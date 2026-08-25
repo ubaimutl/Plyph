@@ -4,6 +4,9 @@
     <key name="provider" type="s"><default>'groq'</default></key>
     <key name="ollama-url" type="s"><default>'http://127.0.0.1:11434'</default></key>
     <key name="ollama-model" type="s"><default>'qwen3:4b'</default></key>
+    <key name="cloudflare-account-id" type="s"><default>''</default></key>
+    <key name="cloudflare-api-key" type="s"><default>''</default></key>
+    <key name="cloudflare-model" type="s"><default>'@cf/qwen/qwen3-30b-a3b-fp8'</default></key>
     <key name="groq-api-key" type="s"><default>''</default></key>
     <key name="groq-model" type="s"><default>'openai/gpt-oss-20b'</default></key>
     <key name="openai-api-key" type="s"><default>''</default></key>

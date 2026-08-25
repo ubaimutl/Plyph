@@ -11,8 +11,32 @@
   background-color: rgba(145, 28, 28, 0.96);
 }
 
+.promptpaste-preview-header {
+  spacing: 8px;
+  margin-bottom: 4px;
+}
+
+.promptpaste-preview-wrap {
+  padding: 4px 8px;
+}
+
+.promptpaste-preview-icon StIcon {
+  icon-size: 16px;
+}
+
+.promptpaste-result-scroll {
+  border-radius: 10px;
+}
+
+.promptpaste-result-surface {
+  padding: 10px 12px;
+  border: 1px solid rgba(128, 128, 128, 0.32);
+  border-radius: 10px;
+  background-color: rgba(128, 128, 128, 0.11);
+}
+
 .promptpaste-result {
-  padding: 8px;
+  font-size: 1em;
 }
 
 .promptpaste-palette-header {

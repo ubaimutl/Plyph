@@ -13,6 +13,12 @@ const INPUT_LIMIT_VALUES = [0, 2000, 4000, 8000, 16000, 32000];
 const INPUT_LIMIT_LABELS = ['Auto', '2K', '4K', '8K', '16K', '32K', 'Custom'];
 const OUTPUT_LIMIT_VALUES = [0, 1000, 2000, 4000, 8000, 16000];
 const OUTPUT_LIMIT_LABELS = ['Auto', '1K', '2K', '4K', '8K', '16K', 'Custom'];
+const PROVIDER_FREE_USAGE = {
+    cloudflare: 'Free tier includes 10,000 Neurons per day.',
+    groq: 'Free plan available. Limits vary by model and account.',
+    cerebras: 'Free plan available. Limits vary by model and account.',
+    vercel: 'Free accounts receive $5 of AI Gateway credit every 30 days after the first request.',
+};
 
 function entry(group, settings, key, title) {
     const row = new Adw.EntryRow({title});
@@ -283,11 +289,29 @@ export default class PromptPastePreferences extends ExtensionPreferences {
         this._providerSettings.title = info.name;
         this._providerSettings.description = provider === 'ollama'
             ? 'Runs on your configured local server.'
-            : 'API keys are stored securely in Passwords and Keys.';
+            : provider === 'cloudflare'
+                ? 'API tokens are stored securely in Passwords and Keys.'
+                : 'API keys are stored securely in Passwords and Keys.';
         if (provider === 'ollama')
             this._providerRows.push(entry(this._providerSettings, settings, 'ollama-url', 'Address'));
-        else
+        else if (provider === 'cloudflare') {
+            this._providerRows.push(entry(
+                this._providerSettings, settings, 'cloudflare-account-id', 'Account ID'));
+            this._providerRows.push(this._secretEntry(settings, provider, 'API token'));
+        } else {
             this._providerRows.push(this._secretEntry(settings, provider));
+        }
+
+        const freeUsage = PROVIDER_FREE_USAGE[provider];
+        if (freeUsage) {
+            const freeUsageRow = new Adw.ActionRow({
+                title: 'Free usage',
+                subtitle: freeUsage,
+            });
+            freeUsageRow.add_prefix(new Gtk.Image({icon_name: 'dialog-information-symbolic'}));
+            this._providerSettings.add(freeUsageRow);
+            this._providerRows.push(freeUsageRow);
+        }
 
         const modelRow = new Adw.ComboRow({title: 'Model', enable_search: true});
         const refresh = new Gtk.Button({
@@ -308,6 +332,14 @@ export default class PromptPastePreferences extends ExtensionPreferences {
         this._providerRows.push(modelRow);
         this._modelRow = modelRow;
 
+        const usageRow = new Adw.ActionRow({
+            title: 'Model usage and cost',
+            subtitle: 'Larger models may use provider allowances faster or incur charges, depending on your account.',
+        });
+        usageRow.add_prefix(new Gtk.Image({icon_name: 'dialog-warning-symbolic'}));
+        this._providerSettings.add(usageRow);
+        this._providerRows.push(usageRow);
+
         const cached = this._cachedModels(settings, provider);
         this._setModelOptions(modelRow, settings, provider, cached);
         modelRow.connect('notify::selected', () => {
@@ -321,9 +353,10 @@ export default class PromptPastePreferences extends ExtensionPreferences {
         custom.connect('clicked', () => this._customModel(settings, provider, modelRow));
     }
 
-    _secretEntry(settings, provider) {
+    _secretEntry(settings, provider, title = 'API key') {
+        const credential = provider === 'cloudflare' ? 'API token' : 'API key';
         const row = new Adw.PasswordEntryRow({
-            title: 'API key',
+            title,
             show_apply_button: true,
         });
         const status = new Gtk.Image({
@@ -339,7 +372,9 @@ export default class PromptPastePreferences extends ExtensionPreferences {
                 row.text = key;
                 row.sensitive = true;
                 status.icon_name = key ? 'emblem-ok-symbolic' : 'dialog-password-symbolic';
-                status.tooltip_text = key ? 'Stored securely in Passwords and Keys' : 'No API key saved';
+                status.tooltip_text = key
+                    ? 'Stored securely in Passwords and Keys'
+                    : `No ${credential} saved`;
             }
         }).catch(error => {
             if (row.get_parent()) {
@@ -359,7 +394,7 @@ export default class PromptPastePreferences extends ExtensionPreferences {
                     status.icon_name = row.text.trim() ? 'emblem-ok-symbolic' : 'dialog-password-symbolic';
                     status.tooltip_text = row.text.trim()
                         ? 'Stored securely in Passwords and Keys'
-                        : 'API key removed';
+                        : `${credential} removed`;
                 }
             } catch (error) {
                 if (row.get_parent()) {

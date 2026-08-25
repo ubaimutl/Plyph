@@ -19,11 +19,12 @@ Correct writing, rewrite text, translate, summarize, fix code, or create your ow
 - Reorder or hide custom actions
 - Open actions from the panel or a keyboard action palette
 - Run locally with Ollama or use supported cloud providers
-- API keys stored securely through the system Secret Service
+- API credentials stored securely through the system Secret Service
 
 Supported providers:
 
 - Ollama
+- Cloudflare Workers AI
 - Groq
 - Gemini
 - OpenRouter
@@ -37,7 +38,7 @@ Install PromptPaste from [GNOME Shell Extensions](https://extensions.gnome.org/e
 
 Supports GNOME Shell 46–50.
 
-After installation, open the extension settings to choose your provider, model, API key, shortcuts, and actions.
+After installation, open the extension settings to choose your provider, model, API credentials, shortcuts, and actions.
 
 ### Manual installation
 
@@ -52,20 +53,21 @@ gnome-extensions pack --force \
   --extra-source=stylesheet.css \
   --extra-source=icons \
   --schema=schemas/org.gnome.shell.extensions.ai-autocorrect.gschema.xml
-gnome-extensions install --force ai-autocorrect@ubai.dev.shell-extension.zip
+gnome-extensions install --force promptpaste@ubai.dev.shell-extension.zip
 ```
 
 Log out and back in, then enable the extension:
 
 ```bash
-gnome-extensions enable ai-autocorrect@ubai.dev
+gnome-extensions enable promptpaste@ubai.dev
 ```
 
 ## Providers
 
-Add your own API key in the extension settings:
+Add the provider's required API key or token in the extension settings:
 
 - Ollama: https://ollama.com
+- Cloudflare Workers AI: https://developers.cloudflare.com/workers-ai/get-started/rest-api/
 - Groq: https://console.groq.com/keys
 - Gemini: https://ai.google.dev/aistudio
 - OpenRouter: https://openrouter.ai/keys
@@ -74,6 +76,15 @@ Add your own API key in the extension settings:
 - Vercel AI Gateway: https://vercel.com/ai-gateway
 
 PromptPaste itself does not charge anything. Provider pricing and free-tier limits depend on the provider and may change.
+
+Providers with useful free usage options include:
+
+- Cloudflare Workers AI: 10,000 Neurons per day on Workers Free.
+- Groq: free plan available; limits vary by model and account.
+- Cerebras: free plan available; limits vary by model and account.
+- Vercel AI Gateway: free accounts receive $5 of credit every 30 days after the first request.
+
+Check the provider's website for current limits and billing terms before selecting a model.
 
 ## Custom actions
 
@@ -105,7 +116,7 @@ Clipboard or selected text is sent to your chosen provider only when you explici
 
 Using previously copied clipboard text as a fallback is optional and disabled by default.
 
-API keys are stored through the system Secret Service and can be managed with GNOME Passwords and Keys. Keys stored by older PromptPaste versions are migrated automatically and removed from GSettings after successful migration.
+API keys and tokens are stored through the system Secret Service and can be managed with GNOME Passwords and Keys. Credentials stored by older PromptPaste versions are migrated automatically and removed from GSettings after successful migration.
 
 When using Ollama with a local server, selected text is processed locally instead of being sent to an online AI provider.
 

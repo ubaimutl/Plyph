@@ -21,41 +21,86 @@ const SHELL_MAJOR = Number.parseInt(Config.PACKAGE_VERSION, 10);
 
 const ResultDialog = GObject.registerClass(
 class ResultDialog extends ModalDialog.ModalDialog {
-    _init(result, onReplace, onCopy, onCancel, onClose) {
+    _init(result, onReplace, onCopy, onCopySelection, onCancel, onClose) {
         super._init({destroyOnClose: true});
         this._finished = false;
         this._onClose = onClose;
-
-        const title = new St.Label({
-            text: 'PromptPaste result',
-            style_class: 'modal-dialog-headline',
-        });
-        this.contentLayout.add_child(title);
-
-        const estimatedLines = result.split('\n').reduce((total, line) =>
+        this._onReplace = onReplace;
+        this._onCopySelection = onCopySelection;
+        this._expanded = false;
+        this._estimatedLines = result.split('\n').reduce((total, line) =>
             total + Math.max(1, Math.ceil(line.length / 70)), 0);
-        const scroll = new St.ScrollView({
-            overlay_scrollbars: true,
-            width: 560,
-            height: Math.min(320, Math.max(120, estimatedLines * 24 + 24)),
-            style_class: 'vfade',
+
+        const header = new St.BoxLayout({
+            style_class: 'promptpaste-preview-header',
+            x_expand: true,
         });
-        const box = new St.BoxLayout(SHELL_MAJOR >= 48
-            ? {orientation: Clutter.Orientation.VERTICAL, x_expand: true}
-            : {vertical: true, x_expand: true});
-        const label = new St.Label({
+        header.add_child(new St.Label({
+            text: 'Result',
+            style_class: 'modal-dialog-headline',
+            x_align: Clutter.ActorAlign.START,
+            y_align: Clutter.ActorAlign.CENTER,
+            x_expand: true,
+        }));
+        const wrapButton = new St.Button({
+            label: 'Wrap',
+            style_class: 'button flat promptpaste-preview-wrap',
+            toggle_mode: true,
+            checked: true,
+            accessible_name: 'Wrap lines',
+            can_focus: true,
+            reactive: true,
+            track_hover: true,
+        });
+        header.add_child(wrapButton);
+        this._expandIcon = new St.Icon({icon_name: 'view-fullscreen-symbolic'});
+        const expandButton = new St.Button({
+            style_class: 'icon-button flat promptpaste-preview-icon',
+            child: this._expandIcon,
+            accessible_name: 'Expand preview',
+            can_focus: true,
+            reactive: true,
+            track_hover: true,
+        });
+        expandButton.connect('clicked', () => this._toggleExpanded(expandButton));
+        header.add_child(expandButton);
+        this.contentLayout.add_child(header);
+
+        this._scroll = new St.ScrollView({
+            overlay_scrollbars: true,
+            style_class: 'vfade promptpaste-result-scroll',
+        });
+        const surface = new St.BoxLayout(SHELL_MAJOR >= 48
+            ? {
+                orientation: Clutter.Orientation.VERTICAL,
+                style_class: 'promptpaste-result-surface',
+                x_expand: true,
+            }
+            : {
+                vertical: true,
+                style_class: 'promptpaste-result-surface',
+                x_expand: true,
+            });
+        this._label = new St.Label({
             text: result,
             x_align: Clutter.ActorAlign.START,
             y_align: Clutter.ActorAlign.START,
             x_expand: true,
             style_class: 'promptpaste-result',
         });
-        label.clutter_text.line_wrap = true;
-        label.clutter_text.line_wrap_mode = Pango.WrapMode.WORD_CHAR;
-        label.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
-        box.add_child(label);
-        scroll.set_child(box);
-        this.contentLayout.add_child(scroll);
+        this._label.clutter_text.set_selectable(true);
+        this._label.clutter_text.set_editable(true);
+        this._label.clutter_text.set_cursor_visible(true);
+        this._label.clutter_text.set_reactive(true);
+        this._label.clutter_text.set_line_wrap(true);
+        this._label.clutter_text.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR);
+        this._label.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
+        wrapButton.connect('notify::checked', () =>
+            this._label.clutter_text.set_line_wrap(wrapButton.checked));
+        surface.add_child(this._label);
+        this._scroll.set_child(surface);
+        this.contentLayout.add_child(this._scroll);
+        this._resizePreview();
 
         this.setButtons([
             {
@@ -65,23 +110,85 @@ class ResultDialog extends ModalDialog.ModalDialog {
             },
             {
                 label: 'Copy',
-                action: () => this._finish(onCopy),
+                action: () => this._finish(onCopy, this._label.clutter_text.get_text()),
             },
             {
                 label: 'Replace',
                 default: true,
-                action: () => this._finish(onReplace),
+                action: () => this._finish(onReplace, this._label.clutter_text.get_text()),
             },
         ]);
+        this.setInitialKeyFocus(this._label.clutter_text);
     }
 
-    _finish(action = null) {
+    vfunc_key_press_event(event) {
+        const key = event.get_key_symbol();
+        const state = event.get_state();
+        const control = (state & Clutter.ModifierType.CONTROL_MASK) !== 0;
+
+        if (control && (key === Clutter.KEY_a || key === Clutter.KEY_A)) {
+            this._label.clutter_text.set_selection(0, -1);
+            return Clutter.EVENT_STOP;
+        }
+        if (control && (key === Clutter.KEY_c || key === Clutter.KEY_C)) {
+            const selection = this._label.clutter_text.get_selection();
+            if (selection)
+                this._onCopySelection(selection);
+            return Clutter.EVENT_STOP;
+        }
+        if (control && (key === Clutter.KEY_Return || key === Clutter.KEY_KP_Enter)) {
+            this._finish(this._onReplace, this._label.clutter_text.get_text());
+            return Clutter.EVENT_STOP;
+        }
+        return super.vfunc_key_press_event(event);
+    }
+
+    _toggleExpanded(button) {
+        this._expanded = !this._expanded;
+        this._expandIcon.icon_name = this._expanded
+            ? 'view-restore-symbolic'
+            : 'view-fullscreen-symbolic';
+        button.accessible_name = this._expanded ? 'Restore preview size' : 'Expand preview';
+        this._resizePreview();
+    }
+
+    _resizePreview() {
+        const monitor = Main.layoutManager.currentMonitor ?? Main.layoutManager.primaryMonitor;
+        const availableWidth = Math.max(480, monitor.width - 160);
+        const availableHeight = Math.max(260, monitor.height - 300);
+        const width = this._expanded
+            ? availableWidth
+            : Math.min(680, Math.max(500, Math.floor(monitor.width * 0.4)));
+        const height = this._expanded
+            ? availableHeight
+            : Math.min(
+                Math.max(200, Math.floor(monitor.height * 0.5)),
+                Math.max(96, this._estimatedLines * 21 + 24));
+        this._scroll.set_size(Math.min(width, availableWidth), Math.min(height, availableHeight));
+    }
+
+    destroy() {
+        this._expandIcon?.destroy();
+        this._expandIcon = null;
+        this._label?.destroy();
+        this._label = null;
+        this._scroll?.destroy();
+        this._scroll = null;
+        this._onReplace = null;
+        this._onCopySelection = null;
+        this._onClose = null;
+        super.destroy();
+    }
+
+    _finish(action = null, value = undefined) {
         if (this._finished)
             return;
         this._finished = true;
+        const onClose = this._onClose;
+        this._onClose = null;
         this.close();
-        this._onClose();
-        action?.();
+        onClose?.();
+        action?.(value);
     }
 });
 
@@ -505,12 +612,14 @@ export default class PromptPasteExtension extends Extension {
         if (this._previewDialog)
             this._previewDialog.destroy();
         const dialog = new ResultDialog(output,
-            () => this._replace(output, true, 'Replaced', focusedWindow, primaryText),
-            () => {
-                this._clipboard.set_text(St.ClipboardType.CLIPBOARD, output);
+            result => this._replace(result, true, 'Replaced', focusedWindow, primaryText),
+            result => {
+                this._clipboard.set_text(St.ClipboardType.CLIPBOARD, result);
                 this._setIcon('emblem-ok-symbolic', 1200);
                 this._showFeedback('Copied');
             },
+            selection =>
+                this._clipboard.set_text(St.ClipboardType.CLIPBOARD, selection),
             () => this._showFeedback('Cancelled'),
             () => {
                 if (this._previewDialog === dialog)

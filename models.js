@@ -7,6 +7,7 @@ import {getApiKey} from './secrets.js';
 export const PROVIDERS = [
     {id: 'ollama', name: 'Ollama (local)', key: null},
     {id: 'groq', name: 'Groq', key: 'groq-api-key'},
+    {id: 'cloudflare', name: 'Cloudflare Workers AI', key: 'cloudflare-api-key'},
     {id: 'gemini', name: 'Gemini', key: 'gemini-api-key'},
     {id: 'openrouter', name: 'OpenRouter', key: 'openrouter-api-key'},
     {id: 'cerebras', name: 'Cerebras', key: 'cerebras-api-key'},
@@ -26,7 +27,9 @@ export function abortModelRequests() {
 
 function requestError(status, provider, detail) {
     if (status === 401 || status === 403)
-        return new Error(`${provider} rejected the API key. Check it and try again.`);
+        return new Error(provider === 'Cloudflare Workers AI'
+            ? 'Cloudflare rejected the API token or Account ID. Check them and try again.'
+            : `${provider} rejected the API key. Check it and try again.`);
     if (status === 404)
         return new Error(`${provider} model list is unavailable.`);
     if (status === 408)
@@ -86,7 +89,9 @@ function getJson(url, headers = {}, provider = 'Provider') {
 async function requiredKey(settings, provider) {
     const value = await getApiKey(settings, provider);
     if (!value)
-        throw new Error(`Add a ${PROVIDERS.find(item => item.id === provider)?.name} API key first.`);
+        throw new Error(provider === 'cloudflare'
+            ? 'Add a Cloudflare Workers AI API token first.'
+            : `Add a ${PROVIDERS.find(item => item.id === provider)?.name} API key first.`);
     return value;
 }
 
@@ -110,6 +115,19 @@ export async function fetchModels(settings, provider) {
         const baseUrl = settings.get_string('ollama-url').replace(/\/$/, '');
         data = await getJson(`${baseUrl}/api/tags`, {}, 'Ollama');
         models = (data.models ?? []).map(model => ({id: model.model ?? model.name, name: model.name}));
+    } else if (provider === 'cloudflare') {
+        const key = await requiredKey(settings, 'cloudflare');
+        const accountId = settings.get_string('cloudflare-account-id').trim();
+        if (!accountId)
+            throw new Error('Add your Cloudflare Account ID first.');
+        ensureCurrent();
+        data = await getJson(
+            `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/ai/models/search?task=${encodeURIComponent('Text Generation')}&hide_experimental=true&per_page=100`,
+            {Authorization: `Bearer ${key}`}, 'Cloudflare Workers AI');
+        models = (Array.isArray(data.result) ? data.result : []).map(model => ({
+            id: model.name ?? model.id,
+            name: model.name ?? model.id,
+        }));
     } else if (provider === 'gemini') {
         const key = await requiredKey(settings, 'gemini');
         ensureCurrent();

@@ -6,6 +6,7 @@ import {getApiKey} from './secrets.js';
 
 const PROVIDER_NAMES = {
     ollama: 'Ollama',
+    cloudflare: 'Cloudflare Workers AI',
     groq: 'Groq',
     gemini: 'Gemini',
     openrouter: 'OpenRouter',
@@ -94,9 +95,13 @@ function providerError(result, provider, model) {
     const providerDetail = result.data?.error?.message ?? result.data?.error;
     const detail = typeof providerDetail === 'string' ? providerDetail : '';
     if (result.status === 401 || result.status === 403)
-        return new Error(`${name} rejected the API key. Check it in Settings.`);
+        return new Error(provider === 'cloudflare'
+            ? 'Cloudflare rejected the API token or Account ID. Check them in Settings.'
+            : `${name} rejected the API key. Check it in Settings.`);
     if (result.status === 404)
-        return new Error(`${name} could not find model “${model}”.`);
+        return new Error(provider === 'cloudflare'
+            ? `Cloudflare could not find the account or model “${model}”.`
+            : `${name} could not find model “${model}”.`);
     if (result.status === 408)
         return new Error(`${name} timed out. Try again.`);
     if (result.status === 429)
@@ -187,6 +192,8 @@ export class AiClient {
         try {
             if (provider === 'ollama')
                 return await this._ollama(text, prompt, model, inputMode, outputLimit);
+            if (provider === 'cloudflare')
+                return await this._cloudflare(text, prompt, model, inputMode, outputLimit);
             if (provider === 'openai')
                 return await this._openAi(text, prompt, model, inputMode, outputLimit);
             if (provider === 'gemini')
@@ -217,7 +224,9 @@ export class AiClient {
     async _required(provider) {
         const value = await getApiKey(this._settings, provider, this._cancellable);
         if (!value)
-            throw new Error(`Add a ${PROVIDER_NAMES[provider]} API key in Settings.`);
+            throw new Error(provider === 'cloudflare'
+                ? 'Add a Cloudflare Workers AI API token in Settings.'
+                : `Add a ${PROVIDER_NAMES[provider]} API key in Settings.`);
         return value;
     }
 
@@ -233,6 +242,18 @@ export class AiClient {
             {Authorization: `Bearer ${key}`},
             body, this._cancellable);
         return outputOrError(result, 'groq', model, inputMode);
+    }
+
+    async _cloudflare(text, prompt, model, inputMode, outputLimit) {
+        const key = await this._required('cloudflare');
+        const accountId = this._settings.get_string('cloudflare-account-id').trim();
+        if (!accountId)
+            throw new Error('Add your Cloudflare Account ID in Settings.');
+        const result = await requestJson(this._session,
+            `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/ai/v1/chat/completions`,
+            {Authorization: `Bearer ${key}`},
+            openAiBody(model, prompt, text, inputMode, outputLimit), this._cancellable);
+        return outputOrError(result, 'cloudflare', model, inputMode);
     }
 
     async _ollama(text, prompt, model, inputMode, outputLimit) {

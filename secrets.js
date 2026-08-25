@@ -3,6 +3,7 @@ import GLib from 'gi://GLib';
 import Secret from 'gi://Secret';
 
 const KEY_SETTINGS = {
+    cloudflare: 'cloudflare-api-key',
     groq: 'groq-api-key',
     gemini: 'gemini-api-key',
     openrouter: 'openrouter-api-key',
@@ -38,7 +39,7 @@ function store(provider, password, cancellable = null) {
             schema,
             {provider},
             Secret.COLLECTION_DEFAULT,
-            `PromptPaste ${provider} API key`,
+            `PromptPaste ${provider} ${provider === 'cloudflare' ? 'API token' : 'API key'}`,
             password,
             cancellable,
             (_source, result) => {
