@@ -15,6 +15,7 @@ const OUTPUT_LIMIT_VALUES = [0, 1000, 2000, 4000, 8000, 16000];
 const OUTPUT_LIMIT_LABELS = ['Auto', '1K', '2K', '4K', '8K', '16K', 'Custom'];
 const PROVIDER_FREE_USAGE = {
     cloudflare: 'Free tier includes 10,000 Neurons per day.',
+    bai: 'DeepSeek V4 Flash is currently free. Availability and limits may change.',
     groq: 'Free plan available. Limits vary by model and account.',
     cerebras: 'Free plan available. Limits vary by model and account.',
     vercel: 'Free accounts receive $5 of AI Gateway credit every 30 days after the first request.',
@@ -99,7 +100,7 @@ function bindTokenLimit(settings, key, control, values) {
     control.custom.connect('entry-activated', saveCustom);
 }
 
-export default class PromptPastePreferences extends ExtensionPreferences {
+export default class PlyphPreferences extends ExtensionPreferences {
     fillPreferencesWindow(window) {
         const settings = this.getSettings();
         this._keyCancellable = new Gio.Cancellable();
@@ -218,7 +219,7 @@ export default class PromptPastePreferences extends ExtensionPreferences {
             description:
                 'GNOME normally reads the PRIMARY selection. Some apps—especially ' +
                 'Firefox on Wayland—do not update it reliably. For listed apps, ' +
-                'PromptPaste sends Ctrl+C and reads the regular clipboard instead. ' +
+                'Plyph sends Ctrl+C and reads the regular clipboard instead. ' +
                 'This changes the clipboard. Avoid adding terminals unless Ctrl+C ' +
                 'copies text there.',
         });

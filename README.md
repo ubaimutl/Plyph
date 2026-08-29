@@ -1,10 +1,10 @@
-# PromptPaste
+# Plyph
 
 Use AI on selected text anywhere in GNOME.
 
-Correct writing, rewrite text, translate, summarize, fix code, or create your own actions. Select some text, trigger an action, and PromptPaste can preview or paste the result back automatically.
+Correct writing, rewrite text, translate, summarize, fix code, or create your own actions. Select some text, trigger an action, and Plyph can preview or paste the result back automatically.
 
-![PromptPaste demo](demo.gif)
+![Plyph demo](demo.gif)
 
 ## Features
 
@@ -25,6 +25,7 @@ Supported providers:
 
 - Ollama
 - Cloudflare Workers AI
+- B.AI
 - Groq
 - Gemini
 - OpenRouter
@@ -34,7 +35,7 @@ Supported providers:
 
 ## Installation
 
-Install PromptPaste from [GNOME Shell Extensions](https://extensions.gnome.org/extension/10540/ai-autocorrect/).
+Install Plyph from [GNOME Shell Extensions](https://extensions.gnome.org/extension/10540/ai-autocorrect/).
 
 Supports GNOME Shell 46–50.
 
@@ -43,8 +44,8 @@ After installation, open the extension settings to choose your provider, model, 
 ### Manual installation
 
 ```bash
-git clone https://github.com/ubaimutl/PromptPaste.git
-cd PromptPaste
+git clone https://github.com/ubaimutl/Plyph.git
+cd Plyph
 gnome-extensions pack --force \
   --extra-source=actions.js \
   --extra-source=ai.js \
@@ -53,13 +54,13 @@ gnome-extensions pack --force \
   --extra-source=stylesheet.css \
   --extra-source=icons \
   --schema=schemas/org.gnome.shell.extensions.ai-autocorrect.gschema.xml
-gnome-extensions install --force promptpaste@ubai.dev.shell-extension.zip
+gnome-extensions install --force plyph@ubai.dev.shell-extension.zip
 ```
 
 Log out and back in, then enable the extension:
 
 ```bash
-gnome-extensions enable promptpaste@ubai.dev
+gnome-extensions enable plyph@ubai.dev
 ```
 
 ## Providers
@@ -68,6 +69,7 @@ Add the provider's required API key or token in the extension settings:
 
 - Ollama: https://ollama.com
 - Cloudflare Workers AI: https://developers.cloudflare.com/workers-ai/get-started/rest-api/
+- B.AI: https://b.ai/
 - Groq: https://console.groq.com/keys
 - Gemini: https://ai.google.dev/aistudio
 - OpenRouter: https://openrouter.ai/keys
@@ -75,11 +77,12 @@ Add the provider's required API key or token in the extension settings:
 - OpenAI: https://platform.openai.com/api-keys
 - Vercel AI Gateway: https://vercel.com/ai-gateway
 
-PromptPaste itself does not charge anything. Provider pricing and free-tier limits depend on the provider and may change.
+Plyph itself does not charge anything. Provider pricing and free-tier limits depend on the provider and may change.
 
 Providers with useful free usage options include:
 
 - Cloudflare Workers AI: 10,000 Neurons per day on Workers Free.
+- B.AI: DeepSeek V4 Flash is currently free; availability and limits may change.
 - Groq: free plan available; limits vary by model and account.
 - Cerebras: free plan available; limits vary by model and account.
 - Vercel AI Gateway: free accounts receive $5 of credit every 30 days after the first request.
@@ -94,11 +97,11 @@ Each custom action can treat selected text as content to transform or as the use
 
 They can also define optional input and output token limits.
 
-**Input limits** use a lightweight token estimate and stop the action before sending if the selection is too large. PromptPaste never truncates selected text.
+**Input limits** use a lightweight token estimate and stop the action before sending if the selection is too large. Plyph never truncates selected text.
 
-**Output limits** control the maximum response size requested from the provider. `Auto` uses PromptPaste's normal response-length behavior.
+**Output limits** control the maximum response size requested from the provider. `Auto` uses Plyph's normal response-length behavior.
 
-If a provider indicates that a response was cut off because the output limit was reached, PromptPaste rejects the partial result and asks you to increase the limit.
+If a provider indicates that a response was cut off because the output limit was reached, Plyph rejects the partial result and asks you to increase the limit.
 
 ## Action palette
 
@@ -116,7 +119,7 @@ Clipboard or selected text is sent to your chosen provider only when you explici
 
 Using previously copied clipboard text as a fallback is optional and disabled by default.
 
-API keys and tokens are stored through the system Secret Service and can be managed with GNOME Passwords and Keys. Credentials stored by older PromptPaste versions are migrated automatically and removed from GSettings after successful migration.
+API keys and tokens are stored through the system Secret Service and can be managed with GNOME Passwords and Keys. Credentials stored by older Plyph versions are migrated automatically and removed from GSettings after successful migration.
 
 When using Ollama with a local server, selected text is processed locally instead of being sent to an online AI provider.
 
@@ -126,7 +129,7 @@ Cloud providers have their own data-retention, privacy, usage-limit, and pricing
 
 GNOME normally exposes selected text through the PRIMARY selection.
 
-Firefox on Wayland can behave differently, so PromptPaste enables explicit-copy compatibility for Firefox by default. In this mode PromptPaste sends `Ctrl+C`, which temporarily changes the normal clipboard.
+Firefox on Wayland can behave differently, so Plyph enables explicit-copy compatibility for Firefox by default. In this mode Plyph sends `Ctrl+C`, which temporarily changes the normal clipboard.
 
 Other application IDs can be added in Settings if needed.
 
