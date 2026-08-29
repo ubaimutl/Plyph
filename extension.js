@@ -32,7 +32,7 @@ class ResultDialog extends ModalDialog.ModalDialog {
             total + Math.max(1, Math.ceil(line.length / 70)), 0);
 
         const header = new St.BoxLayout({
-            style_class: 'promptpaste-preview-header',
+            style_class: 'plyph-preview-header',
             x_expand: true,
         });
         header.add_child(new St.Label({
@@ -44,7 +44,7 @@ class ResultDialog extends ModalDialog.ModalDialog {
         }));
         const wrapButton = new St.Button({
             label: 'Wrap',
-            style_class: 'button flat promptpaste-preview-wrap',
+            style_class: 'button flat plyph-preview-wrap',
             toggle_mode: true,
             checked: true,
             accessible_name: 'Wrap lines',
@@ -55,7 +55,7 @@ class ResultDialog extends ModalDialog.ModalDialog {
         header.add_child(wrapButton);
         this._expandIcon = new St.Icon({icon_name: 'view-fullscreen-symbolic'});
         const expandButton = new St.Button({
-            style_class: 'icon-button flat promptpaste-preview-icon',
+            style_class: 'icon-button flat plyph-preview-icon',
             child: this._expandIcon,
             accessible_name: 'Expand preview',
             can_focus: true,
@@ -68,17 +68,17 @@ class ResultDialog extends ModalDialog.ModalDialog {
 
         this._scroll = new St.ScrollView({
             overlay_scrollbars: true,
-            style_class: 'vfade promptpaste-result-scroll',
+            style_class: 'vfade plyph-result-scroll',
         });
         const surface = new St.BoxLayout(SHELL_MAJOR >= 48
             ? {
                 orientation: Clutter.Orientation.VERTICAL,
-                style_class: 'promptpaste-result-surface',
+                style_class: 'plyph-result-surface',
                 x_expand: true,
             }
             : {
                 vertical: true,
-                style_class: 'promptpaste-result-surface',
+                style_class: 'plyph-result-surface',
                 x_expand: true,
             });
         this._label = new St.Label({
@@ -86,7 +86,7 @@ class ResultDialog extends ModalDialog.ModalDialog {
             x_align: Clutter.ActorAlign.START,
             y_align: Clutter.ActorAlign.START,
             x_expand: true,
-            style_class: 'promptpaste-result',
+            style_class: 'plyph-result',
         });
         this._label.clutter_text.set_selectable(true);
         this._label.clutter_text.set_editable(true);
@@ -195,7 +195,7 @@ class ResultDialog extends ModalDialog.ModalDialog {
 const ActionPalette = GObject.registerClass(
 class ActionPalette extends ModalDialog.ModalDialog {
     _init(actions, onActivate, onClose) {
-        super._init({destroyOnClose: true, styleClass: 'promptpaste-palette'});
+        super._init({destroyOnClose: true, styleClass: 'plyph-palette'});
         this._actions = actions;
         this._buttons = [];
         this._selected = 0;
@@ -204,18 +204,18 @@ class ActionPalette extends ModalDialog.ModalDialog {
         this._onClose = onClose;
 
         const header = new St.BoxLayout({
-            style_class: 'promptpaste-palette-header',
+            style_class: 'plyph-palette-header',
             x_expand: true,
         });
         header.add_child(new St.Label({
-            text: 'PromptPaste',
-            style_class: 'promptpaste-palette-title',
+            text: 'Plyph',
+            style_class: 'plyph-palette-title',
             x_align: Clutter.ActorAlign.CENTER,
             y_align: Clutter.ActorAlign.CENTER,
             x_expand: true,
         }));
         const closeButton = new St.Button({
-            style_class: 'icon-button flat promptpaste-palette-close',
+            style_class: 'icon-button flat plyph-palette-close',
             child: new St.Icon({icon_name: 'window-close-symbolic'}),
             accessible_name: 'Close action palette',
             can_focus: true,
@@ -226,21 +226,21 @@ class ActionPalette extends ModalDialog.ModalDialog {
         header.add_child(closeButton);
         this.contentLayout.add_child(header);
         const list = new St.BoxLayout(SHELL_MAJOR >= 48
-            ? {orientation: Clutter.Orientation.VERTICAL, style_class: 'promptpaste-palette-list'}
-            : {vertical: true, style_class: 'promptpaste-palette-list'});
+            ? {orientation: Clutter.Orientation.VERTICAL, style_class: 'plyph-palette-list'}
+            : {vertical: true, style_class: 'plyph-palette-list'});
         this.contentLayout.add_child(list);
 
         actions.forEach(action => {
             if (action.separatorBefore) {
                 list.add_child(new St.Widget({
-                    style_class: 'promptpaste-palette-separator',
+                    style_class: 'plyph-palette-separator',
                     x_expand: true,
                 }));
             }
-            const row = new St.BoxLayout({style_class: 'promptpaste-palette-row'});
+            const row = new St.BoxLayout({style_class: 'plyph-palette-row'});
             row.add_child(new St.Icon({
                 icon_name: action.icon,
-                style_class: 'promptpaste-palette-icon',
+                style_class: 'plyph-palette-icon',
             }));
             row.add_child(new St.Label({
                 text: action.name,
@@ -252,7 +252,7 @@ class ActionPalette extends ModalDialog.ModalDialog {
                 can_focus: true,
                 reactive: true,
                 track_hover: true,
-                style_class: 'promptpaste-palette-item',
+                style_class: 'plyph-palette-item',
                 x_expand: true,
             });
             button.connect('clicked', () => this._finish(action));
@@ -311,7 +311,7 @@ class ActionPalette extends ModalDialog.ModalDialog {
     }
 });
 
-export default class PromptPasteExtension extends Extension {
+export default class PlyphExtension extends Extension {
     enable() {
         this._busy = false;
         this._iconResetId = null;
@@ -331,7 +331,7 @@ export default class PromptPasteExtension extends Extension {
             .create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
 
         this._defaultIcon = Gio.icon_new_for_string(
-            this.path + '/icons/promptpaste-symbolic.svg');
+            this.path + '/icons/plyph-symbolic.svg');
         this._indicator = new PanelMenu.Button(0, this.metadata.name, false);
         this._icon = new St.Icon({
             gicon: this._defaultIcon,
@@ -702,7 +702,7 @@ export default class PromptPasteExtension extends Extension {
     _showFeedback(message, error = false, duration = 1500) {
         if (!this._settings?.get_boolean('pointer-feedback')) {
             if (error)
-                Main.notifyError('PromptPaste', message);
+                Main.notifyError('Plyph', message);
             return;
         }
         if (this._feedbackId) {
@@ -720,7 +720,7 @@ export default class PromptPasteExtension extends Extension {
 
         const label = new St.Label({
             text: message,
-            style_class: error ? 'promptpaste-feedback error' : 'promptpaste-feedback',
+            style_class: error ? 'plyph-feedback error' : 'plyph-feedback',
             opacity: 0,
         });
         label.clutter_text.line_wrap = true;

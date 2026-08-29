@@ -4,6 +4,7 @@ import Secret from 'gi://Secret';
 
 const KEY_SETTINGS = {
     cloudflare: 'cloudflare-api-key',
+    bai: 'bai-api-key',
     groq: 'groq-api-key',
     gemini: 'gemini-api-key',
     openrouter: 'openrouter-api-key',
@@ -14,7 +15,7 @@ const KEY_SETTINGS = {
 
 function createSecretSchema() {
     return new Secret.Schema(
-        'dev.ubai.PromptPaste.ApiKey',
+        'dev.ubai.Plyph.ApiKey',
         Secret.SchemaFlags.NONE,
         {provider: Secret.SchemaAttributeType.STRING});
 }
@@ -39,7 +40,7 @@ function store(provider, password, cancellable = null) {
             schema,
             {provider},
             Secret.COLLECTION_DEFAULT,
-            `PromptPaste ${provider} ${provider === 'cloudflare' ? 'API token' : 'API key'}`,
+            `Plyph ${provider} ${provider === 'cloudflare' ? 'API token' : 'API key'}`,
             password,
             cancellable,
             (_source, result) => {

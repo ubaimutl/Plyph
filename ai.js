@@ -7,6 +7,7 @@ import {getApiKey} from './secrets.js';
 const PROVIDER_NAMES = {
     ollama: 'Ollama',
     cloudflare: 'Cloudflare Workers AI',
+    bai: 'B.AI',
     groq: 'Groq',
     gemini: 'Gemini',
     openrouter: 'OpenRouter',
@@ -194,6 +195,8 @@ export class AiClient {
                 return await this._ollama(text, prompt, model, inputMode, outputLimit);
             if (provider === 'cloudflare')
                 return await this._cloudflare(text, prompt, model, inputMode, outputLimit);
+            if (provider === 'bai')
+                return await this._bai(text, prompt, model, inputMode, outputLimit);
             if (provider === 'openai')
                 return await this._openAi(text, prompt, model, inputMode, outputLimit);
             if (provider === 'gemini')
@@ -256,6 +259,15 @@ export class AiClient {
         return outputOrError(result, 'cloudflare', model, inputMode);
     }
 
+    async _bai(text, prompt, model, inputMode, outputLimit) {
+        const key = await this._required('bai');
+        const result = await requestJson(this._session,
+            'https://api.b.ai/v1/chat/completions',
+            {Authorization: `Bearer ${key}`},
+            openAiBody(model, prompt, text, inputMode, outputLimit), this._cancellable);
+        return outputOrError(result, 'bai', model, inputMode);
+    }
+
     async _ollama(text, prompt, model, inputMode, outputLimit) {
         const baseUrl = this._settings.get_string('ollama-url').replace(/\/$/, '');
         const body = {
@@ -311,7 +323,7 @@ export class AiClient {
         const key = await this._required('openrouter');
         const result = await requestJson(this._session,
             'https://openrouter.ai/api/v1/chat/completions',
-            {Authorization: `Bearer ${key}`, 'X-Title': 'PromptPaste'},
+            {Authorization: `Bearer ${key}`, 'X-Title': 'Plyph'},
             openAiBody(model, prompt, text, inputMode, outputLimit), this._cancellable);
         return outputOrError(result, 'openrouter', model, inputMode);
     }
