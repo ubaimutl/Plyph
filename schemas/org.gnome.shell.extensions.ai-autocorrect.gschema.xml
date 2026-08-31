@@ -39,11 +39,15 @@
     <key name="preview-results" type="b"><default>true</default></key>
     <key name="clipboard-fallback" type="b"><default>false</default></key>
     <key name="explicit-copy-apps" type="s"><default>'firefox'</default></key>
+    <key name="show-floating-button" type="b"><default>false</default></key>
+    <key name="quick-actions" type="s"><default>'["ask", "correct", "rewrite"]'</default></key>
+    <key name="excluded-apps" type="s"><default>'code, gnome-terminal-server, telegram-desktop'</default></key>
     <key name="pointer-feedback" type="b"><default>true</default></key>
     <key name="action-palette-position" type="s"><default>'disabled'</default></key>
     <key name="variable-language" type="s"><default>'English'</default></key>
     <key name="variable-tone" type="s"><default>'professional'</default></key>
     <key name="variable-style" type="s"><default>'clear and concise'</default></key>
+    <key name="ask-shortcut" type="as"><default>[]</default></key>
     <key name="correct-shortcut" type="as"><default>[]</default></key>
     <key name="rewrite-shortcut" type="as"><default>[]</default></key>
     <key name="actions-shortcut" type="as"><default>[]</default></key>

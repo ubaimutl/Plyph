@@ -18,6 +18,10 @@ import {AiClient} from './ai.js';
 import {readActions} from './actions.js';
 
 const SHELL_MAJOR = Number.parseInt(Config.PACKAGE_VERSION, 10);
+const FLOATING_COLLAPSE_DELAY = 900;
+const FLOATING_HIDE_DELAY = 2800;
+const FLOATING_INITIAL_HIDE_DELAY = 4000;
+const DISMISSED_SELECTION_COOLDOWN = 1200000;
 
 const ResultDialog = GObject.registerClass(
 class ResultDialog extends ModalDialog.ModalDialog {
@@ -192,6 +196,75 @@ class ResultDialog extends ModalDialog.ModalDialog {
     }
 });
 
+const AskDialog = GObject.registerClass(
+class AskDialog extends ModalDialog.ModalDialog {
+    _init(onAsk, onCancel, onClose) {
+        super._init({destroyOnClose: true});
+        this._finished = false;
+        this._onClose = onClose;
+        this._onAsk = onAsk;
+
+        const header = new St.BoxLayout({
+            style_class: 'plyph-preview-header',
+            x_expand: true,
+        });
+        header.add_child(new St.Label({
+            text: 'Ask',
+            style_class: 'modal-dialog-headline',
+            x_align: Clutter.ActorAlign.START,
+            y_align: Clutter.ActorAlign.CENTER,
+            x_expand: true,
+        }));
+        this.contentLayout.add_child(header);
+
+        this._entry = new St.Entry({
+            hint_text: 'Instruction...',
+            style_class: 'plyph-ask-entry',
+            can_focus: true,
+            x_expand: true,
+        });
+        this.contentLayout.add_child(this._entry);
+
+        this.setButtons([
+            {
+                label: 'Cancel',
+                key: Clutter.KEY_Escape,
+                action: () => this._finish(onCancel),
+            },
+            {
+                label: 'Ask',
+                default: true,
+                action: () => this._finish(onAsk, this._entry.get_text()),
+            },
+        ]);
+
+        this._entry.clutter_text.connect('activate', () => {
+            this._finish(onAsk, this._entry.get_text());
+        });
+
+        this.setInitialKeyFocus(this._entry.clutter_text);
+    }
+
+    destroy() {
+        this._entry?.destroy();
+        this._entry = null;
+        this._onAsk = null;
+        this._onClose = null;
+        super.destroy();
+    }
+
+    _finish(action = null, value = undefined) {
+        if (this._finished)
+            return;
+        this._finished = true;
+        const onClose = this._onClose;
+        this._onClose = null;
+        this.close();
+        onClose?.();
+        action?.(value);
+    }
+});
+
 const ActionPalette = GObject.registerClass(
 class ActionPalette extends ModalDialog.ModalDialog {
     _init(actions, onActivate, onClose) {
@@ -311,6 +384,232 @@ class ActionPalette extends ModalDialog.ModalDialog {
     }
 });
 
+const FloatingToolbar = GObject.registerClass(
+class FloatingToolbar extends St.BoxLayout {
+    _init(gicon, getActions, onAction, onMore, onExpandedChanged, settings) {
+        super._init({
+            style_class: 'plyph-floating-toolbar',
+            reactive: true,
+            can_focus: true,
+            track_hover: true,
+        });
+
+        this._expanded = false;
+        this._showingFeedback = false;
+        this._busy = false;
+        this._gicon = gicon;
+        this._getActions = getActions;
+        this._onAction = onAction;
+        this._onMore = onMore;
+        this._onExpandedChanged = onExpandedChanged;
+        this._settings = settings;
+
+        this._logoButton = new St.Button({
+            style_class: 'plyph-floating-logo',
+            reactive: true,
+            can_focus: true,
+            track_hover: true,
+        });
+        this._logoIcon = new St.Icon({
+            gicon: gicon,
+            style_class: 'plyph-floating-logo-icon',
+        });
+        this._logoButton.set_child(this._logoIcon);
+        this._logoButton.connect('clicked', () => this.toggleExpanded());
+        this.add_child(this._logoButton);
+
+        this._actionsBox = new St.BoxLayout({
+            style_class: 'plyph-floating-actions',
+            opacity: 0,
+            visible: false,
+        });
+        this.add_child(this._actionsBox);
+    }
+
+    get expanded() {
+        return this._expanded;
+    }
+
+    get showingFeedback() {
+        return this._showingFeedback;
+    }
+
+    collapse() {
+        if (!this._expanded && !this._showingFeedback) return;
+        this._expanded = false;
+        this._showingFeedback = false;
+        this._busy = false;
+        if (this._onExpandedChanged) this._onExpandedChanged(false);
+
+        this._logoButton.reactive = true;
+        this._logoButton.can_focus = true;
+        this._logoButton.accessible_name = 'Open Plyph actions';
+        this._logoIcon.icon_name = null;
+        this._logoIcon.gicon = this._gicon;
+        this._setLogoState();
+
+        this._logoButton.remove_style_pseudo_class('active');
+        this._actionsBox.ease({
+            opacity: 0,
+            duration: 150,
+            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+            onComplete: () => {
+                if (!this._expanded && !this._showingFeedback) {
+                    this._actionsBox.hide();
+                    this._actionsBox.destroy_all_children();
+                }
+            }
+        });
+    }
+
+    showFeedback(message, state = 'success') {
+        this._expanded = false;
+        this._showingFeedback = true;
+        this._busy = state === 'working';
+        this._logoButton.add_style_pseudo_class('active');
+        this._logoButton.reactive = !this._busy;
+        this._logoButton.can_focus = !this._busy;
+        this._logoButton.accessible_name = message;
+
+        const iconName = state === 'working'
+            ? 'content-loading-symbolic'
+            : state === 'error'
+                ? 'dialog-error-symbolic'
+                : 'emblem-ok-symbolic';
+        this._logoIcon.gicon = null;
+        this._logoIcon.icon_name = iconName;
+        this._setLogoState(state);
+
+        this._actionsBox.remove_transition('opacity');
+        this._actionsBox.destroy_all_children();
+
+        const box = new St.BoxLayout({
+            vertical: false,
+            style_class: `plyph-floating-status ${state}`,
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+
+        const label = new St.Label({
+            text: message,
+            y_align: Clutter.ActorAlign.CENTER,
+            style_class: 'plyph-floating-status-label',
+        });
+        box.add_child(label);
+
+        this._actionsBox.add_child(box);
+        this._actionsBox.show();
+
+        this._actionsBox.ease({
+            opacity: 255,
+            duration: 150,
+            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+        });
+    }
+
+    toggleExpanded() {
+        if (this._busy)
+            return;
+        if (this._expanded) {
+            this.collapse();
+            return;
+        }
+
+        this._expanded = true;
+        this._showingFeedback = false;
+        this._logoButton.reactive = true;
+        this._logoButton.can_focus = true;
+        this._logoButton.accessible_name = 'Close Plyph actions';
+        this._logoIcon.icon_name = null;
+        this._logoIcon.gicon = this._gicon;
+        this._setLogoState();
+        if (this._onExpandedChanged) this._onExpandedChanged(true);
+
+        this._logoButton.add_style_pseudo_class('active');
+
+        this._actionsBox.destroy_all_children();
+
+        const allActions = this._getActions();
+
+        // Read quick action references from settings if available, else default
+        let quickActionIds = [];
+        try {
+            quickActionIds = JSON.parse(this._settings?.get_string('quick-actions') || '[]');
+        } catch (e) {}
+
+        if (!Array.isArray(quickActionIds) || quickActionIds.length === 0) {
+            quickActionIds = ['ask', 'correct', 'rewrite'];
+        }
+
+        const quickActions = quickActionIds.map(id => {
+            const action = allActions.find(a => a.id === id || a.mode === id);
+            if (!action) return null;
+
+            // Make built-in action names compact for the toolbar
+            let compactName = action.name;
+            if (action.mode === 'ask') compactName = 'Ask';
+            if (action.mode === 'correct') compactName = 'Correct';
+            if (action.mode === 'rewrite') compactName = 'Rewrite';
+            if (action.mode === 'prompt') compactName = 'Run';
+
+            return { ...action, compactName };
+        }).filter(Boolean).slice(0, 4);
+
+        for (const action of quickActions) {
+            const btn = new St.Button({
+                style_class: 'plyph-floating-action-btn flat',
+                reactive: true,
+                can_focus: true,
+                track_hover: true,
+            });
+            const content = new St.BoxLayout({ style_class: 'plyph-floating-action-content' });
+            content.add_child(new St.Icon({
+                icon_name: action.icon,
+                style_class: 'plyph-floating-action-icon',
+            }));
+            content.add_child(new St.Label({
+                text: action.compactName,
+                y_align: Clutter.ActorAlign.CENTER,
+            }));
+            btn.set_child(content);
+            btn.connect('clicked', () => {
+                this.collapse();
+                this._onAction(action);
+            });
+            this._actionsBox.add_child(btn);
+        }
+
+        const moreBtn = new St.Button({
+            style_class: 'plyph-floating-action-btn flat',
+            reactive: true,
+            can_focus: true,
+            track_hover: true,
+            child: new St.Icon({
+                icon_name: 'view-more-symbolic',
+                style_class: 'plyph-floating-action-icon',
+            })
+        });
+        moreBtn.connect('clicked', () => {
+            this.collapse();
+            this._onMore();
+        });
+        this._actionsBox.add_child(moreBtn);
+
+        this._actionsBox.show();
+        this._actionsBox.ease({
+            opacity: 255,
+            duration: 150,
+            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+        });
+    }
+
+    _setLogoState(state = null) {
+        for (const name of ['working', 'success', 'error'])
+            this._logoIcon.remove_style_class_name(name);
+        if (state)
+            this._logoIcon.add_style_class_name(state);
+    }
+});
+
 export default class PlyphExtension extends Extension {
     enable() {
         this._busy = false;
@@ -338,6 +637,10 @@ export default class PlyphExtension extends Extension {
             style_class: 'system-status-icon',
         });
         this._indicator.add_child(this._icon);
+
+        const ask = new PopupMenu.PopupMenuItem('Ask...');
+        ask.connect('activate', () => this._run('ask'));
+        this._indicator.menu.addMenuItem(ask);
 
         const correct = new PopupMenu.PopupMenuItem('Correct selected text');
         correct.connect('activate', () => this._run('correct'));
@@ -369,14 +672,20 @@ export default class PlyphExtension extends Extension {
         this._indicator.menu.addMenuItem(settings);
         Main.panel.addToStatusArea(this.uuid, this._indicator);
 
+        this._addShortcut('ask-shortcut', 'ask');
         this._addShortcut('correct-shortcut', 'correct');
         this._addShortcut('rewrite-shortcut', 'rewrite');
         Main.wm.addKeybinding('actions-shortcut', this._settings,
             Meta.KeyBindingFlags.NONE, Shell.ActionMode.NORMAL,
             () => this._openActions());
+
+        this._setupFloatingButton();
     }
 
     disable() {
+        this._destroyFloatingButton();
+
+        Main.wm.removeKeybinding('ask-shortcut');
         Main.wm.removeKeybinding('correct-shortcut');
         Main.wm.removeKeybinding('rewrite-shortcut');
         Main.wm.removeKeybinding('actions-shortcut');
@@ -388,6 +697,10 @@ export default class PlyphExtension extends Extension {
         if (this._previewDialog) {
             this._previewDialog.destroy();
             this._previewDialog = null;
+        }
+        if (this._askDialog) {
+            this._askDialog.destroy();
+            this._askDialog = null;
         }
         this._destroyActionPalette();
 
@@ -431,6 +744,398 @@ export default class PlyphExtension extends Extension {
         this._settings = null;
     }
 
+    _runAction(action) {
+        this._floatingButton?.collapse();
+        this._run(
+            action.mode, action.prompt,
+            action.mode === 'custom' ? action.name : null,
+            {
+                provider: action.provider ?? '',
+                model: action.model ?? '',
+                inputMode: action.inputMode ?? 'transform',
+                inputLimit: action.inputLimit ?? 0,
+                outputLimit: action.outputLimit ?? 'auto',
+            },
+            true
+        );
+    }
+
+    _runAvailableAction(action, fromFloatingToolbar = false) {
+        if (fromFloatingToolbar) {
+            this._runAction(action);
+            return;
+        }
+
+        this._run(
+            action.mode, action.prompt,
+            action.mode === 'custom' ? action.name : null,
+            {
+                provider: action.provider ?? '',
+                model: action.model ?? '',
+                inputMode: action.inputMode ?? 'transform',
+                inputLimit: action.inputLimit ?? 0,
+                outputLimit: action.outputLimit ?? 0,
+            }
+        );
+    }
+
+    _setupFloatingButton() {
+        this._floatingButton = new FloatingToolbar(
+            this._defaultIcon,
+            () => this._getAvailableActions(),
+            (action) => this._runAction(action),
+            () => this._openActions(true),
+            expanded => this._handleFloatingExpandedChanged(expanded),
+            this._settings
+        );
+        this._floatingButton.hide();
+        Main.layoutManager.uiGroup.add_child(this._floatingButton);
+
+        this._floatingButtonTimeoutId = null;
+        this._floatingToolbarCollapseId = null;
+        this._floatingButtonDismissDelay = 0;
+        this._selectionReadSerial = 0;
+        this._dismissedSelectionText = null;
+        this._dismissedSelectionUntil = 0;
+        this._floatingSourceWindow = null;
+        this._hidingFloatingButton = false;
+        this._lastSelectionText = null;
+
+        this._floatingButton.connect('notify::hover', () =>
+            this._handleFloatingHoverChanged());
+
+        this._floatingButtonCaptureId = global.stage.connect(
+            'captured-event', (_actor, event) => this._handleFloatingCapturedEvent(event));
+
+        const selection = global.display.get_selection();
+        this._selectionChangedId = selection.connect('owner-changed', (_selection, type) => {
+            if (type === Meta.SelectionType.SELECTION_PRIMARY)
+                this._handleSelectionChange();
+        });
+    }
+
+    _destroyFloatingButton() {
+        if (this._selectionChangedId) {
+            const selection = global.display.get_selection();
+            selection.disconnect(this._selectionChangedId);
+            this._selectionChangedId = null;
+        }
+        if (this._floatingButtonCaptureId) {
+            global.stage.disconnect(this._floatingButtonCaptureId);
+            this._floatingButtonCaptureId = null;
+        }
+        if (this._floatingButtonFocusId) {
+            global.display.disconnect(this._floatingButtonFocusId);
+            this._floatingButtonFocusId = null;
+        }
+        if (this._floatingButtonTimeoutId) {
+            GLib.Source.remove(this._floatingButtonTimeoutId);
+            this._floatingButtonTimeoutId = null;
+        }
+        if (this._floatingToolbarCollapseId) {
+            GLib.Source.remove(this._floatingToolbarCollapseId);
+            this._floatingToolbarCollapseId = null;
+        }
+        if (this._floatingButton) {
+            this._floatingButton.destroy();
+            this._floatingButton = null;
+        }
+    }
+
+    _isAppExcluded(window) {
+        if (!window) return false;
+
+        if (this._previewDialog || this._askDialog || this._actionPalette) {
+            return true;
+        }
+
+        const allowed = this._settings.get_string('excluded-apps')
+            .split(/[\n,]/)
+            .map(value => value.trim().toLowerCase())
+            .filter(Boolean);
+
+        if (allowed.length === 0)
+            return false;
+
+        const appId = Shell.WindowTracker.get_default()
+            .get_window_app(window)?.get_id();
+        const values = [
+            appId,
+            window.get_wm_class(),
+            window.get_wm_class_instance(),
+            window.get_gtk_application_id(),
+        ].filter(Boolean).map(value => value?.toLowerCase());
+        return allowed.some(name => values.some(value => value?.includes(name)));
+    }
+
+    async _handleSelectionChange() {
+        const serial = ++this._selectionReadSerial;
+
+        if (!this._settings.get_boolean('show-floating-button')) {
+            this._hideFloatingButton();
+            return;
+        }
+
+        if (this._busy || this._ignoreNextSelection) return;
+
+        const window = global.display.focus_window;
+        if (this._isAppExcluded(window)) {
+            this._hideFloatingButton();
+            return;
+        }
+
+        if (!await this._delay(120) || serial !== this._selectionReadSerial)
+            return;
+
+        if (!this._clipboard)
+            return;
+
+        let text = await this._getClipboardText(St.ClipboardType.PRIMARY);
+        if (serial !== this._selectionReadSerial)
+            return;
+
+        if (!text?.trim()) {
+            if (!await this._delay(120) || serial !== this._selectionReadSerial)
+                return;
+            text = await this._getClipboardText(St.ClipboardType.PRIMARY);
+            if (serial !== this._selectionReadSerial)
+                return;
+        }
+
+        if (!text?.trim()) {
+            if (!this._floatingButton?.visible)
+                this._lastSelectionText = null;
+            return;
+        }
+
+        if (this._dismissedSelectionText) {
+            if (text === this._dismissedSelectionText) {
+                if (GLib.get_monotonic_time() < this._dismissedSelectionUntil)
+                    return;
+            }
+            this._dismissedSelectionText = null;
+            this._dismissedSelectionUntil = 0;
+        }
+
+        if (this._lastSelectionText === text && this._floatingButton?.visible) {
+            return;
+        }
+
+        this._lastSelectionText = text;
+
+        if (this._busy || this._previewDialog || this._askDialog || this._actionPalette) {
+            return;
+        }
+
+        this._positionFloatingButton();
+    }
+
+    _positionFloatingButton() {
+        if (!this._floatingButton) return;
+
+        this._floatingSourceWindow = global.display.focus_window;
+        const [pointerX, pointerY] = global.get_pointer();
+
+        let x = pointerX + 12;
+        let y = pointerY + 12;
+
+        this._floatingButton.opacity = 0;
+        this._floatingButton.show();
+
+        const [, naturalWidth] = this._floatingButton.get_preferred_width(-1);
+        const [, naturalHeight] = this._floatingButton.get_preferred_height(naturalWidth);
+
+        const monitor = Main.layoutManager.currentMonitor ?? Main.layoutManager.primaryMonitor;
+        x = Math.max(monitor.x + 8, Math.min(x, monitor.x + monitor.width - naturalWidth - 8));
+        y = Math.max(monitor.y + 8, Math.min(y, monitor.y + monitor.height - naturalHeight - 8));
+
+        this._floatingButton.set_position(x, y);
+
+        this._floatingButton.ease({
+            opacity: 255,
+            duration: 150,
+            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+        });
+
+        if (!this._floatingButtonFocusId) {
+            this._floatingButtonFocusId = global.display.connect('notify::focus-window', () => {
+                const focusedWindow = global.display.focus_window;
+                if (focusedWindow && focusedWindow !== this._floatingSourceWindow)
+                    this._hideFloatingButton(true);
+            });
+        }
+
+        this._resetFloatingButtonTimeout(FLOATING_INITIAL_HIDE_DELAY);
+    }
+
+    _handleFloatingCapturedEvent(event) {
+        const type = event.type();
+
+        if (this._actionPalette)
+            return Clutter.EVENT_PROPAGATE;
+
+        if (type === Clutter.EventType.BUTTON_PRESS) {
+            if (this._floatingButton?.visible && !this._isFloatingButtonEvent(event))
+                this._hideFloatingButton(true);
+        } else if (type === Clutter.EventType.KEY_PRESS) {
+            if (this._floatingButton?.visible)
+                this._hideFloatingButton(true);
+        } else if (type === Clutter.EventType.SCROLL) {
+            if (this._floatingButton?.visible && !this._isFloatingButtonEvent(event))
+                this._hideFloatingButton(true);
+        }
+
+        return Clutter.EVENT_PROPAGATE;
+    }
+
+    _handleFloatingExpandedChanged(expanded) {
+        if (this._hidingFloatingButton)
+            return;
+
+        this._clearFloatingToolbarCollapse();
+        if (expanded) {
+            this._resetFloatingButtonTimeout(0);
+            this._scheduleFloatingToolbarCollapse();
+        } else if (!this._floatingButton?.showingFeedback) {
+            this._resetFloatingButtonTimeout(FLOATING_HIDE_DELAY);
+        }
+    }
+
+    _handleFloatingHoverChanged() {
+        if (this._floatingButton?.hover || this._isPointerInsideFloatingButton())
+            return;
+
+        if (this._floatingButton?.expanded)
+            this._scheduleFloatingToolbarCollapse();
+        else if (this._floatingButton?.showingFeedback)
+            this._resetFloatingButtonTimeout();
+        else
+            this._resetFloatingButtonTimeout(FLOATING_HIDE_DELAY);
+    }
+
+    _scheduleFloatingToolbarCollapse() {
+        this._clearFloatingToolbarCollapse();
+        if (!this._floatingButton?.expanded)
+            return;
+
+        this._floatingToolbarCollapseId = GLib.timeout_add(
+            GLib.PRIORITY_DEFAULT, FLOATING_COLLAPSE_DELAY, () => {
+                this._floatingToolbarCollapseId = null;
+                if (!this._floatingButton?.expanded)
+                    return GLib.SOURCE_REMOVE;
+                if (this._isPointerInsideFloatingButton()) {
+                    this._scheduleFloatingToolbarCollapse();
+                    return GLib.SOURCE_REMOVE;
+                }
+                this._floatingButton.collapse();
+                return GLib.SOURCE_REMOVE;
+            });
+    }
+
+    _clearFloatingToolbarCollapse() {
+        if (this._floatingToolbarCollapseId) {
+            GLib.Source.remove(this._floatingToolbarCollapseId);
+            this._floatingToolbarCollapseId = null;
+        }
+    }
+
+    _isPointerInsideFloatingButton(margin = 6) {
+        if (!this._floatingButton?.visible)
+            return false;
+
+        const [pointerX, pointerY] = global.get_pointer();
+        const [buttonX, buttonY] = this._floatingButton.get_transformed_position();
+        const [buttonWidth, buttonHeight] = this._floatingButton.get_transformed_size();
+        return pointerX >= buttonX - margin && pointerX <= buttonX + buttonWidth + margin &&
+            pointerY >= buttonY - margin && pointerY <= buttonY + buttonHeight + margin;
+    }
+
+    _isFloatingButtonEvent(event) {
+        if (!this._floatingButton)
+            return false;
+
+        const source = event.get_source?.();
+        if (source && (source === this._floatingButton || this._floatingButton.contains(source)))
+            return true;
+
+        const [x, y] = event.get_coords();
+        const [buttonX, buttonY] = this._floatingButton.get_transformed_position();
+        const [buttonWidth, buttonHeight] = this._floatingButton.get_transformed_size();
+        return x >= buttonX && x <= buttonX + buttonWidth &&
+            y >= buttonY && y <= buttonY + buttonHeight;
+    }
+
+    _resetFloatingButtonTimeout(timeoutDuration = null) {
+        if (Number.isFinite(timeoutDuration))
+            this._floatingButtonDismissDelay = Math.max(0, timeoutDuration);
+
+        if (this._floatingButtonTimeoutId) {
+            GLib.Source.remove(this._floatingButtonTimeoutId);
+            this._floatingButtonTimeoutId = null;
+        }
+
+        if (!this._floatingButtonDismissDelay)
+            return;
+
+        this._floatingButtonTimeoutId = GLib.timeout_add(
+            GLib.PRIORITY_DEFAULT, this._floatingButtonDismissDelay, () => {
+                this._floatingButtonTimeoutId = null;
+                if (this._isPointerInsideFloatingButton()) {
+                    this._resetFloatingButtonTimeout();
+                    return GLib.SOURCE_REMOVE;
+                }
+                this._hideFloatingButton(true);
+                return GLib.SOURCE_REMOVE;
+            });
+    }
+
+    _hideFloatingButton(suppressSelection = false) {
+        if (suppressSelection && this._lastSelectionText) {
+            this._dismissedSelectionText = this._lastSelectionText;
+            this._dismissedSelectionUntil = GLib.get_monotonic_time() +
+                DISMISSED_SELECTION_COOLDOWN;
+        }
+        this._selectionReadSerial = (this._selectionReadSerial ?? 0) + 1;
+        this._floatingButtonDismissDelay = 0;
+        this._floatingSourceWindow = null;
+        this._clearFloatingToolbarCollapse();
+
+        try {
+            if (this._floatingButtonFocusId) {
+                global.display.disconnect(this._floatingButtonFocusId);
+                this._floatingButtonFocusId = null;
+            }
+        } catch (e) {}
+
+        try {
+            if (this._floatingButtonTimeoutId) {
+                GLib.Source.remove(this._floatingButtonTimeoutId);
+                this._floatingButtonTimeoutId = null;
+            }
+        } catch (e) {}
+
+        if (this._floatingButton && this._floatingButton.visible) {
+            this._hidingFloatingButton = true;
+            try {
+                if (typeof this._floatingButton.collapse === 'function') {
+                    this._floatingButton.collapse();
+                }
+            } catch (e) {}
+            this._hidingFloatingButton = false;
+
+            this._floatingButton.remove_transition('opacity');
+            this._floatingButton.ease({
+                opacity: 0,
+                duration: 100,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                onComplete: () => {
+                    if (this._floatingButton && this._floatingButton.opacity === 0)
+                        this._floatingButton.hide();
+                }
+            });
+        }
+    }
+
     _addShortcut(name, mode) {
         Main.wm.addKeybinding(name, this._settings,
             Meta.KeyBindingFlags.NONE, Shell.ActionMode.NORMAL,
@@ -454,22 +1159,16 @@ export default class PlyphExtension extends Extension {
         }
     }
 
-    _openActions() {
-        const position = this._settings.get_string('action-palette-position');
-        if (position !== 'monitor-center' && position !== 'near-pointer') {
-            this._indicator.menu.open();
-            return;
-        }
-        if (this._actionPalette)
-            return;
-
-        const actions = [
+    _getAvailableActions() {
+        return [
+            {name: 'Ask...', mode: 'ask', icon: 'dialog-question-symbolic'},
             {name: 'Correct selected text', mode: 'correct', icon: 'tools-check-spelling-symbolic'},
             {name: 'Rewrite selected text', mode: 'rewrite', icon: 'document-edit-symbolic'},
             {name: 'Run selected prompt', mode: 'prompt', icon: 'system-run-symbolic'},
             ...readActions(this._settings)
                 .filter(action => action.enabled)
                 .map((action, index) => ({
+                    id: action.id,
                     name: action.name,
                     mode: 'custom',
                     prompt: action.prompt,
@@ -482,22 +1181,38 @@ export default class PlyphExtension extends Extension {
                     separatorBefore: index === 0,
                 })),
         ];
+    }
+
+    _openActions(fromFloatingToolbar = false) {
+        let position = this._settings.get_string('action-palette-position');
+        if (fromFloatingToolbar) {
+            this._clearFloatingToolbarCollapse();
+            this._resetFloatingButtonTimeout(0);
+            if (position !== 'monitor-center' && position !== 'near-pointer')
+                position = 'near-pointer';
+        }
+        if (position !== 'monitor-center' && position !== 'near-pointer') {
+            this._indicator.menu.open();
+            return;
+        }
+        if (this._actionPalette)
+            return;
+
+        const actions = this._getAvailableActions();
+        const runAction = action =>
+            this._runAvailableAction(action, fromFloatingToolbar);
+        const resumeFloatingDismiss = () => {
+            if (fromFloatingToolbar && !this._busy && this._floatingButton?.visible)
+                this._resetFloatingButtonTimeout(FLOATING_HIDE_DELAY);
+        };
 
         if (position === 'monitor-center') {
             const palette = new ActionPalette(actions,
-                action => this._run(
-                    action.mode, action.prompt,
-                    action.mode === 'custom' ? action.name : null,
-                    {
-                        provider: action.provider ?? '',
-                        model: action.model ?? '',
-                        inputMode: action.inputMode ?? 'transform',
-                        inputLimit: action.inputLimit ?? 0,
-                        outputLimit: action.outputLimit ?? 0,
-                    }),
+                action => runAction(action),
                 () => {
                     if (this._actionPalette === palette)
                         this._actionPalette = null;
+                    resumeFloatingDismiss();
                 });
             this._actionPalette = palette;
             palette.open();
@@ -521,29 +1236,21 @@ export default class PlyphExtension extends Extension {
             item.connect('activate', callback);
             palette.addMenuItem(item);
         };
-        addAction('Correct selected text', () => this._run('correct'));
-        addAction('Rewrite selected text', () => this._run('rewrite'));
-        addAction('Run selected prompt', () => this._run('prompt'));
+        for (const action of actions.slice(0, 4))
+            addAction(action.name, () => runAction(action));
 
-        const customActions = actions.slice(3);
+        const customActions = actions.slice(4);
         if (customActions.length > 0)
             palette.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
-        for (const action of customActions) {
-            addAction(action.name, () => this._run(
-                'custom', action.prompt, action.name,
-                {
-                    provider: action.provider,
-                    model: action.model,
-                    inputMode: action.inputMode,
-                    inputLimit: action.inputLimit,
-                    outputLimit: action.outputLimit,
-                }));
-        }
+        for (const action of customActions)
+            addAction(action.name, () => runAction(action));
 
         this._actionPalette = palette;
         palette.connect('open-state-changed', (_menu, open) => {
-            if (!open && this._actionPalette === palette)
+            if (!open && this._actionPalette === palette) {
                 this._destroyActionPalette();
+                resumeFloatingDismiss();
+            }
         });
         palette.connect('destroy', () => source.destroy());
 
@@ -568,14 +1275,18 @@ export default class PlyphExtension extends Extension {
         };
     }
 
-    async _run(mode, customPrompt = null, actionName = null, options = {}) {
+    async _run(mode, customPrompt = null, actionName = null, options = {}, fromFloatingToolbar = false) {
         if (this._busy)
             return;
         const client = this._client;
         const focusedWindow = global.display.focus_window;
+        if (!fromFloatingToolbar)
+            this._hideFloatingButton();
         this._busy = true;
         this._setIcon('content-loading-symbolic');
-        this._showFeedback('Working…', false, 0);
+        this._showFeedback('Working…', 'working', 0);
+
+        let isAskDialogPending = false;
         try {
             const selection = await this._readSelection(focusedWindow);
             const text = selection.text;
@@ -583,6 +1294,16 @@ export default class PlyphExtension extends Extension {
                 return;
             if (!text.trim())
                 throw new Error('Select text first.');
+
+            if (mode === 'ask') {
+                isAskDialogPending = true;
+                this._restoreDefaultIcon();
+                this._hideFloatingButton();
+                this._clearPointerFeedback();
+                this._showAskDialog(focusedWindow, selection, text, client);
+                return;
+            }
+
             const requestOptions = mode === 'prompt' ? this._promptOptions() : options;
             const output = await client.transform(text, mode, customPrompt, requestOptions);
             if (this._client !== client)
@@ -590,7 +1311,7 @@ export default class PlyphExtension extends Extension {
             if (this._settings.get_boolean('preview-results'))
                 this._showPreview(output, focusedWindow, selection.primaryText);
             else
-                this._replace(
+                await this._replace(
                     output, false,
                     actionName ?? (mode === 'rewrite'
                         ? 'Rewritten'
@@ -601,8 +1322,58 @@ export default class PlyphExtension extends Extension {
                 return;
             if (error instanceof GLib.Error && error.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
                 return;
-            this._restoreDefaultIcon();
-            this._showFeedback(error.message ?? String(error), true, 3500);
+            this._setIcon('dialog-error-symbolic', 1800);
+            this._showFeedback(error.message ?? String(error), 'error', 3500);
+        } finally {
+            if (!isAskDialogPending)
+                this._busy = false;
+        }
+    }
+
+    _showAskDialog(focusedWindow, selection, text, client) {
+        if (this._askDialog)
+            this._askDialog.destroy();
+
+        const dialog = new AskDialog(
+            instruction => {
+                if (!instruction.trim()) {
+                    this._busy = false;
+                    return;
+                }
+                const systemPrompt = "Use the provided context and the user's instruction to produce the requested response. Return only the useful requested output unless the user explicitly asks for an explanation.";
+                const userPrompt = `Context:\n${text}\n\nInstruction:\n${instruction}`;
+                this._processAsk(focusedWindow, selection, userPrompt, client, systemPrompt);
+            },
+            () => {
+                this._busy = false;
+            },
+            () => {
+                if (this._askDialog === dialog)
+                    this._askDialog = null;
+            }
+        );
+        this._askDialog = dialog;
+        dialog.open();
+    }
+
+    async _processAsk(focusedWindow, selection, text, client, prompt) {
+        this._setIcon('content-loading-symbolic');
+        this._showFeedback('Working…', 'working', 0);
+        try {
+            const output = await client.transform(text, 'ask', prompt, { inputMode: 'prompt' });
+            if (this._client !== client)
+                return;
+            if (this._settings.get_boolean('preview-results'))
+                this._showPreview(output, focusedWindow, selection.primaryText);
+            else
+                await this._replace(output, false, 'Generated', focusedWindow, selection.primaryText);
+        } catch (error) {
+            if (this._client !== client)
+                return;
+            if (error instanceof GLib.Error && error.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
+                return;
+            this._setIcon('dialog-error-symbolic', 1800);
+            this._showFeedback(error.message ?? String(error), 'error', 3500);
         } finally {
             this._busy = false;
         }
@@ -620,7 +1391,7 @@ export default class PlyphExtension extends Extension {
             },
             selection =>
                 this._clipboard.set_text(St.ClipboardType.CLIPBOARD, selection),
-            () => this._showFeedback('Cancelled'),
+            null,
             () => {
                 if (this._previewDialog === dialog)
                     this._previewDialog = null;
@@ -628,12 +1399,13 @@ export default class PlyphExtension extends Extension {
         this._previewDialog = dialog;
         dialog.open();
         this._restoreDefaultIcon();
-        this._showFeedback('Ready to review');
+        this._hideFloatingButton();
+        this._clearPointerFeedback();
     }
 
     _replace(output, delayed, message, focusedWindow, primaryText) {
         this._clipboard.set_text(St.ClipboardType.CLIPBOARD, output);
-        this._pasteWhenReady(delayed ? 200 : 0, message, () => {
+        return this._pasteWhenReady(delayed ? 200 : 0, message, () => {
             this._rememberUndo(focusedWindow);
             this._discardConsumedPrimary(primaryText);
         });
@@ -646,8 +1418,8 @@ export default class PlyphExtension extends Extension {
         if (!this._keyboard)
             return;
         if (!released) {
-            this._restoreDefaultIcon();
-            this._showFeedback('Release the shortcut keys and try again.', true, 3500);
+            this._setIcon('dialog-error-symbolic', 1800);
+            this._showFeedback('Release the shortcut keys and try again.', 'error', 3500);
             return;
         }
         if (!await this._delay(25) || !this._keyboard)
@@ -673,13 +1445,15 @@ export default class PlyphExtension extends Extension {
         if (!this._undo)
             return;
         if (global.display.focus_window !== this._undo.focusedWindow) {
-            this._showFeedback('Return to the original window before undoing.', true, 3500);
+            this._setIcon('dialog-error-symbolic', 1800);
+            this._showFeedback('Return to the original window before undoing.', 'error', 3500);
             return;
         }
 
         const released = await this._waitForModifiersReleased();
         if (!released || !this._keyboard) {
-            this._showFeedback('Release the shortcut keys and try again.', true, 3500);
+            this._setIcon('dialog-error-symbolic', 1800);
+            this._showFeedback('Release the shortcut keys and try again.', 'error', 3500);
             return;
         }
         if (!await this._delay(25) || !this._keyboard)
@@ -699,12 +1473,7 @@ export default class PlyphExtension extends Extension {
         this._undoItem?.setSensitive(false);
     }
 
-    _showFeedback(message, error = false, duration = 1500) {
-        if (!this._settings?.get_boolean('pointer-feedback')) {
-            if (error)
-                Main.notifyError('Plyph', message);
-            return;
-        }
+    _clearPointerFeedback() {
         if (this._feedbackId) {
             GLib.Source.remove(this._feedbackId);
             this._feedbackId = null;
@@ -717,10 +1486,32 @@ export default class PlyphExtension extends Extension {
             this._feedback.destroy();
             this._feedback = null;
         }
+    }
+
+    _showFeedback(message, state = 'success', duration = 1500) {
+        if (this._floatingButton && this._floatingButton.visible) {
+            this._clearPointerFeedback();
+            this._floatingButton.showFeedback(message, state);
+
+            if (duration > 0) {
+                this._resetFloatingButtonTimeout(Math.max(duration, 3000));
+            } else {
+                this._resetFloatingButtonTimeout(0);
+            }
+            return;
+        }
+
+        if (!this._settings?.get_boolean('pointer-feedback')) {
+            if (state === 'error')
+                Main.notifyError('Plyph', message);
+            return;
+        }
+
+        this._clearPointerFeedback();
 
         const label = new St.Label({
             text: message,
-            style_class: error ? 'plyph-feedback error' : 'plyph-feedback',
+            style_class: state === 'error' ? 'plyph-feedback error' : 'plyph-feedback',
             opacity: 0,
         });
         label.clutter_text.line_wrap = true;
@@ -738,20 +1529,9 @@ export default class PlyphExtension extends Extension {
         label.ease({opacity: 255, duration: 100, mode: Clutter.AnimationMode.EASE_OUT_QUAD});
         this._feedback = label;
 
-        this._feedbackFollowId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
-            if (!this._feedback)
-                return GLib.SOURCE_REMOVE;
-            position();
-            return GLib.SOURCE_CONTINUE;
-        });
-
         if (duration > 0) {
             this._feedbackId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, duration, () => {
                 this._feedbackId = null;
-                if (this._feedbackFollowId) {
-                    GLib.Source.remove(this._feedbackFollowId);
-                    this._feedbackFollowId = null;
-                }
                 label.ease({
                     opacity: 0,
                     duration: 150,

@@ -110,7 +110,7 @@ export default class PlyphPreferences extends ExtensionPreferences {
         });
         const actionsPage = new Adw.PreferencesPage({
             title: 'Actions',
-            icon_name: 'system-run-symbolic',
+            icon_name: 'emblem-system-symbolic',
         });
         const promptsPage = new Adw.PreferencesPage({
             title: 'Prompts',
@@ -183,6 +183,12 @@ export default class PlyphPreferences extends ExtensionPreferences {
         runPrompt.add(runOutputLimit.custom);
         actionsPage.add(runPrompt);
 
+        this._quickActionsGroup = new Adw.PreferencesGroup({
+            title: 'Toolbar Quick Actions',
+            description: 'Select which actions appear in the floating toolbar.',
+        });
+        actionsPage.add(this._quickActionsGroup);
+
         const actions = new Adw.PreferencesGroup({
             title: 'Custom actions',
             description: 'Create actions for the panel menu. Use the Open actions shortcut for quick access.',
@@ -196,6 +202,7 @@ export default class PlyphPreferences extends ExtensionPreferences {
             title: 'Shortcuts',
             description: 'Click an action, then press the shortcut you want.',
         });
+        this._shortcutRow(shortcuts, settings, 'ask-shortcut', 'Ask');
         this._shortcutRow(shortcuts, settings, 'correct-shortcut', 'Correct');
         this._shortcutRow(shortcuts, settings, 'rewrite-shortcut', 'Rewrite');
         this._shortcutRow(shortcuts, settings, 'actions-shortcut', 'Open actions');
@@ -226,6 +233,14 @@ export default class PlyphPreferences extends ExtensionPreferences {
         entry(capture, settings, 'explicit-copy-apps', 'Compatibility apps');
 
         const behavior = new Adw.PreferencesGroup({title: 'Behavior'});
+
+        const showFloating = new Adw.SwitchRow({
+            title: 'Show floating action button when selecting text',
+            subtitle: 'An alternative to keyboard shortcuts.',
+        });
+        settings.bind('show-floating-button', showFloating, 'active', Gio.SettingsBindFlags.DEFAULT);
+        behavior.add(showFloating);
+
         const preview = new Adw.SwitchRow({
             title: 'Preview before replacing',
             subtitle: 'Confirm, copy, or cancel the generated result.',
@@ -240,12 +255,19 @@ export default class PlyphPreferences extends ExtensionPreferences {
         behavior.add(clipboardFallback);
         const pointerFeedback = new Adw.SwitchRow({
             title: 'Show feedback near pointer',
-            subtitle: 'Show progress, success, and errors where you are working.',
+            subtitle: 'Show progress, success, and errors inline via the floating toolbar.',
         });
         settings.bind('pointer-feedback', pointerFeedback, 'active', Gio.SettingsBindFlags.DEFAULT);
         behavior.add(pointerFeedback);
         generalPage.add(behavior);
         generalPage.add(capture);
+
+        const exclusion = new Adw.PreferencesGroup({
+            title: 'Floating Button Exclusions',
+            description: 'Comma-separated list of application IDs or WM_CLASS names where the floating button will be hidden.',
+        });
+        entry(exclusion, settings, 'excluded-apps', 'Excluded apps');
+        generalPage.add(exclusion);
 
         const prompts = new Adw.PreferencesGroup({title: 'Built-in prompts'});
         entry(prompts, settings, 'prompt-correct', 'Correction prompt');
@@ -572,6 +594,146 @@ export default class PlyphPreferences extends ExtensionPreferences {
         add.connect('activated', () => this._editAction(settings));
         this._actionsGroup.add(add);
         this._actionRows.push(add);
+
+        this._renderQuickActions(settings);
+    }
+
+    _renderQuickActions(settings) {
+        if (this._quickActionRows) {
+            for (const row of this._quickActionRows) {
+                this._quickActionsGroup.remove(row);
+            }
+        }
+        this._quickActionRows = [];
+
+        const customActions = readActions(settings);
+        const allActions = [
+            { id: 'ask', name: 'Ask' },
+            { id: 'correct', name: 'Correct selected text' },
+            { id: 'rewrite', name: 'Rewrite selected text' },
+            { id: 'prompt', name: 'Run selected prompt' },
+            ...customActions.map(a => ({ id: a.id, name: a.name }))
+        ];
+
+        let quickActionIds = [];
+        try {
+            quickActionIds = JSON.parse(settings.get_string('quick-actions') || '[]');
+            if (Array.isArray(quickActionIds) && quickActionIds.length > 4) {
+                quickActionIds = quickActionIds.slice(0, 4);
+            }
+        } catch (e) {}
+
+        if (!Array.isArray(quickActionIds) || quickActionIds.length === 0) {
+            quickActionIds = ['ask', 'correct', 'rewrite'];
+        }
+
+        const saveQuickActions = (newIds) => {
+            settings.set_string('quick-actions', JSON.stringify(newIds));
+            this._renderQuickActions(settings);
+        };
+
+        const moveAction = (index, offset) => {
+            const target = index + offset;
+            if (index < 0 || target < 0 || target >= quickActionIds.length) return;
+            const newIds = [...quickActionIds];
+            [newIds[index], newIds[target]] = [newIds[target], newIds[index]];
+            saveQuickActions(newIds);
+        };
+
+        for (let i = 0; i < quickActionIds.length; i++) {
+            const id = quickActionIds[i];
+            const action = allActions.find(a => a.id === id);
+            if (!action) continue;
+
+            const row = new Adw.ActionRow({ title: action.name });
+
+            const up = new Gtk.Button({
+                icon_name: 'go-up-symbolic',
+                valign: Gtk.Align.CENTER,
+                tooltip_text: 'Move up',
+                sensitive: i > 0,
+            });
+            up.add_css_class('flat');
+            up.connect('clicked', () => moveAction(i, -1));
+
+            const down = new Gtk.Button({
+                icon_name: 'go-down-symbolic',
+                valign: Gtk.Align.CENTER,
+                tooltip_text: 'Move down',
+                sensitive: i < quickActionIds.length - 1,
+            });
+            down.add_css_class('flat');
+            down.connect('clicked', () => moveAction(i, 1));
+
+            const remove = new Gtk.Button({
+                icon_name: 'list-remove-symbolic',
+                valign: Gtk.Align.CENTER,
+                tooltip_text: 'Remove from Quick Actions',
+            });
+            remove.add_css_class('flat');
+            remove.connect('clicked', () => {
+                saveQuickActions(quickActionIds.filter(val => val !== id));
+            });
+
+            row.add_suffix(up);
+            row.add_suffix(down);
+            row.add_suffix(remove);
+
+            this._quickActionsGroup.add(row);
+            this._quickActionRows.push(row);
+        }
+
+        if (quickActionIds.length < 4) {
+            const add = new Adw.ActionRow({ title: 'Add quick action', activatable: true });
+            add.add_prefix(new Gtk.Image({ icon_name: 'list-add-symbolic' }));
+            add.connect('activated', () => {
+                this._showAddQuickActionDialog(settings, allActions, quickActionIds, (newId) => {
+                    saveQuickActions([...quickActionIds, newId]);
+                });
+            });
+            this._quickActionsGroup.add(add);
+            this._quickActionRows.push(add);
+        } else {
+            const limit = new Adw.ActionRow({
+                title: 'Limit reached',
+                subtitle: 'Up to four actions appear beside the selection button. More remain available in the palette.'
+            });
+            this._quickActionsGroup.add(limit);
+            this._quickActionRows.push(limit);
+        }
+    }
+
+    _showAddQuickActionDialog(settings, allActions, currentIds, onAdd) {
+        const availableActions = allActions.filter(a => a.id && !currentIds.includes(a.id));
+
+        const dialog = new Adw.PreferencesWindow({
+            title: 'Add Quick Action',
+            modal: true,
+            destroy_with_parent: true,
+            transient_for: this._actionsGroup.get_root(),
+            default_width: 400,
+            default_height: 500,
+        });
+
+        const page = new Adw.PreferencesPage();
+        const group = new Adw.PreferencesGroup({ title: 'Available Actions' });
+
+        for (const action of availableActions) {
+            const row = new Adw.ActionRow({ title: action.name, activatable: true });
+            row.connect('activated', () => {
+                onAdd(action.id);
+                dialog.close();
+            });
+            group.add(row);
+        }
+
+        if (availableActions.length === 0) {
+            group.add(new Adw.ActionRow({ title: 'No more actions available.' }));
+        }
+
+        page.add(group);
+        dialog.add(page);
+        dialog.present();
     }
 
     _moveAction(settings, id, offset) {

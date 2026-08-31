@@ -84,3 +84,73 @@
   margin: 6px 4px;
   background-color: rgba(128, 128, 128, 0.35);
 }
+
+.plyph-ask-entry {
+  min-width: 400px;
+  margin-top: 10px;
+  margin-bottom: 10px;
+}
+
+.plyph-floating-toolbar {
+  background-color: rgba(32, 32, 32, 0.94);
+  border-radius: 99px;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
+  padding: 3px;
+}
+
+.plyph-floating-logo {
+  padding: 4px;
+  border-radius: 99px;
+}
+
+.plyph-floating-logo:hover,
+.plyph-floating-logo:focus,
+.plyph-floating-logo:active {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.plyph-floating-logo-icon {
+  icon-size: 16px;
+  color: white;
+}
+
+.plyph-floating-actions {
+  spacing: 2px;
+  margin-left: 2px;
+}
+
+.plyph-floating-status {
+  padding: 4px 10px 4px 6px;
+}
+
+.plyph-floating-status-label {
+  max-width: 300px;
+}
+
+.plyph-floating-logo-icon.success,
+.plyph-floating-status.success {
+  color: #57e389;
+}
+
+.plyph-floating-logo-icon.error,
+.plyph-floating-status.error {
+  color: #ff7b63;
+}
+
+.plyph-floating-action-btn {
+  padding: 4px 10px;
+  border-radius: 99px;
+}
+
+.plyph-floating-action-btn:hover,
+.plyph-floating-action-btn:focus {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.plyph-floating-action-content {
+  spacing: 6px;
+}
+
+.plyph-floating-action-icon {
+  icon-size: 16px;
+}

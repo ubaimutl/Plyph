@@ -53,6 +53,7 @@ gnome-extensions pack --force \
   --extra-source=secrets.js \
   --extra-source=stylesheet.css \
   --extra-source=icons \
+  --extra-source=LICENSE \
   --schema=schemas/org.gnome.shell.extensions.ai-autocorrect.gschema.xml
 gnome-extensions install --force plyph@ubai.dev.shell-extension.zip
 ```
