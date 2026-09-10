@@ -241,6 +241,20 @@ export default class PlyphPreferences extends ExtensionPreferences {
         settings.bind('show-floating-button', showFloating, 'active', Gio.SettingsBindFlags.DEFAULT);
         behavior.add(showFloating);
 
+        const toolbarScales = [1, 1.25, 1.5, 1.75, 2];
+        const toolbarScale = new Adw.ComboRow({
+            title: 'Floating toolbar scale',
+            subtitle: 'Enlarge the button, icons, and text together.',
+            model: Gtk.StringList.new(['1× (Default)', '1.25×', '1.5×', '1.75×', '2×']),
+        });
+        toolbarScale.selected = Math.max(0,
+            toolbarScales.indexOf(settings.get_double('floating-toolbar-scale')));
+        settings.bind('show-floating-button', toolbarScale, 'sensitive', Gio.SettingsBindFlags.GET);
+        toolbarScale.connect('notify::selected', () => {
+            settings.set_double('floating-toolbar-scale', toolbarScales[toolbarScale.selected] ?? 1);
+        });
+        behavior.add(toolbarScale);
+
         const preview = new Adw.SwitchRow({
             title: 'Preview before replacing',
             subtitle: 'Confirm, copy, or cancel the generated result.',
@@ -254,11 +268,36 @@ export default class PlyphPreferences extends ExtensionPreferences {
         settings.bind('clipboard-fallback', clipboardFallback, 'active', Gio.SettingsBindFlags.DEFAULT);
         behavior.add(clipboardFallback);
         const pointerFeedback = new Adw.SwitchRow({
-            title: 'Show feedback near pointer',
-            subtitle: 'Show progress, success, and errors inline via the floating toolbar.',
+            title: 'Show action feedback',
+            subtitle: 'Display a lightweight on-screen status while actions run.',
         });
         settings.bind('pointer-feedback', pointerFeedback, 'active', Gio.SettingsBindFlags.DEFAULT);
         behavior.add(pointerFeedback);
+        const feedbackPositions = [
+            'top-left', 'top-center', 'top-right',
+            'center-left', 'center', 'center-right',
+            'bottom-left', 'bottom-center', 'bottom-right',
+        ];
+        const feedbackPosition = new Adw.ComboRow({
+            title: 'Feedback location',
+            subtitle: 'Choose where the action status appears on the active monitor.',
+            model: Gtk.StringList.new([
+                'Top left', 'Top center', 'Top right',
+                'Center left', 'Center', 'Center right',
+                'Bottom left', 'Bottom center', 'Bottom right',
+            ]),
+        });
+        feedbackPosition.selected = Math.max(0,
+            feedbackPositions.indexOf(settings.get_string('feedback-position')));
+        feedbackPosition.sensitive = pointerFeedback.active;
+        feedbackPosition.connect('notify::selected', () => {
+            settings.set_string('feedback-position',
+                feedbackPositions[feedbackPosition.selected] ?? 'bottom-center');
+        });
+        pointerFeedback.connect('notify::active', () => {
+            feedbackPosition.sensitive = pointerFeedback.active;
+        });
+        behavior.add(feedbackPosition);
         generalPage.add(behavior);
         generalPage.add(capture);
 

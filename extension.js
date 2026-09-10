@@ -1,5 +1,5 @@
-import Gio from 'gi://Gio';
 import Clutter from 'gi://Clutter';
+import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import Meta from 'gi://Meta';
@@ -21,6 +21,7 @@ const SHELL_MAJOR = Number.parseInt(Config.PACKAGE_VERSION, 10);
 const FLOATING_COLLAPSE_DELAY = 900;
 const FLOATING_HIDE_DELAY = 2800;
 const FLOATING_INITIAL_HIDE_DELAY = 4000;
+const FLOATING_TIMEOUT_CHECK_INTERVAL = 100;
 const DISMISSED_SELECTION_COOLDOWN = 1200000;
 
 const ResultDialog = GObject.registerClass(
@@ -122,7 +123,6 @@ class ResultDialog extends ModalDialog.ModalDialog {
                 action: () => this._finish(onReplace, this._label.clutter_text.get_text()),
             },
         ]);
-        this.setInitialKeyFocus(this._label.clutter_text);
     }
 
     vfunc_key_press_event(event) {
@@ -238,7 +238,7 @@ class AskDialog extends ModalDialog.ModalDialog {
             },
         ]);
 
-        this._entry.clutter_text.connect('activate', () => {
+        this._entryActivateId = this._entry.clutter_text.connect('activate', () => {
             this._finish(onAsk, this._entry.get_text());
         });
 
@@ -246,6 +246,10 @@ class AskDialog extends ModalDialog.ModalDialog {
     }
 
     destroy() {
+        if (this._entryActivateId) {
+            this._entry.clutter_text.disconnect(this._entryActivateId);
+            this._entryActivateId = null;
+        }
         this._entry?.destroy();
         this._entry = null;
         this._onAsk = null;
@@ -386,7 +390,7 @@ class ActionPalette extends ModalDialog.ModalDialog {
 
 const FloatingToolbar = GObject.registerClass(
 class FloatingToolbar extends St.BoxLayout {
-    _init(gicon, getActions, onAction, onMore, onExpandedChanged, settings) {
+    _init(gicon, getActions, onAction, onMore, onExpandedChanged, settings, iconDirectory) {
         super._init({
             style_class: 'plyph-floating-toolbar',
             reactive: true,
@@ -403,6 +407,9 @@ class FloatingToolbar extends St.BoxLayout {
         this._onMore = onMore;
         this._onExpandedChanged = onExpandedChanged;
         this._settings = settings;
+        this._toolbarIcons = Object.fromEntries(
+            ['ask', 'correct', 'rewrite', 'prompt', 'custom', 'more'].map(name =>
+                [name, Gio.icon_new_for_string(`${iconDirectory}/plyph-${name}-symbolic.svg`)]));
 
         this._logoButton = new St.Button({
             style_class: 'plyph-floating-logo',
@@ -549,7 +556,7 @@ class FloatingToolbar extends St.BoxLayout {
             if (action.mode === 'ask') compactName = 'Ask';
             if (action.mode === 'correct') compactName = 'Correct';
             if (action.mode === 'rewrite') compactName = 'Rewrite';
-            if (action.mode === 'prompt') compactName = 'Run';
+            if (action.mode === 'prompt') compactName = 'Run Prompt';
 
             return { ...action, compactName };
         }).filter(Boolean).slice(0, 4);
@@ -563,8 +570,9 @@ class FloatingToolbar extends St.BoxLayout {
             });
             const content = new St.BoxLayout({ style_class: 'plyph-floating-action-content' });
             content.add_child(new St.Icon({
-                icon_name: action.icon,
+                gicon: this._toolbarIcons[action.mode] ?? this._toolbarIcons.custom,
                 style_class: 'plyph-floating-action-icon',
+                y_align: Clutter.ActorAlign.CENTER,
             }));
             content.add_child(new St.Label({
                 text: action.compactName,
@@ -584,8 +592,9 @@ class FloatingToolbar extends St.BoxLayout {
             can_focus: true,
             track_hover: true,
             child: new St.Icon({
-                icon_name: 'view-more-symbolic',
+                gicon: this._toolbarIcons.more,
                 style_class: 'plyph-floating-action-icon',
+                y_align: Clutter.ActorAlign.CENTER,
             })
         });
         moreBtn.connect('clicked', () => {
@@ -786,10 +795,20 @@ export default class PlyphExtension extends Extension {
             (action) => this._runAction(action),
             () => this._openActions(true),
             expanded => this._handleFloatingExpandedChanged(expanded),
-            this._settings
+            this._settings,
+            `${this.path}/icons`
         );
         this._floatingButton.hide();
         Main.layoutManager.uiGroup.add_child(this._floatingButton);
+        this._applyFloatingToolbarScale();
+        this._floatingToolbarScaleId = this._settings.connect('changed::floating-toolbar-scale', () =>
+            this._applyFloatingToolbarScale());
+        // CSS scaling changes the actual allocation, keeping text sharp and
+        // pointer targets aligned with the visible controls.
+        this._floatingButtonSizeSignalIds = [
+            this._floatingButton.connect('notify::width', () => this._clampFloatingToolbar()),
+            this._floatingButton.connect('notify::height', () => this._clampFloatingToolbar()),
+        ];
 
         this._floatingButtonTimeoutId = null;
         this._floatingToolbarCollapseId = null;
@@ -797,11 +816,13 @@ export default class PlyphExtension extends Extension {
         this._selectionReadSerial = 0;
         this._dismissedSelectionText = null;
         this._dismissedSelectionUntil = 0;
+        this._dismissedSelectionWindow = null;
         this._floatingSourceWindow = null;
+        this._floatingSourceSignalIds = [];
         this._hidingFloatingButton = false;
         this._lastSelectionText = null;
 
-        this._floatingButton.connect('notify::hover', () =>
+        this._floatingButtonHoverId = this._floatingButton.connect('notify::hover', () =>
             this._handleFloatingHoverChanged());
 
         this._floatingButtonCaptureId = global.stage.connect(
@@ -812,9 +833,70 @@ export default class PlyphExtension extends Extension {
             if (type === Meta.SelectionType.SELECTION_PRIMARY)
                 this._handleSelectionChange();
         });
+
+        this._floatingButtonFocusId = global.display.connect('notify::focus-window', () => {
+            const window = global.display.focus_window;
+            if (window === this._floatingSourceWindow)
+                return;
+            // Shell controls may temporarily take focus from the source window.
+            if (!window && (this._actionPalette || this._isPointerInsideFloatingButton(0)))
+                return;
+            this._hideFloatingButton(true);
+        });
+        this._floatingButtonSettingId = this._settings.connect('changed::show-floating-button', () => {
+            if (!this._settings.get_boolean('show-floating-button'))
+                this._hideFloatingButton(true);
+        });
+        this._floatingOverviewId = Main.overview.connect('showing', () =>
+            this._hideFloatingButton(true));
+    }
+
+    _applyFloatingToolbarScale() {
+        const scales = [100, 125, 150, 175, 200];
+        const requested = Math.round(this._settings.get_double('floating-toolbar-scale') * 100);
+        const scale = scales.includes(requested) ? requested : 100;
+        for (const value of scales)
+            this._floatingButton.remove_style_class_name(`plyph-toolbar-scale-${value}`);
+        if (scale !== 100)
+            this._floatingButton.add_style_class_name(`plyph-toolbar-scale-${scale}`);
+    }
+
+    _clampFloatingToolbar() {
+        const toolbar = this._floatingButton;
+        if (!toolbar?.visible)
+            return;
+        const monitorIndex = this._floatingSourceWindow?.get_monitor();
+        const monitor = Main.layoutManager.monitors[monitorIndex]
+            ?? Main.layoutManager.currentMonitor ?? Main.layoutManager.primaryMonitor;
+        const x = Math.max(monitor.x + 8,
+            Math.min(toolbar.x, monitor.x + monitor.width - toolbar.width - 8));
+        const y = Math.max(monitor.y + 8,
+            Math.min(toolbar.y, monitor.y + monitor.height - toolbar.height - 8));
+        if (x !== toolbar.x || y !== toolbar.y)
+            toolbar.set_position(x, y);
     }
 
     _destroyFloatingButton() {
+        this._hideFloatingButton();
+        for (const id of this._floatingButtonSizeSignalIds ?? [])
+            this._floatingButton?.disconnect(id);
+        this._floatingButtonSizeSignalIds = [];
+        if (this._floatingButtonHoverId) {
+            this._floatingButton?.disconnect(this._floatingButtonHoverId);
+            this._floatingButtonHoverId = null;
+        }
+        if (this._floatingToolbarScaleId) {
+            this._settings.disconnect(this._floatingToolbarScaleId);
+            this._floatingToolbarScaleId = null;
+        }
+        if (this._floatingButtonSettingId) {
+            this._settings.disconnect(this._floatingButtonSettingId);
+            this._floatingButtonSettingId = null;
+        }
+        if (this._floatingOverviewId) {
+            Main.overview.disconnect(this._floatingOverviewId);
+            this._floatingOverviewId = null;
+        }
         if (this._selectionChangedId) {
             const selection = global.display.get_selection();
             selection.disconnect(this._selectionChangedId);
@@ -840,6 +922,30 @@ export default class PlyphExtension extends Extension {
             this._floatingButton.destroy();
             this._floatingButton = null;
         }
+    }
+
+    _watchFloatingSourceWindow(window) {
+        if (this._floatingSourceWindow === window)
+            return;
+
+        this._clearFloatingSourceWindow();
+        this._floatingSourceWindow = window;
+        // Wayland delivers application input before Clutter's captured-event.
+        // Mutter updates user-time for clicks, touch and keys in that window,
+        // including clicks that clear a selection without releasing PRIMARY.
+        this._floatingSourceSignalIds = [
+            window.connect('notify::user-time', () => this._hideFloatingButton(true)),
+            window.connect('unmanaged', () => this._hideFloatingButton(true)),
+            window.connect('position-changed', () => this._hideFloatingButton(true)),
+            window.connect('size-changed', () => this._hideFloatingButton(true)),
+        ];
+    }
+
+    _clearFloatingSourceWindow() {
+        for (const id of this._floatingSourceSignalIds ?? [])
+            this._floatingSourceWindow.disconnect(id);
+        this._floatingSourceSignalIds = [];
+        this._floatingSourceWindow = null;
     }
 
     _isAppExcluded(window) {
@@ -871,7 +977,7 @@ export default class PlyphExtension extends Extension {
     async _handleSelectionChange() {
         const serial = ++this._selectionReadSerial;
 
-        if (!this._settings.get_boolean('show-floating-button')) {
+        if (!this._settings?.get_boolean('show-floating-button')) {
             this._hideFloatingButton();
             return;
         }
@@ -879,42 +985,55 @@ export default class PlyphExtension extends Extension {
         if (this._busy || this._ignoreNextSelection) return;
 
         const window = global.display.focus_window;
-        if (this._isAppExcluded(window)) {
+        if (!window || Main.overview.visible || this._isAppExcluded(window)) {
             this._hideFloatingButton();
             return;
         }
 
-        if (!await this._delay(120) || serial !== this._selectionReadSerial)
+        this._watchFloatingSourceWindow(window);
+        const userTime = window.get_user_time();
+        const isCurrent = () => serial === this._selectionReadSerial &&
+            this._settings?.get_boolean('show-floating-button') &&
+            global.display.focus_window === window && window.get_user_time() === userTime;
+
+        if (!await this._delay(120) || !isCurrent())
             return;
+
+        // Wait until a drag/Shift-selection finishes before placing the button.
+        const selectingMask = Clutter.ModifierType.BUTTON1_MASK | Clutter.ModifierType.SHIFT_MASK;
+        while (global.get_pointer()[2] & selectingMask) {
+            if (!await this._delay(50) || !isCurrent())
+                return;
+        }
 
         if (!this._clipboard)
             return;
 
         let text = await this._getClipboardText(St.ClipboardType.PRIMARY);
-        if (serial !== this._selectionReadSerial)
+        if (!isCurrent())
             return;
 
         if (!text?.trim()) {
-            if (!await this._delay(120) || serial !== this._selectionReadSerial)
+            if (!await this._delay(120) || !isCurrent())
                 return;
             text = await this._getClipboardText(St.ClipboardType.PRIMARY);
-            if (serial !== this._selectionReadSerial)
+            if (!isCurrent())
                 return;
         }
 
         if (!text?.trim()) {
-            if (!this._floatingButton?.visible)
-                this._lastSelectionText = null;
+            this._hideFloatingButton(true);
             return;
         }
 
         if (this._dismissedSelectionText) {
-            if (text === this._dismissedSelectionText) {
+            if (text === this._dismissedSelectionText && window === this._dismissedSelectionWindow) {
                 if (GLib.get_monotonic_time() < this._dismissedSelectionUntil)
                     return;
             }
             this._dismissedSelectionText = null;
             this._dismissedSelectionUntil = 0;
+            this._dismissedSelectionWindow = null;
         }
 
         if (this._lastSelectionText === text && this._floatingButton?.visible) {
@@ -933,12 +1052,11 @@ export default class PlyphExtension extends Extension {
     _positionFloatingButton() {
         if (!this._floatingButton) return;
 
-        this._floatingSourceWindow = global.display.focus_window;
         const [pointerX, pointerY] = global.get_pointer();
-
         let x = pointerX + 12;
         let y = pointerY + 12;
 
+        this._floatingButton.remove_transition('opacity');
         this._floatingButton.opacity = 0;
         this._floatingButton.show();
 
@@ -957,14 +1075,6 @@ export default class PlyphExtension extends Extension {
             mode: Clutter.AnimationMode.EASE_OUT_QUAD,
         });
 
-        if (!this._floatingButtonFocusId) {
-            this._floatingButtonFocusId = global.display.connect('notify::focus-window', () => {
-                const focusedWindow = global.display.focus_window;
-                if (focusedWindow && focusedWindow !== this._floatingSourceWindow)
-                    this._hideFloatingButton(true);
-            });
-        }
-
         this._resetFloatingButtonTimeout(FLOATING_INITIAL_HIDE_DELAY);
     }
 
@@ -974,14 +1084,16 @@ export default class PlyphExtension extends Extension {
         if (this._actionPalette)
             return Clutter.EVENT_PROPAGATE;
 
-        if (type === Clutter.EventType.BUTTON_PRESS) {
-            if (this._floatingButton?.visible && !this._isFloatingButtonEvent(event))
+        if (type === Clutter.EventType.BUTTON_PRESS || type === Clutter.EventType.TOUCH_BEGIN) {
+            if (!this._isFloatingButtonEvent(event))
                 this._hideFloatingButton(true);
         } else if (type === Clutter.EventType.KEY_PRESS) {
-            if (this._floatingButton?.visible)
+            const focus = global.stage.get_key_focus();
+            const toolbarFocused = focus && this._floatingButton?.contains(focus);
+            if (!toolbarFocused || event.get_key_symbol() === Clutter.KEY_Escape)
                 this._hideFloatingButton(true);
         } else if (type === Clutter.EventType.SCROLL) {
-            if (this._floatingButton?.visible && !this._isFloatingButtonEvent(event))
+            if (!this._isFloatingButtonEvent(event))
                 this._hideFloatingButton(true);
         }
 
@@ -1002,6 +1114,8 @@ export default class PlyphExtension extends Extension {
     }
 
     _handleFloatingHoverChanged() {
+        if (this._hidingFloatingButton || !this._floatingButton?.visible)
+            return;
         if (this._floatingButton?.hover || this._isPointerInsideFloatingButton())
             return;
 
@@ -1051,7 +1165,7 @@ export default class PlyphExtension extends Extension {
     }
 
     _isFloatingButtonEvent(event) {
-        if (!this._floatingButton)
+        if (!this._floatingButton?.visible)
             return false;
 
         const source = event.get_source?.();
@@ -1074,65 +1188,52 @@ export default class PlyphExtension extends Extension {
             this._floatingButtonTimeoutId = null;
         }
 
-        if (!this._floatingButtonDismissDelay)
+        if (!this._floatingButtonDismissDelay || !this._floatingButton?.visible ||
+            this._hidingFloatingButton)
             return;
 
+        const deadline = GLib.get_monotonic_time() + this._floatingButtonDismissDelay * 1000;
         this._floatingButtonTimeoutId = GLib.timeout_add(
-            GLib.PRIORITY_DEFAULT, this._floatingButtonDismissDelay, () => {
+            GLib.PRIORITY_DEFAULT, FLOATING_TIMEOUT_CHECK_INTERVAL, () => {
+                // Keep the deadline while hovered, so a missed leave event cannot
+                // extend it by another full timeout every time we check.
+                if (GLib.get_monotonic_time() < deadline || this._isPointerInsideFloatingButton())
+                    return GLib.SOURCE_CONTINUE;
                 this._floatingButtonTimeoutId = null;
-                if (this._isPointerInsideFloatingButton()) {
-                    this._resetFloatingButtonTimeout();
-                    return GLib.SOURCE_REMOVE;
-                }
                 this._hideFloatingButton(true);
                 return GLib.SOURCE_REMOVE;
             });
     }
 
     _hideFloatingButton(suppressSelection = false) {
-        if (suppressSelection && this._lastSelectionText) {
+        if (suppressSelection && this._lastSelectionText && this._floatingSourceWindow) {
             this._dismissedSelectionText = this._lastSelectionText;
+            this._dismissedSelectionWindow = this._floatingSourceWindow;
             this._dismissedSelectionUntil = GLib.get_monotonic_time() +
                 DISMISSED_SELECTION_COOLDOWN;
         }
         this._selectionReadSerial = (this._selectionReadSerial ?? 0) + 1;
+        this._lastSelectionText = null;
         this._floatingButtonDismissDelay = 0;
-        this._floatingSourceWindow = null;
+        this._clearFloatingSourceWindow();
         this._clearFloatingToolbarCollapse();
+        if (this._floatingButtonTimeoutId) {
+            GLib.Source.remove(this._floatingButtonTimeoutId);
+            this._floatingButtonTimeoutId = null;
+        }
 
+        if (!this._floatingButton?.visible)
+            return;
+
+        // Hide synchronously: repeated input/hover callbacks must not restart a
+        // fade or leave an invisible reactive actor over the application.
+        this._hidingFloatingButton = true;
         try {
-            if (this._floatingButtonFocusId) {
-                global.display.disconnect(this._floatingButtonFocusId);
-                this._floatingButtonFocusId = null;
-            }
-        } catch (e) {}
-
-        try {
-            if (this._floatingButtonTimeoutId) {
-                GLib.Source.remove(this._floatingButtonTimeoutId);
-                this._floatingButtonTimeoutId = null;
-            }
-        } catch (e) {}
-
-        if (this._floatingButton && this._floatingButton.visible) {
-            this._hidingFloatingButton = true;
-            try {
-                if (typeof this._floatingButton.collapse === 'function') {
-                    this._floatingButton.collapse();
-                }
-            } catch (e) {}
-            this._hidingFloatingButton = false;
-
             this._floatingButton.remove_transition('opacity');
-            this._floatingButton.ease({
-                opacity: 0,
-                duration: 100,
-                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-                onComplete: () => {
-                    if (this._floatingButton && this._floatingButton.opacity === 0)
-                        this._floatingButton.hide();
-                }
-            });
+            this._floatingButton.hide();
+            this._floatingButton.collapse();
+        } finally {
+            this._hidingFloatingButton = false;
         }
     }
 
@@ -1280,8 +1381,7 @@ export default class PlyphExtension extends Extension {
             return;
         const client = this._client;
         const focusedWindow = global.display.focus_window;
-        if (!fromFloatingToolbar)
-            this._hideFloatingButton();
+        this._hideFloatingButton(true);
         this._busy = true;
         this._setIcon('content-loading-symbolic');
         this._showFeedback('Working…', 'working', 0);
@@ -1489,19 +1589,8 @@ export default class PlyphExtension extends Extension {
     }
 
     _showFeedback(message, state = 'success', duration = 1500) {
-        if (this._floatingButton && this._floatingButton.visible) {
-            this._clearPointerFeedback();
-            this._floatingButton.showFeedback(message, state);
-
-            if (duration > 0) {
-                this._resetFloatingButtonTimeout(Math.max(duration, 3000));
-            } else {
-                this._resetFloatingButtonTimeout(0);
-            }
-            return;
-        }
-
         if (!this._settings?.get_boolean('pointer-feedback')) {
+            this._clearPointerFeedback();
             if (state === 'error')
                 Main.notifyError('Plyph', message);
             return;
@@ -1509,37 +1598,75 @@ export default class PlyphExtension extends Extension {
 
         this._clearPointerFeedback();
 
+        const feedback = new St.BoxLayout({
+            style_class: `plyph-feedback ${state}`,
+            opacity: 0,
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        const icon = new St.Icon({
+            icon_name: state === 'working'
+                ? 'content-loading-symbolic'
+                : state === 'error'
+                    ? 'dialog-error-symbolic'
+                    : 'emblem-ok-symbolic',
+            style_class: 'plyph-feedback-icon',
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        feedback.add_child(icon);
         const label = new St.Label({
             text: message,
-            style_class: state === 'error' ? 'plyph-feedback error' : 'plyph-feedback',
-            opacity: 0,
+            style_class: 'plyph-feedback-label',
+            y_align: Clutter.ActorAlign.CENTER,
         });
         label.clutter_text.line_wrap = true;
-        Main.uiGroup.add_child(label);
-        const [, naturalWidth] = label.get_preferred_width(-1);
-        const [, naturalHeight] = label.get_preferred_height(naturalWidth);
+        feedback.add_child(label);
+        Main.uiGroup.add_child(feedback);
 
-        const position = () => {
-            const [pointerX, pointerY] = global.get_pointer();
-            const x = Math.max(8, Math.min(pointerX + 16, global.stage.width - naturalWidth - 8));
-            const y = Math.max(8, Math.min(pointerY + 20, global.stage.height - naturalHeight - 8));
-            label.set_position(x, y);
-        };
-        position();
-        label.ease({opacity: 255, duration: 100, mode: Clutter.AnimationMode.EASE_OUT_QUAD});
-        this._feedback = label;
+        const [, naturalWidth] = feedback.get_preferred_width(-1);
+        const [, naturalHeight] = feedback.get_preferred_height(naturalWidth);
+        const windowMonitor = global.display.focus_window?.get_monitor();
+        const monitor = Number.isInteger(windowMonitor)
+            ? Main.layoutManager.monitors[windowMonitor]
+                ?? Main.layoutManager.currentMonitor ?? Main.layoutManager.primaryMonitor
+            : Main.layoutManager.currentMonitor ?? Main.layoutManager.primaryMonitor;
+        const position = this._settings.get_string('feedback-position');
+        const margin = 32;
+        let x;
+        let y;
+
+        if (position.endsWith('-left'))
+            x = monitor.x + margin;
+        else if (position.endsWith('-right'))
+            x = monitor.x + monitor.width - naturalWidth - margin;
+        else
+            x = monitor.x + (monitor.width - naturalWidth) / 2;
+
+        if (position.startsWith('top-'))
+            y = monitor.y + margin;
+        else if (position.startsWith('bottom-'))
+            y = monitor.y + monitor.height - naturalHeight - margin;
+        else
+            y = monitor.y + (monitor.height - naturalHeight) / 2;
+
+        x = Math.max(monitor.x + 8,
+            Math.min(x, monitor.x + monitor.width - naturalWidth - 8));
+        y = Math.max(monitor.y + 8,
+            Math.min(y, monitor.y + monitor.height - naturalHeight - 8));
+        feedback.set_position(Math.round(x), Math.round(y));
+        feedback.ease({opacity: 255, duration: 100, mode: Clutter.AnimationMode.EASE_OUT_QUAD});
+        this._feedback = feedback;
 
         if (duration > 0) {
             this._feedbackId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, duration, () => {
                 this._feedbackId = null;
-                label.ease({
+                feedback.ease({
                     opacity: 0,
                     duration: 150,
                     mode: Clutter.AnimationMode.EASE_OUT_QUAD,
                     onComplete: () => {
-                        if (this._feedback === label)
+                        if (this._feedback === feedback)
                             this._feedback = null;
-                        label.destroy();
+                        feedback.destroy();
                     },
                 });
                 return GLib.SOURCE_REMOVE;

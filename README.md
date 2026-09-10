@@ -55,13 +55,13 @@ gnome-extensions pack --force \
   --extra-source=icons \
   --extra-source=LICENSE \
   --schema=schemas/org.gnome.shell.extensions.ai-autocorrect.gschema.xml
-gnome-extensions install --force plyph@ubai.dev.shell-extension.zip
+gnome-extensions install --force ai-autocorrect@ubai.dev.shell-extension.zip
 ```
 
 Log out and back in, then enable the extension:
 
 ```bash
-gnome-extensions enable plyph@ubai.dev
+gnome-extensions enable ai-autocorrect@ubai.dev
 ```
 
 ## Providers

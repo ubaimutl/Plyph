@@ -1,14 +1,24 @@
 .plyph-feedback {
-  max-width: 360px;
-  padding: 8px 12px;
-  border-radius: 9px;
+  spacing: 8px;
+  max-width: 380px;
+  padding: 10px 14px;
+  border-radius: 12px;
   color: white;
-  background-color: rgba(32, 32, 32, 0.94);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  background-color: rgba(28, 28, 28, 0.94);
+  box-shadow: 0 5px 18px rgba(0, 0, 0, 0.32);
 }
 
 .plyph-feedback.error {
   background-color: rgba(145, 28, 28, 0.96);
+}
+
+.plyph-feedback-icon {
+  icon-size: 18px;
+}
+
+.plyph-feedback-label {
+  max-width: 330px;
+  font-weight: 600;
 }
 
 .plyph-preview-header {
@@ -92,21 +102,29 @@
 }
 
 .plyph-floating-toolbar {
-  background-color: rgba(32, 32, 32, 0.94);
+  background-color: rgba(248, 248, 250, 0.97);
+  color: #1b1d22;
+  border: 1px solid rgba(70, 76, 88, 0.28);
   border-radius: 99px;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.35);
-  padding: 3px;
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.2);
+  padding: 1px;
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .plyph-floating-logo {
   padding: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 99px;
+  background-color: #0b0d10;
+  color: white;
 }
 
 .plyph-floating-logo:hover,
 .plyph-floating-logo:focus,
 .plyph-floating-logo:active {
-  background-color: rgba(255, 255, 255, 0.1);
+  background-color: #202329;
+  border-color: rgba(255, 255, 255, 0.35);
 }
 
 .plyph-floating-logo-icon {
@@ -115,8 +133,8 @@
 }
 
 .plyph-floating-actions {
-  spacing: 2px;
-  margin-left: 2px;
+  spacing: 1px;
+  margin-left: 1px;
 }
 
 .plyph-floating-status {
@@ -127,30 +145,86 @@
   max-width: 300px;
 }
 
-.plyph-floating-logo-icon.success,
-.plyph-floating-status.success {
+.plyph-floating-logo-icon.success {
   color: #57e389;
 }
 
-.plyph-floating-logo-icon.error,
-.plyph-floating-status.error {
+.plyph-floating-status.success {
+  color: #177245;
+}
+
+.plyph-floating-logo-icon.error {
   color: #ff7b63;
 }
 
+.plyph-floating-status.error {
+  color: #b42330;
+}
+
 .plyph-floating-action-btn {
-  padding: 4px 10px;
-  border-radius: 99px;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 6px;
+  background-color: transparent;
+  color: #1b1d22;
 }
 
 .plyph-floating-action-btn:hover,
 .plyph-floating-action-btn:focus {
-  background-color: rgba(255, 255, 255, 0.1);
+  background-color: rgba(45, 91, 160, 0.12);
+}
+
+.plyph-floating-action-btn:active {
+  background-color: rgba(45, 91, 160, 0.18);
 }
 
 .plyph-floating-action-content {
-  spacing: 6px;
+  spacing: 4px;
 }
 
 .plyph-floating-action-icon {
-  icon-size: 16px;
+  icon-size: 13px;
+  color: #35373c;
 }
+
+/* Toolbar size presets. The unmodified rules above are the 1× default. */
+
+.plyph-floating-toolbar.plyph-toolbar-scale-125 { font-size: 15px; padding: 1.25px; border-width: 1.25px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-125 .plyph-floating-logo { padding: 5px; border-width: 1.25px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-125 .plyph-floating-logo-icon { icon-size: 20px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-125 .plyph-floating-actions { spacing: 1.25px; margin-left: 1.25px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-125 .plyph-floating-action-btn { padding: 5px 10px; border-radius: 7.5px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-125 .plyph-floating-action-content { spacing: 5px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-125 .plyph-floating-action-icon { icon-size: 16.25px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-125 .plyph-floating-status { padding: 5px 12.5px 5px 7.5px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-125 .plyph-floating-status-label { max-width: 375px; }
+
+.plyph-floating-toolbar.plyph-toolbar-scale-150 { font-size: 18px; padding: 1.5px; border-width: 1.5px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-150 .plyph-floating-logo { padding: 6px; border-width: 1.5px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-150 .plyph-floating-logo-icon { icon-size: 24px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-150 .plyph-floating-actions { spacing: 1.5px; margin-left: 1.5px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-150 .plyph-floating-action-btn { padding: 6px 12px; border-radius: 9px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-150 .plyph-floating-action-content { spacing: 6px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-150 .plyph-floating-action-icon { icon-size: 19.5px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-150 .plyph-floating-status { padding: 6px 15px 6px 9px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-150 .plyph-floating-status-label { max-width: 450px; }
+
+.plyph-floating-toolbar.plyph-toolbar-scale-175 { font-size: 21px; padding: 1.75px; border-width: 1.75px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-175 .plyph-floating-logo { padding: 7px; border-width: 1.75px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-175 .plyph-floating-logo-icon { icon-size: 28px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-175 .plyph-floating-actions { spacing: 1.75px; margin-left: 1.75px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-175 .plyph-floating-action-btn { padding: 7px 14px; border-radius: 10.5px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-175 .plyph-floating-action-content { spacing: 7px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-175 .plyph-floating-action-icon { icon-size: 22.75px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-175 .plyph-floating-status { padding: 7px 17.5px 7px 10.5px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-175 .plyph-floating-status-label { max-width: 525px; }
+
+.plyph-floating-toolbar.plyph-toolbar-scale-200 { font-size: 24px; padding: 2px; border-width: 2px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-200 .plyph-floating-logo { padding: 8px; border-width: 2px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-200 .plyph-floating-logo-icon { icon-size: 32px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-200 .plyph-floating-actions { spacing: 2px; margin-left: 2px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-200 .plyph-floating-action-btn { padding: 8px 16px; border-radius: 12px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-200 .plyph-floating-action-content { spacing: 8px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-200 .plyph-floating-action-icon { icon-size: 26px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-200 .plyph-floating-status { padding: 8px 20px 8px 12px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-200 .plyph-floating-status-label { max-width: 600px; }

@@ -40,9 +40,16 @@
     <key name="clipboard-fallback" type="b"><default>false</default></key>
     <key name="explicit-copy-apps" type="s"><default>'firefox'</default></key>
     <key name="show-floating-button" type="b"><default>false</default></key>
+    <key name="floating-toolbar-scale" type="d">
+      <default>1.0</default>
+      <range min="1.0" max="2.0"/>
+      <summary>Floating toolbar scale</summary>
+      <description>Size of the selection toolbar. 1.0 preserves the default size.</description>
+    </key>
     <key name="quick-actions" type="s"><default>'["ask", "correct", "rewrite"]'</default></key>
     <key name="excluded-apps" type="s"><default>'code, gnome-terminal-server, telegram-desktop'</default></key>
     <key name="pointer-feedback" type="b"><default>true</default></key>
+    <key name="feedback-position" type="s"><default>'bottom-center'</default></key>
     <key name="action-palette-position" type="s"><default>'disabled'</default></key>
     <key name="variable-language" type="s"><default>'English'</default></key>
     <key name="variable-tone" type="s"><default>'professional'</default></key>
