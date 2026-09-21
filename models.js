@@ -4,8 +4,33 @@ import Soup from 'gi://Soup';
 
 import {getApiKey} from './secrets.js';
 
+export function compatibleEndpoint(settings, endpoint) {
+    const base = settings.get_string('openai-compatible-url').trim().replace(/\/+$/, '');
+    try {
+        const uri = GLib.Uri.parse(base, GLib.UriFlags.NONE);
+        if (!/^https?:\/\//i.test(base) || /\s/.test(base) ||
+            !['http', 'https'].includes(uri.get_scheme()?.toLowerCase()) ||
+            !uri.get_host() || uri.get_userinfo() !== null ||
+            uri.get_query() !== null || uri.get_fragment() !== null)
+            throw new Error('Invalid URL');
+    } catch {
+        throw new Error('Enter a valid HTTP or HTTPS base URL including /v1, without credentials, query parameters or a fragment.');
+    }
+    return `${base}/${endpoint}`;
+}
+
+export async function compatibleHeaders(settings, cancellable = null) {
+    if (!settings.get_boolean('openai-compatible-auth'))
+        return {};
+    const key = await getApiKey(settings, 'openai-compatible', cancellable);
+    if (!key)
+        throw new Error('Add an API key or disable authentication for the local server in Settings.');
+    return {Authorization: `Bearer ${key}`};
+}
+
 export const PROVIDERS = [
     {id: 'ollama', name: 'Ollama (local)', key: null},
+    {id: 'openai-compatible', name: 'OpenAI-compatible (local)', key: 'openai-compatible-api-key'},
     {id: 'groq', name: 'Groq', key: 'groq-api-key'},
     {id: 'cloudflare', name: 'Cloudflare Workers AI', key: 'cloudflare-api-key'},
     {id: 'bai', name: 'B.AI', key: 'bai-api-key'},
@@ -112,7 +137,17 @@ export async function fetchModels(settings, provider) {
     };
     let data;
     let models;
-    if (provider === 'ollama') {
+    if (provider === 'openai-compatible') {
+        const url = compatibleEndpoint(settings, 'models');
+        const headers = await compatibleHeaders(settings);
+        ensureCurrent();
+        data = await getJson(url, headers, 'OpenAI-compatible (local)');
+        ensureCurrent();
+        if (!Array.isArray(data?.data))
+            throw new Error('The server returned an invalid model list. Enter a custom model ID instead.');
+        models = data.data.filter(model => typeof model?.id === 'string' && model.id.trim())
+            .map(model => ({id: model.id, name: model.id}));
+    } else if (provider === 'ollama') {
         const baseUrl = settings.get_string('ollama-url').replace(/\/$/, '');
         data = await getJson(`${baseUrl}/api/tags`, {}, 'Ollama');
         models = (data.models ?? []).map(model => ({id: model.model ?? model.name, name: model.name}));
@@ -165,5 +200,6 @@ export async function fetchModels(settings, provider) {
             models = models.filter(model => !/(guard|whisper|tts)/i.test(model.id));
         }
     }
+    ensureCurrent();
     return uniqueModels(models);
 }

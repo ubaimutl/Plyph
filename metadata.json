@@ -1,7 +1,7 @@
 {
   "uuid": "ai-autocorrect@ubai.dev",
   "name": "Plyph",
-  "description": "Use AI on selected text. Reads and sends clipboard data to your chosen provider only when you trigger an action. Supports local Ollama and cloud providers.",
+  "description": "Use AI on selected text. Reads and sends clipboard data to your chosen provider only when you trigger an action. Supports local Ollama, OpenAI-compatible local servers and cloud providers.",
   "shell-version": ["46", "47", "48", "49", "50"],
   "settings-schema": "org.gnome.shell.extensions.ai-autocorrect",
   "url": "https://github.com/ubaimutl/Plyph"

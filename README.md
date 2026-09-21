@@ -24,6 +24,7 @@ Correct writing, rewrite text, translate, summarize, fix code, or create your ow
 Supported providers:
 
 - Ollama
+- OpenAI-compatible (local or LAN server)
 - Cloudflare Workers AI
 - B.AI
 - Groq
@@ -139,3 +140,22 @@ Other application IDs can be added in Settings if needed.
 AI responses can be incorrect. Enable **Preview before replacing** if you want to inspect generated text first.
 
 After an automatic replacement, **Undo last replacement** remains available in the panel menu for 60 seconds and uses the target application's native undo action.
+
+## OpenAI-compatible local servers
+
+Select **OpenAI-compatible (local)** in Settings. Enter the API base URL including
+`/v1`, for example `http://192.168.1.10:8000/v1` or
+`http://localhost:8000/v1`. HTTP and HTTPS are supported, including custom path
+prefixes. The server must be reachable from your GNOME computer.
+
+Leave **Use API key authentication** disabled for servers without authentication.
+If your server requires a key, enable it and save the key in Passwords and Keys.
+Refresh the model list, then explicitly select a model, or enter its exact ID with
+**Enter a custom model**. Manual IDs work even when the server has no `/models`
+endpoint. Changing the server settings clears the cached list but preserves your
+selected model; check that this model exists on the new server.
+
+Plyph sends non-streaming requests to `<base>/chat/completions` and discovers models
+at `<base>/models`. This provider is also available for individual custom actions
+and Run selected prompt. It never falls back to a cloud provider. Processing and
+privacy depend on the configured server, including any upstream services it uses.

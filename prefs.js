@@ -126,6 +126,8 @@ export default class PlyphPreferences extends ExtensionPreferences {
 
         this._providerSettings = new Adw.PreferencesGroup({title: 'Provider settings'});
         this._providerRows = [];
+        const compatibleSignals = ['openai-compatible-url', 'openai-compatible-auth'].map(key =>
+            settings.connect(`changed::${key}`, () => this._invalidateCompatibleModels(settings)));
         this._renderProviderSettings(settings);
         generalPage.add(this._providerSettings);
         provider.connect('notify::selected', () => {
@@ -324,6 +326,8 @@ export default class PlyphPreferences extends ExtensionPreferences {
         promptsPage.add(variables);
 
         window.connect('close-request', () => {
+            for (const id of compatibleSignals)
+                settings.disconnect(id);
             abortModelRequests();
             this._keyCancellable.cancel();
             this._keyCancellable = null;
@@ -349,12 +353,24 @@ export default class PlyphPreferences extends ExtensionPreferences {
         const info = PROVIDERS.find(item => item.id === provider) ?? PROVIDERS[0];
         provider = info.id;
         this._providerSettings.title = info.name;
-        this._providerSettings.description = provider === 'ollama'
-            ? 'Runs on your configured local server.'
-            : provider === 'cloudflare'
-                ? 'API tokens are stored securely in Passwords and Keys.'
-                : 'API keys are stored securely in Passwords and Keys.';
-        if (provider === 'ollama')
+        this._providerSettings.description = provider === 'openai-compatible'
+            ? 'Uses your configured server. Include /v1 in the base URL, for example http://192.168.1.10:8000/v1.'
+            : provider === 'ollama'
+                ? 'Runs on your configured local server.'
+                : provider === 'cloudflare'
+                    ? 'API tokens are stored securely in Passwords and Keys.'
+                    : 'API keys are stored securely in Passwords and Keys.';
+        if (provider === 'openai-compatible') {
+            this._providerRows.push(entry(this._providerSettings, settings, 'openai-compatible-url', 'Base URL (including /v1)'));
+            const auth = new Adw.SwitchRow({title: 'Use API key authentication'});
+            settings.bind('openai-compatible-auth', auth, 'active', Gio.SettingsBindFlags.DEFAULT);
+            this._providerSettings.add(auth);
+            this._providerRows.push(auth);
+            // Do not access Secret Service for an unauthenticated server.
+            if (settings.get_boolean('openai-compatible-auth'))
+                this._providerRows.push(this._secretEntry(settings, provider));
+            auth.connect('notify::active', () => this._renderProviderSettings(settings));
+        } else if (provider === 'ollama')
             this._providerRows.push(entry(this._providerSettings, settings, 'ollama-url', 'Address'));
         else if (provider === 'cloudflare') {
             this._providerRows.push(entry(
@@ -399,8 +415,10 @@ export default class PlyphPreferences extends ExtensionPreferences {
             subtitle: 'Larger models may use provider allowances faster or incur charges, depending on your account.',
         });
         usageRow.add_prefix(new Gtk.Image({icon_name: 'dialog-warning-symbolic'}));
-        this._providerSettings.add(usageRow);
-        this._providerRows.push(usageRow);
+        if (provider !== 'openai-compatible') {
+            this._providerSettings.add(usageRow);
+            this._providerRows.push(usageRow);
+        }
 
         const cached = this._cachedModels(settings, provider);
         this._setModelOptions(modelRow, settings, provider, cached);
@@ -452,6 +470,8 @@ export default class PlyphPreferences extends ExtensionPreferences {
             status.tooltip_text = 'Saving…';
             try {
                 await setApiKey(settings, provider, row.text, this._keyCancellable);
+                if (provider === 'openai-compatible')
+                    this._invalidateCompatibleModels(settings);
                 if (row.get_parent()) {
                     status.icon_name = row.text.trim() ? 'emblem-ok-symbolic' : 'dialog-password-symbolic';
                     status.tooltip_text = row.text.trim()
@@ -473,13 +493,31 @@ export default class PlyphPreferences extends ExtensionPreferences {
         return row;
     }
 
+    _invalidateCompatibleModels(settings) {
+        abortModelRequests();
+        this._modelRefreshGeneration = (this._modelRefreshGeneration ?? 0) + 1;
+        this._cacheModels(settings, 'openai-compatible', []);
+        if (settings.get_string('provider') === 'openai-compatible' && this._modelRow) {
+            this._setModelOptions(this._modelRow, settings, 'openai-compatible', []);
+            this._modelRow.subtitle = 'Server settings changed. Refresh models or enter a custom model ID.';
+        }
+    }
+
     _cachedModels(settings, provider) {
         try {
             const cache = JSON.parse(settings.get_string('model-cache'));
+            if (provider === 'openai-compatible' &&
+                cache['openai-compatible-settings'] !== this._compatibleCacheSettings(settings))
+                return [];
             return Array.isArray(cache[provider]) ? cache[provider] : [];
         } catch {
             return [];
         }
+    }
+
+    _compatibleCacheSettings(settings) {
+        return JSON.stringify([settings.get_string('openai-compatible-url'),
+            settings.get_boolean('openai-compatible-auth')]);
     }
 
     _cacheModels(settings, provider, models) {
@@ -492,12 +530,16 @@ export default class PlyphPreferences extends ExtensionPreferences {
             // Replace an invalid cache.
         }
         cache[provider] = models;
+        if (provider === 'openai-compatible')
+            cache['openai-compatible-settings'] = this._compatibleCacheSettings(settings);
         settings.set_string('model-cache', JSON.stringify(cache));
     }
 
     _setModelOptions(row, settings, provider, models) {
         const current = settings.get_string(`${provider}-model`);
         const options = [...models];
+        if (provider === 'openai-compatible' && !current)
+            options.unshift({id: '', name: 'Choose a model…'});
         if (current && !options.some(model => model.id === current))
             options.unshift({id: current, name: current});
         row._modelIds = options.map(model => model.id);
@@ -509,17 +551,18 @@ export default class PlyphPreferences extends ExtensionPreferences {
     }
 
     async _refreshModels(settings, provider, row, button) {
+        const generation = this._modelRefreshGeneration ?? 0;
         button.sensitive = false;
         row.subtitle = 'Loading…';
         try {
             const models = await fetchModels(settings, provider);
-            if (this._modelRow !== row)
+            if (this._modelRow !== row || generation !== (this._modelRefreshGeneration ?? 0))
                 return;
             this._cacheModels(settings, provider, models);
             this._setModelOptions(row, settings, provider, models);
             row.subtitle = `${models.length} available`;
         } catch (error) {
-            if (this._modelRow === row)
+            if (this._modelRow === row && generation === (this._modelRefreshGeneration ?? 0))
                 row.subtitle = error.message ?? String(error);
         } finally {
             if (this._modelRow === row)

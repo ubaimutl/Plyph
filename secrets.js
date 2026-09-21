@@ -3,6 +3,7 @@ import GLib from 'gi://GLib';
 import Secret from 'gi://Secret';
 
 const KEY_SETTINGS = {
+    'openai-compatible': 'openai-compatible-api-key',
     cloudflare: 'cloudflare-api-key',
     bai: 'bai-api-key',
     groq: 'groq-api-key',

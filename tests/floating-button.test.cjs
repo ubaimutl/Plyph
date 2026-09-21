@@ -1,4 +1,4 @@
-// Run with: node --test --test-isolation=none tests/floating-button.test.cjs
+// Run with: node --test tests/floating-button.test.cjs
 // Exercise the extension's actual lifecycle methods with deterministic Shell
 // signals and time, including app input that never emits captured-event.
 const {readFileSync} = require('node:fs');
@@ -40,6 +40,7 @@ function setup() {
     settings.enabled = true;
     settings.get_boolean = () => settings.enabled;
     settings.get_string = () => '';
+    settings.get_double = () => 1;
     const pointer = [300, 300, 0];
     const Clutter = {
         EVENT_PROPAGATE: false,
@@ -72,6 +73,8 @@ function setup() {
         destroy() { this.hide(); this.handlers.clear(); }
         contains(actor) { return actor === this; }
         remove_transition() {}
+        remove_style_class_name() {}
+        add_style_class_name() {}
         ease({opacity}) { this.opacity = opacity; }
         get_preferred_width() { return [40, 40]; }
         get_preferred_height() { return [40, 40]; }

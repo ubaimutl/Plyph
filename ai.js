@@ -3,9 +3,11 @@ import GLib from 'gi://GLib';
 import Soup from 'gi://Soup';
 
 import {getApiKey} from './secrets.js';
+import {compatibleEndpoint, compatibleHeaders} from './models.js';
 
 const PROVIDER_NAMES = {
     ollama: 'Ollama',
+    'openai-compatible': 'OpenAI-compatible (local)',
     cloudflare: 'Cloudflare Workers AI',
     bai: 'B.AI',
     groq: 'Groq',
@@ -99,6 +101,8 @@ function providerError(result, provider, model) {
         return new Error(provider === 'cloudflare'
             ? 'Cloudflare rejected the API token or Account ID. Check them in Settings.'
             : `${name} rejected the API key. Check it in Settings.`);
+    if (result.status === 404 && provider === 'openai-compatible')
+        return new Error(`${name} could not find the endpoint or model “${model}”. Check the base URL (including /v1) and model ID.`);
     if (result.status === 404)
         return new Error(provider === 'cloudflare'
             ? `Cloudflare could not find the account or model “${model}”.`
@@ -138,7 +142,8 @@ function outputLimitError() {
 function outputOrError(result, provider, model, inputMode) {
     if (result.data?.choices?.[0]?.finish_reason === 'length')
         throw outputLimitError();
-    const output = result.data?.choices?.[0]?.message?.content?.trim();
+    const content = result.data?.choices?.[0]?.message?.content;
+    const output = typeof content === 'string' ? content.trim() : '';
     if (output)
         return cleanOutput(output, inputMode);
     throw providerError(result, provider, model);
@@ -191,6 +196,8 @@ export class AiClient {
         const storedPrompt = this._settings.get_string(promptKey);
         const prompt = this._expandPrompt(customPrompt ?? storedPrompt, text);
         try {
+            if (provider === 'openai-compatible')
+                return await this._compatible(text, prompt, model, inputMode, outputLimit);
             if (provider === 'ollama')
                 return await this._ollama(text, prompt, model, inputMode, outputLimit);
             if (provider === 'cloudflare')
@@ -285,6 +292,21 @@ export class AiClient {
         if (output)
             return cleanOutput(output, inputMode);
         throw providerError(result, 'ollama', model);
+    }
+
+    async _compatible(text, prompt, model, inputMode, outputLimit) {
+        if (!model.trim())
+            throw new Error('Choose a model or enter a custom model ID in Settings.');
+        const url = compatibleEndpoint(this._settings, 'chat/completions');
+        const cancellable = this._cancellable;
+        const headers = await compatibleHeaders(this._settings, cancellable);
+        if (cancellable.is_cancelled())
+            throw new Error('Request cancelled');
+        const body = {...openAiBody(model.trim(), prompt, text, inputMode, outputLimit), stream: false};
+        const result = await requestJson(this._session, url, headers, body, cancellable);
+        if (result.status < 200 || result.status >= 300)
+            throw providerError(result, 'openai-compatible', model);
+        return outputOrError(result, 'openai-compatible', model, inputMode);
     }
 
     async _openAi(text, prompt, model, inputMode, outputLimit) {
