@@ -31,6 +31,7 @@ Supported providers:
 - OpenRouter
 - Cerebras
 - OpenAI
+- OpenAI-compatible servers, including LM Studio
 - Vercel AI Gateway
 
 ## Installation
@@ -76,6 +77,7 @@ Add the provider's required API key or token in the extension settings:
 - OpenRouter: https://openrouter.ai/keys
 - Cerebras: https://cloud.cerebras.ai
 - OpenAI: https://platform.openai.com/api-keys
+- OpenAI-compatible: set the base URL for LM Studio or another compatible server. LM Studio commonly uses `http://127.0.0.1:1234/v1`.
 - Vercel AI Gateway: https://vercel.com/ai-gateway
 
 Plyph itself does not charge anything. Provider pricing and free-tier limits depend on the provider and may change.
@@ -100,9 +102,19 @@ They can also define optional input and output token limits.
 
 **Input limits** use a lightweight token estimate and stop the action before sending if the selection is too large. Plyph never truncates selected text.
 
-**Output limits** control the maximum response size requested from the provider. `Auto` uses Plyph's normal response-length behavior.
+**Output limits** control the maximum response size requested from the provider. `Auto` starts at 1000 tokens and grows with the selected text, up to 2000 tokens.
 
 If a provider indicates that a response was cut off because the output limit was reached, Plyph rejects the partial result and asks you to increase the limit.
+
+### Debugging failed AI requests
+
+Enable **Debug AI requests** in Settings to write the provider, model, estimated input size, requested output limit, sanitized endpoint, and HTTP status to the GNOME system log. Plyph does not log selected text, prompts, API keys, authorization headers, or response bodies.
+
+View the entries while reproducing the issue with:
+
+```bash
+journalctl -f /usr/bin/gnome-shell | grep Plyph
+```
 
 ## Action palette
 
@@ -122,7 +134,7 @@ Using previously copied clipboard text as a fallback is optional and disabled by
 
 API keys and tokens are stored through the system Secret Service and can be managed with GNOME Passwords and Keys. Credentials stored by older Plyph versions are migrated automatically and removed from GSettings after successful migration.
 
-When using Ollama with a local server, selected text is processed locally instead of being sent to an online AI provider.
+When using Ollama, LM Studio, or another local OpenAI-compatible server, selected text is processed locally instead of being sent to an online AI provider.
 
 Cloud providers have their own data-retention, privacy, usage-limit, and pricing policies. Review the policy of the provider and model you choose before sending sensitive information.
 

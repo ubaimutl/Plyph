@@ -170,7 +170,7 @@ export default class PlyphPreferences extends ExtensionPreferences {
         bindTokenLimit(settings, 'prompt-run-input-limit', runInputLimit, INPUT_LIMIT_VALUES);
         const runOutputLimit = tokenLimitControl(
             'Output limit',
-            'Auto allows responses up to 2000 tokens.',
+            'Auto starts at 1000 tokens and allows up to 2000.',
             OUTPUT_LIMIT_VALUES,
             OUTPUT_LIMIT_LABELS,
             settings.get_int64('prompt-run-output-limit'));
@@ -273,6 +273,12 @@ export default class PlyphPreferences extends ExtensionPreferences {
         });
         settings.bind('pointer-feedback', pointerFeedback, 'active', Gio.SettingsBindFlags.DEFAULT);
         behavior.add(pointerFeedback);
+        const debugLogging = new Adw.SwitchRow({
+            title: 'Debug AI requests',
+            subtitle: 'Write request details and response status to the GNOME system log.',
+        });
+        settings.bind('debug-logging', debugLogging, 'active', Gio.SettingsBindFlags.DEFAULT);
+        behavior.add(debugLogging);
         const feedbackPositions = [
             'top-left', 'top-center', 'top-right',
             'center-left', 'center', 'center-right',
@@ -351,12 +357,18 @@ export default class PlyphPreferences extends ExtensionPreferences {
         this._providerSettings.title = info.name;
         this._providerSettings.description = provider === 'ollama'
             ? 'Runs on your configured local server.'
+            : provider === 'openai-compatible'
+                ? 'Connects to LM Studio or another OpenAI-compatible server.'
             : provider === 'cloudflare'
                 ? 'API tokens are stored securely in Passwords and Keys.'
                 : 'API keys are stored securely in Passwords and Keys.';
         if (provider === 'ollama')
             this._providerRows.push(entry(this._providerSettings, settings, 'ollama-url', 'Address'));
-        else if (provider === 'cloudflare') {
+        else if (provider === 'openai-compatible') {
+            this._providerRows.push(entry(
+                this._providerSettings, settings, 'openai-compatible-url', 'Base URL'));
+            this._providerRows.push(this._secretEntry(settings, provider, 'API key (optional)'));
+        } else if (provider === 'cloudflare') {
             this._providerRows.push(entry(
                 this._providerSettings, settings, 'cloudflare-account-id', 'Account ID'));
             this._providerRows.push(this._secretEntry(settings, provider, 'API token'));

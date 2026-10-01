@@ -13,6 +13,7 @@ export const PROVIDERS = [
     {id: 'openrouter', name: 'OpenRouter', key: 'openrouter-api-key'},
     {id: 'cerebras', name: 'Cerebras', key: 'cerebras-api-key'},
     {id: 'openai', name: 'OpenAI', key: 'openai-api-key'},
+    {id: 'openai-compatible', name: 'OpenAI-compatible', key: 'openai-compatible-api-key'},
     {id: 'vercel', name: 'Vercel AI Gateway', key: 'vercel-api-key'},
 ];
 
@@ -96,6 +97,14 @@ async function requiredKey(settings, provider) {
     return value;
 }
 
+async function optionalKey(settings, provider) {
+    try {
+        return await getApiKey(settings, provider);
+    } catch {
+        return settings.get_string(`${provider}-api-key`).trim();
+    }
+}
+
 function uniqueModels(models) {
     const seen = new Set();
     return models
@@ -142,14 +151,18 @@ export async function fetchModels(settings, provider) {
         const info = PROVIDERS.find(item => item.id === provider);
         const key = provider === 'vercel'
             ? await requiredKey(settings, 'vercel')
-            : info?.key ? await requiredKey(settings, provider) : '';
+            : provider === 'openai-compatible'
+                ? await optionalKey(settings, provider)
+                : info?.key ? await requiredKey(settings, provider) : '';
         ensureCurrent();
+        const openAiCompatibleUrl = settings.get_string('openai-compatible-url').replace(/\/$/, '');
         const endpoints = {
             groq: 'https://api.groq.com/openai/v1/models',
             bai: 'https://api.b.ai/v1/models',
             openrouter: 'https://openrouter.ai/api/v1/models?output_modalities=text',
             cerebras: 'https://api.cerebras.ai/v1/models',
             openai: 'https://api.openai.com/v1/models',
+            'openai-compatible': `${openAiCompatibleUrl}/models`,
             vercel: 'https://ai-gateway.vercel.sh/v1/models',
         };
         data = await getJson(endpoints[provider], key ? {Authorization: `Bearer ${key}`} : {}, info.name);

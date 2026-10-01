@@ -10,6 +10,7 @@ const KEY_SETTINGS = {
     openrouter: 'openrouter-api-key',
     cerebras: 'cerebras-api-key',
     openai: 'openai-api-key',
+    'openai-compatible': 'openai-compatible-api-key',
     vercel: 'vercel-api-key',
 };
 

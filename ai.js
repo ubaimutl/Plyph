@@ -13,6 +13,7 @@ const PROVIDER_NAMES = {
     openrouter: 'OpenRouter',
     cerebras: 'Cerebras',
     openai: 'OpenAI',
+    'openai-compatible': 'OpenAI-compatible',
     vercel: 'Vercel AI Gateway',
 };
 
@@ -41,7 +42,7 @@ function estimateTokens(text) {
 
 function maxTokens(text, outputLimit = 0) {
     return tokenLimit(outputLimit) ||
-        Math.min(2000, Math.max(220, estimateTokens(text) + 180));
+        Math.min(2000, Math.max(1000, estimateTokens(text) + 180));
 }
 
 function cleanOutput(text, inputMode = 'transform') {
@@ -57,7 +58,22 @@ function cleanOutput(text, inputMode = 'transform') {
     return output;
 }
 
-function requestJson(session, url, headers, body, cancellable) {
+function debugEndpoint(url) {
+    try {
+        const uri = GLib.Uri.parse(url, GLib.UriFlags.NONE);
+        const port = uri.get_port();
+        return `${uri.get_scheme()}://${uri.get_host()}${port >= 0 ? `:${port}` : ''}${uri.get_path()}`;
+    } catch {
+        return 'invalid endpoint';
+    }
+}
+
+function debugLog(settings, message) {
+    if (settings?.get_boolean('debug-logging'))
+        console.debug(`[Plyph] ${message}`);
+}
+
+function requestJson(session, url, headers, body, cancellable, settings = null) {
     return new Promise((resolve, reject) => {
         const message = Soup.Message.new('POST', url);
         for (const [name, value] of Object.entries(headers))
@@ -74,6 +90,8 @@ function requestJson(session, url, headers, body, cancellable) {
                     if (message.status_code < 400)
                         throw new Error(`Invalid response (${message.status_code})`);
                 }
+                debugLog(settings,
+                    `AI response: status=${message.status_code}, endpoint=${debugEndpoint(url)}`);
                 resolve({status: message.status_code, data});
             } catch (error) {
                 reject(error);
@@ -144,6 +162,17 @@ function outputOrError(result, provider, model, inputMode) {
     throw providerError(result, provider, model);
 }
 
+async function optionalApiKey(settings, provider, cancellable = null) {
+    try {
+        return await getApiKey(settings, provider, cancellable);
+    } catch (error) {
+        if (error instanceof GLib.Error &&
+            error.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
+            throw error;
+        return settings.get_string(`${provider}-api-key`).trim();
+    }
+}
+
 export class AiClient {
     constructor(settings) {
         this._settings = settings;
@@ -190,6 +219,9 @@ export class AiClient {
             : mode === 'prompt' ? 'prompt-run' : 'prompt-correct';
         const storedPrompt = this._settings.get_string(promptKey);
         const prompt = this._expandPrompt(customPrompt ?? storedPrompt, text);
+        debugLog(this._settings,
+            `AI request: provider=${provider}, model=${model}, action=${mode}, ` +
+            `input-tokens≈${estimatedTokens}, output-limit=${maxTokens(text, outputLimit)}`);
         try {
             if (provider === 'ollama')
                 return await this._ollama(text, prompt, model, inputMode, outputLimit);
@@ -199,6 +231,8 @@ export class AiClient {
                 return await this._bai(text, prompt, model, inputMode, outputLimit);
             if (provider === 'openai')
                 return await this._openAi(text, prompt, model, inputMode, outputLimit);
+            if (provider === 'openai-compatible')
+                return await this._openAiCompatible(text, prompt, model, inputMode, outputLimit);
             if (provider === 'gemini')
                 return await this._gemini(text, prompt, model, inputMode, outputLimit);
             if (provider === 'openrouter')
@@ -209,7 +243,11 @@ export class AiClient {
                 return await this._cerebras(text, prompt, model, inputMode, outputLimit);
             return await this._groq(text, prompt, model, inputMode, outputLimit);
         } catch (error) {
-            throw networkError(error);
+            const normalizedError = networkError(error);
+            debugLog(this._settings,
+                `AI request failed: provider=${provider}, model=${model}, ` +
+                `error=${normalizedError.name ?? 'Error'}`);
+            throw normalizedError;
         }
     }
 
@@ -243,7 +281,7 @@ export class AiClient {
         const result = await requestJson(this._session,
             'https://api.groq.com/openai/v1/chat/completions',
             {Authorization: `Bearer ${key}`},
-            body, this._cancellable);
+            body, this._cancellable, this._settings);
         return outputOrError(result, 'groq', model, inputMode);
     }
 
@@ -255,7 +293,7 @@ export class AiClient {
         const result = await requestJson(this._session,
             `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/ai/v1/chat/completions`,
             {Authorization: `Bearer ${key}`},
-            openAiBody(model, prompt, text, inputMode, outputLimit), this._cancellable);
+            openAiBody(model, prompt, text, inputMode, outputLimit), this._cancellable, this._settings);
         return outputOrError(result, 'cloudflare', model, inputMode);
     }
 
@@ -264,7 +302,7 @@ export class AiClient {
         const result = await requestJson(this._session,
             'https://api.b.ai/v1/chat/completions',
             {Authorization: `Bearer ${key}`},
-            openAiBody(model, prompt, text, inputMode, outputLimit), this._cancellable);
+            openAiBody(model, prompt, text, inputMode, outputLimit), this._cancellable, this._settings);
         return outputOrError(result, 'bai', model, inputMode);
     }
 
@@ -278,7 +316,7 @@ export class AiClient {
         if (outputLimit)
             body.options = {num_predict: outputLimit};
         const result = await requestJson(this._session,
-            `${baseUrl}/api/chat`, {}, body, this._cancellable);
+            `${baseUrl}/api/chat`, {}, body, this._cancellable, this._settings);
         if (result.data?.done_reason === 'length')
             throw outputLimitError();
         const output = result.data?.message?.content?.trim();
@@ -292,8 +330,19 @@ export class AiClient {
         const result = await requestJson(this._session,
             'https://api.openai.com/v1/chat/completions',
             {Authorization: `Bearer ${key}`},
-            openAiBody(model, prompt, text, inputMode, outputLimit), this._cancellable);
+            openAiBody(model, prompt, text, inputMode, outputLimit), this._cancellable, this._settings);
         return outputOrError(result, 'openai', model, inputMode);
+    }
+
+    async _openAiCompatible(text, prompt, model, inputMode, outputLimit) {
+        const baseUrl = this._settings.get_string('openai-compatible-url').replace(/\/$/, '');
+        const key = await optionalApiKey(this._settings, 'openai-compatible', this._cancellable);
+        const headers = key ? {Authorization: `Bearer ${key}`} : {};
+        const result = await requestJson(this._session,
+            `${baseUrl}/chat/completions`,
+            headers,
+            openAiBody(model, prompt, text, inputMode, outputLimit), this._cancellable, this._settings);
+        return outputOrError(result, 'openai-compatible', model, inputMode);
     }
 
     async _gemini(text, prompt, model, inputMode, outputLimit) {
@@ -310,7 +359,7 @@ export class AiClient {
             body.systemInstruction = {parts: [{text: prompt}]};
         const result = await requestJson(this._session,
             `https://generativelanguage.googleapis.com/v1beta/models/${encodedModel}:generateContent?key=${encodeURIComponent(key)}`,
-            {}, body, this._cancellable);
+            {}, body, this._cancellable, this._settings);
         if (result.data?.candidates?.[0]?.finishReason === 'MAX_TOKENS')
             throw outputLimitError();
         const output = result.data?.candidates?.[0]?.content?.parts?.map(part => part.text ?? '').join('').trim();
@@ -324,7 +373,7 @@ export class AiClient {
         const result = await requestJson(this._session,
             'https://openrouter.ai/api/v1/chat/completions',
             {Authorization: `Bearer ${key}`, 'X-Title': 'Plyph'},
-            openAiBody(model, prompt, text, inputMode, outputLimit), this._cancellable);
+            openAiBody(model, prompt, text, inputMode, outputLimit), this._cancellable, this._settings);
         return outputOrError(result, 'openrouter', model, inputMode);
     }
 
@@ -333,7 +382,7 @@ export class AiClient {
         const result = await requestJson(this._session,
             'https://ai-gateway.vercel.sh/v1/chat/completions',
             {Authorization: `Bearer ${key}`},
-            openAiBody(model, prompt, text, inputMode, outputLimit), this._cancellable);
+            openAiBody(model, prompt, text, inputMode, outputLimit), this._cancellable, this._settings);
         return outputOrError(result, 'vercel', model, inputMode);
     }
 
@@ -342,7 +391,7 @@ export class AiClient {
         const result = await requestJson(this._session,
             'https://api.cerebras.ai/v1/chat/completions',
             {Authorization: `Bearer ${key}`},
-            openAiBody(model, prompt, text, inputMode, outputLimit, true), this._cancellable);
+            openAiBody(model, prompt, text, inputMode, outputLimit, true), this._cancellable, this._settings);
         return outputOrError(result, 'cerebras', model, inputMode);
     }
 }

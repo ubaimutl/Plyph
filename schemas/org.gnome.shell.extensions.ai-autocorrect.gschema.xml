@@ -13,6 +13,9 @@
     <key name="groq-model" type="s"><default>'openai/gpt-oss-20b'</default></key>
     <key name="openai-api-key" type="s"><default>''</default></key>
     <key name="openai-model" type="s"><default>'gpt-4.1-mini'</default></key>
+    <key name="openai-compatible-url" type="s"><default>'http://127.0.0.1:1234/v1'</default></key>
+    <key name="openai-compatible-api-key" type="s"><default>''</default></key>
+    <key name="openai-compatible-model" type="s"><default>'local-model'</default></key>
     <key name="gemini-api-key" type="s"><default>''</default></key>
     <key name="gemini-model" type="s"><default>'gemini-3.5-flash-lite'</default></key>
     <key name="openrouter-api-key" type="s"><default>''</default></key>
@@ -49,6 +52,7 @@
     <key name="quick-actions" type="s"><default>'["ask", "correct", "rewrite"]'</default></key>
     <key name="excluded-apps" type="s"><default>'code, gnome-terminal-server, telegram-desktop'</default></key>
     <key name="pointer-feedback" type="b"><default>true</default></key>
+    <key name="debug-logging" type="b"><default>false</default></key>
     <key name="feedback-position" type="s"><default>'bottom-center'</default></key>
     <key name="action-palette-position" type="s"><default>'disabled'</default></key>
     <key name="variable-language" type="s"><default>'English'</default></key>
