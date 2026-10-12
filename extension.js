@@ -491,7 +491,6 @@ class FloatingToolbar extends St.BoxLayout {
         this._actionsBox.destroy_all_children();
 
         const box = new St.BoxLayout({
-            vertical: false,
             style_class: `plyph-floating-status ${state}`,
             y_align: Clutter.ActorAlign.CENTER,
         });
@@ -634,7 +633,10 @@ export default class PlyphExtension extends Extension {
         this._settings = this.getSettings();
         this._client = new AiClient(this._settings);
         this._clipboard = St.Clipboard.get_default();
-        this._keyboard = Clutter.get_default_backend()
+        const backend = SHELL_MAJOR >= 51
+            ? global.stage.context.get_backend()
+            : Clutter.get_default_backend();
+        this._keyboard = backend
             .get_default_seat()
             .create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
 
