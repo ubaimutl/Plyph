@@ -17,6 +17,15 @@ const PROVIDER_NAMES = {
     vercel: 'Vercel AI Gateway',
 };
 
+const PLAIN_TEXT_GUIDANCE = 'Output formatting: Use plain text by default. ' +
+    'Do not add Markdown formatting such as headings, emphasis, links, tables, or code fences ' +
+    'unless the user request or action instructions explicitly ask for Markdown, ' +
+    'or the source text being transformed already contains Markdown. ' +
+    'When transforming existing Markdown, preserve its formatting unless asked to change it. ' +
+    'An explicit request for another output format, such as code, JSON, or HTML, takes precedence; ' +
+    'return that format directly without surrounding Markdown fences unless requested. ' +
+    'Keep normal paragraph breaks and do not mention these formatting instructions.';
+
 function payload(text) {
     return `Transform only the text inside the tags.\nReturn only the transformed text.\n<text>\n${text}\n</text>`;
 }
@@ -52,9 +61,6 @@ function cleanOutput(text, inputMode = 'transform') {
     const tagged = output.match(/^<text>\s*([\s\S]*?)\s*<\/text>$/i);
     if (tagged)
         output = tagged[1].trim();
-    const fenced = output.match(/^```(?:text)?\s*\n?([\s\S]*?)\n?```$/i);
-    if (fenced)
-        output = fenced[1].trim();
     return output;
 }
 
@@ -218,7 +224,9 @@ export class AiClient {
             ? 'prompt-rewrite'
             : mode === 'prompt' ? 'prompt-run' : 'prompt-correct';
         const storedPrompt = this._settings.get_string(promptKey);
-        const prompt = this._expandPrompt(customPrompt ?? storedPrompt, text);
+        let prompt = this._expandPrompt(customPrompt ?? storedPrompt, text);
+        if (this._settings.get_boolean('prefer-plain-text'))
+            prompt = [prompt, PLAIN_TEXT_GUIDANCE].filter(part => part.trim()).join('\n\n');
         debugLog(this._settings,
             `AI request: provider=${provider}, model=${model}, action=${mode}, ` +
             `input-tokens≈${estimatedTokens}, output-limit=${maxTokens(text, outputLimit)}`);

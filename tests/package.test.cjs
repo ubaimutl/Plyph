@@ -60,7 +60,10 @@ test('upload bundle contains current sources, imports, icons and compilable sett
             '--schemadir', schemaDirectory, 'get', metadata['settings-schema'], 'floating-toolbar-scale',
         ], {encoding: 'utf8', env: {...process.env, GSETTINGS_BACKEND: 'memory'}});
         assert.equal(Number(scale), 1);
-
+        const plainText = execFileSync('gsettings', [
+            '--schemadir', schemaDirectory, 'get', metadata['settings-schema'], 'prefer-plain-text',
+        ], {encoding: 'utf8', env: {...process.env, GSETTINGS_BACKEND: 'memory'}});
+        assert.equal(plainText.trim(), 'true', 'Plain text guidance must be enabled for new and existing installs');
     } finally {
         rmSync(temporary, {recursive: true, force: true});
     }

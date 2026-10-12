@@ -261,6 +261,12 @@ export default class PlyphPreferences extends ExtensionPreferences {
         });
         settings.bind('preview-results', preview, 'active', Gio.SettingsBindFlags.DEFAULT);
         behavior.add(preview);
+        const plainText = new Adw.SwitchRow({
+            title: 'Prefer plain text responses',
+            subtitle: 'Use Markdown only when requested or already present in the text being transformed.',
+        });
+        settings.bind('prefer-plain-text', plainText, 'active', Gio.SettingsBindFlags.DEFAULT);
+        behavior.add(plainText);
         const clipboardFallback = new Adw.SwitchRow({
             title: 'Use clipboard when no text is selected',
             subtitle: 'Allow actions to use previously copied text.',

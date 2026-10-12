@@ -40,6 +40,11 @@
     <key name="custom-actions" type="s"><default>'[]'</default></key>
     <key name="model-cache" type="s"><default>'{}'</default></key>
     <key name="preview-results" type="b"><default>true</default></key>
+    <key name="prefer-plain-text" type="b">
+      <default>true</default>
+      <summary>Prefer plain text responses</summary>
+      <description>Request plain text unless Markdown is explicitly requested or already present in the text being transformed.</description>
+    </key>
     <key name="clipboard-fallback" type="b"><default>false</default></key>
     <key name="explicit-copy-apps" type="s"><default>'firefox'</default></key>
     <key name="show-floating-button" type="b"><default>false</default></key>
