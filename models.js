@@ -3,9 +3,11 @@ import GLib from 'gi://GLib';
 import Soup from 'gi://Soup';
 
 import {getApiKey} from './secrets.js';
+import {ChatGPTClient} from './chatgpt.js';
 
 export const PROVIDERS = [
     {id: 'ollama', name: 'Ollama (local)', key: null},
+    {id: 'chatgpt', name: 'ChatGPT Account', key: null},
     {id: 'groq', name: 'Groq', key: 'groq-api-key'},
     {id: 'cloudflare', name: 'Cloudflare Workers AI', key: 'cloudflare-api-key'},
     {id: 'bai', name: 'B.AI', key: 'bai-api-key'},
@@ -18,6 +20,7 @@ export const PROVIDERS = [
 ];
 
 const activeSessions = new Set();
+const activeChatGPTClients = new Set();
 let requestGeneration = 0;
 
 export function abortModelRequests() {
@@ -25,6 +28,9 @@ export function abortModelRequests() {
     for (const session of activeSessions)
         session.abort();
     activeSessions.clear();
+    for (const client of activeChatGPTClients)
+        client.destroy();
+    activeChatGPTClients.clear();
 }
 
 function requestError(status, provider, detail) {
@@ -119,6 +125,18 @@ export async function fetchModels(settings, provider) {
         if (generation !== requestGeneration)
             throw new Error('Request cancelled');
     };
+    if (provider === 'chatgpt') {
+        const client = new ChatGPTClient(settings);
+        activeChatGPTClients.add(client);
+        try {
+            const models = await client.models();
+            ensureCurrent();
+            return models;
+        } finally {
+            activeChatGPTClients.delete(client);
+            client.destroy();
+        }
+    }
     let data;
     let models;
     if (provider === 'ollama') {

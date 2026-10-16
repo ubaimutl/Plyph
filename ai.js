@@ -3,9 +3,11 @@ import GLib from 'gi://GLib';
 import Soup from 'gi://Soup';
 
 import {getApiKey} from './secrets.js';
+import {ChatGPTClient} from './chatgpt.js';
 
 const PROVIDER_NAMES = {
     ollama: 'Ollama',
+    chatgpt: 'ChatGPT Account',
     cloudflare: 'Cloudflare Workers AI',
     bai: 'B.AI',
     groq: 'Groq',
@@ -195,6 +197,7 @@ export class AiClient {
 
     destroy() {
         this.cancel();
+        this._chatgpt?.destroy();
         this._session.abort();
         this._session = null;
         this._settings = null;
@@ -229,8 +232,16 @@ export class AiClient {
             prompt = [prompt, PLAIN_TEXT_GUIDANCE].filter(part => part.trim()).join('\n\n');
         debugLog(this._settings,
             `AI request: provider=${provider}, model=${model}, action=${mode}, ` +
-            `input-tokens≈${estimatedTokens}, output-limit=${maxTokens(text, outputLimit)}`);
+            `input-tokens≈${estimatedTokens}, output-limit=${provider === 'chatgpt' ? 'managed by ChatGPT' : maxTokens(text, outputLimit)}`);
         try {
+            if (provider === 'chatgpt') {
+                if (hasActionLimits && tokenLimit(options.outputLimit))
+                    throw new Error('ChatGPT does not support output token limits. Set this action’s output limit to Auto.');
+                this._chatgpt ??= new ChatGPTClient(this._settings);
+                const result = await this._chatgpt.transform(inputMode === 'prompt' ? text : payload(text),
+                    prompt, model, this._cancellable);
+                return cleanOutput(result, inputMode);
+            }
             if (provider === 'ollama')
                 return await this._ollama(text, prompt, model, inputMode, outputLimit);
             if (provider === 'cloudflare')

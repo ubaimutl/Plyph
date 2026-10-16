@@ -8,7 +8,7 @@ const source = readFileSync(resolve(__dirname, '../ai.js'), 'utf8')
     .replace(/^import .*;\n/gm, '')
     .replace('export class AiClient', 'globalThis.AiClient = class AiClient');
 const providers = ['ollama', 'cloudflare', 'bai', 'groq', 'gemini', 'openrouter',
-    'cerebras', 'openai', 'openai-compatible', 'vercel'];
+    'cerebras', 'openai', 'openai-compatible', 'vercel', 'chatgpt'];
 
 function setup(provider = 'groq') {
     const requests = [];
@@ -33,9 +33,16 @@ function setup(provider = 'groq') {
     };
     const context = vm.createContext({
         console, TextDecoder,
+        ChatGPTClient: class {
+            async transform(text, instructions, model) {
+                requests.push({model, messages: [{role: 'system', content: instructions}, {role: 'user', content: text}]});
+                return response.text;
+            }
+            destroy() {}
+        },
         getApiKey: async () => 'test-key',
         Gio: {Cancellable: class { cancel() {} }},
-        GLib: {PRIORITY_DEFAULT: 0, Bytes: class { constructor(value) { this.value = value; } }},
+        GLib: {Error: class extends Error {}, PRIORITY_DEFAULT: 0, Bytes: class { constructor(value) { this.value = value; } }},
         Soup: {
             Message: {new: (_method, url) => ({
                 url, status_code: 200,
@@ -143,5 +150,15 @@ test('provider override gets the rule and preserves requested structured output'
         assert.equal(userText(requests.at(-1)), 'Return JSON.');
         assert.equal(guidance(requests.at(-1)).includes('Use plain text by default'), plainText);
     }
+    client.destroy();
+});
+
+
+test('ChatGPT accepts Auto limits and rejects explicit unsupported output limits before requesting', async () => {
+    const {client, requests} = setup('chatgpt');
+    await client.transform('Hello', 'prompt', null, {outputLimit: 0});
+    assert.equal(requests.length, 1);
+    await assert.rejects(client.transform('Hello', 'custom', null, {outputLimit: 1000}), /Auto/);
+    assert.equal(requests.length, 1);
     client.destroy();
 });

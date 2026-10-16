@@ -8,6 +8,7 @@ import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/ex
 import {readActions, writeActions} from './actions.js';
 import {abortModelRequests, fetchModels, PROVIDERS} from './models.js';
 import {getApiKey, setApiKey} from './secrets.js';
+import {ChatGPTClient} from './chatgpt.js';
 
 const INPUT_LIMIT_VALUES = [0, 2000, 4000, 8000, 16000, 32000];
 const INPUT_LIMIT_LABELS = ['Auto', '2K', '4K', '8K', '16K', '32K', 'Custom'];
@@ -336,6 +337,8 @@ export default class PlyphPreferences extends ExtensionPreferences {
         promptsPage.add(variables);
 
         window.connect('close-request', () => {
+            this._chatgptClient?.destroy();
+            this._chatgptClient = null;
             abortModelRequests();
             this._keyCancellable.cancel();
             this._keyCancellable = null;
@@ -352,6 +355,8 @@ export default class PlyphPreferences extends ExtensionPreferences {
     }
 
     _renderProviderSettings(settings) {
+        this._chatgptClient?.destroy();
+        this._chatgptClient = null;
         abortModelRequests();
         for (const row of this._providerRows)
             this._providerSettings.remove(row);
@@ -361,14 +366,18 @@ export default class PlyphPreferences extends ExtensionPreferences {
         const info = PROVIDERS.find(item => item.id === provider) ?? PROVIDERS[0];
         provider = info.id;
         this._providerSettings.title = info.name;
-        this._providerSettings.description = provider === 'ollama'
+        this._providerSettings.description = provider === 'chatgpt'
+            ? 'Use your ChatGPT plan. Credentials are stored securely in Passwords and Keys.'
+            : provider === 'ollama'
             ? 'Runs on your configured local server.'
             : provider === 'openai-compatible'
                 ? 'Connects to LM Studio or another OpenAI-compatible server.'
             : provider === 'cloudflare'
                 ? 'API tokens are stored securely in Passwords and Keys.'
                 : 'API keys are stored securely in Passwords and Keys.';
-        if (provider === 'ollama')
+        if (provider === 'chatgpt')
+            this._chatgptAccounts(settings);
+        else if (provider === 'ollama')
             this._providerRows.push(entry(this._providerSettings, settings, 'ollama-url', 'Address'));
         else if (provider === 'openai-compatible') {
             this._providerRows.push(entry(
@@ -407,15 +416,21 @@ export default class PlyphPreferences extends ExtensionPreferences {
         });
         custom.add_css_class('flat');
         modelRow.add_suffix(refresh);
-        modelRow.add_suffix(custom);
+        if (provider !== 'chatgpt')
+            modelRow.add_suffix(custom);
         this._providerSettings.add(modelRow);
         this._providerRows.push(modelRow);
         this._modelRow = modelRow;
 
         const usageRow = new Adw.ActionRow({
-            title: 'Model usage and cost',
-            subtitle: 'Larger models may use provider allowances faster or incur charges, depending on your account.',
+            title: provider === 'chatgpt' ? 'Using ChatGPT plan' : 'Model usage and cost',
+            subtitle: provider === 'chatgpt'
+                ? 'Uses your shared ChatGPT allowance. Custom action output limits must be set to Auto.'
+                : 'Larger models may use provider allowances faster or incur charges, depending on your account.',
         });
+        if (provider === 'chatgpt')
+            usageRow.add_suffix(new Gtk.LinkButton({label: 'Manage usage',
+                uri: 'https://chatgpt.com/settings/usage', valign: Gtk.Align.CENTER}));
         usageRow.add_prefix(new Gtk.Image({icon_name: 'dialog-warning-symbolic'}));
         this._providerSettings.add(usageRow);
         this._providerRows.push(usageRow);
@@ -431,6 +446,123 @@ export default class PlyphPreferences extends ExtensionPreferences {
         });
         refresh.connect('clicked', () => this._refreshModels(settings, provider, modelRow, refresh));
         custom.connect('clicked', () => this._customModel(settings, provider, modelRow));
+        if (provider === 'chatgpt')
+            this._refreshChatGPTModels = () => this._refreshModels(settings, provider, modelRow, refresh);
+    }
+
+    _chatgptAccounts(settings) {
+        const client = new ChatGPTClient(settings);
+        this._chatgptClient = client;
+        const row = new Adw.ComboRow({title: 'Account', use_markup: false});
+        const controls = new Adw.ActionRow({title: 'Connect your account', use_markup: false});
+        const connect = new Gtk.Button({label: 'Continue with ChatGPT', valign: Gtk.Align.CENTER});
+        const add = new Gtk.Button({label: 'Add account', valign: Gtk.Align.CENTER});
+        const signOut = new Gtk.Button({label: 'Sign out', valign: Gtk.Align.CENTER});
+        const cancel = new Gtk.Button({label: 'Cancel', visible: false, valign: Gtk.Align.CENTER});
+        for (const button of [connect, add, signOut, cancel])
+            controls.add_suffix(button);
+        for (const item of [row, controls]) {
+            this._providerSettings.add(item);
+            this._providerRows.push(item);
+        }
+        let accounts = [];
+        let updating = false;
+        let pending = null;
+        const current = () => this._chatgptClient === client;
+        const updateButtons = () => {
+            const account = accounts[row.selected];
+            row.sensitive = !pending && accounts.length > 0;
+            connect.visible = !account?.connected || !account?.authorized;
+            connect.sensitive = !pending;
+            controls.title = account?.connected ? 'Account settings' : 'Connect your account';
+            add.visible = accounts.length > 0;
+            add.sensitive = !pending;
+            signOut.visible = Boolean(account?.connected);
+            signOut.sensitive = !pending;
+            cancel.visible = Boolean(pending);
+            row.subtitle = account?.connected ? account.authorized ? 'Connected' : 'Plan access was not granted' : 'Not connected';
+        };
+        const reload = async () => {
+            const loaded = await client.accounts();
+            if (!current()) return;
+            accounts = loaded;
+            updating = true;
+            row.model = Gtk.StringList.new(accounts.length ? accounts.map(account => account.label) : ['No saved accounts']);
+            row.selected = Math.max(0, accounts.findIndex(account => account.id === settings.get_string('chatgpt-account-id')));
+            updating = false;
+            const id = accounts[row.selected]?.id ?? '';
+            if (id !== settings.get_string('chatgpt-account-id')) {
+                settings.set_string('chatgpt-account-id', id);
+                clearModels();
+                if (accounts[row.selected]?.connected)
+                    this._refreshChatGPTModels();
+            }
+            updateButtons();
+        };
+        const clearModels = () => {
+            abortModelRequests();
+            settings.set_string('chatgpt-model', '');
+            this._cacheModels(settings, 'chatgpt', []);
+            this._setModelOptions(this._modelRow, settings, 'chatgpt', []);
+        };
+        row.connect('notify::selected', () => {
+            if (updating || pending || !current()) return;
+            settings.set_string('chatgpt-account-id', accounts[row.selected]?.id ?? '');
+            clearModels();
+            updateButtons();
+            if (accounts[row.selected]?.connected)
+                this._refreshChatGPTModels();
+        });
+        const run = async action => {
+            pending = new Gio.Cancellable();
+            controls.subtitle = 'Connecting…';
+            updateButtons();
+            try {
+                await action(pending);
+            } catch (error) {
+                if (current()) controls.subtitle = error.message ?? String(error);
+            } finally {
+                pending = null;
+                if (current()) {
+                    updateButtons();
+                    try { await reload(); } catch (error) { controls.subtitle = error.message ?? String(error); }
+                }
+            }
+        };
+        const login = id => run(async cancellable => {
+            const result = await client.signIn(id, cancellable);
+            if (!current()) return;
+            settings.set_string('chatgpt-account-id', result.id);
+            clearModels();
+            controls.subtitle = result.authorized ? 'Connected to your ChatGPT plan.' : 'Plan access was not granted. Reconnect and allow plan usage.';
+            if (result.authorized) {
+                this._refreshChatGPTModels();
+                if (!settings.get_boolean('chatgpt-welcome-shown')) {
+                    const dialog = new Adw.MessageDialog({
+                        transient_for: row.get_root(), modal: true,
+                        heading: 'You’re using your ChatGPT plan',
+                        body: 'Plyph uses your shared ChatGPT allowance. You can review or change access through Manage usage.',
+                    });
+                    dialog.add_response('ok', 'Got it');
+                    dialog.set_default_response('ok');
+                    dialog.set_close_response('ok');
+                    dialog.connect('response', () => settings.set_boolean('chatgpt-welcome-shown', true));
+                    dialog.present();
+                }
+            }
+        });
+        connect.connect('clicked', () => login(accounts[row.selected]?.id ?? null));
+        add.connect('clicked', () => login(null));
+        cancel.connect('clicked', () => pending?.cancel());
+        signOut.connect('clicked', () => run(async cancellable => {
+            const id = accounts[row.selected]?.id;
+            const result = await client.signOut(id, cancellable);
+            if (!current()) return;
+            clearModels();
+            controls.subtitle = result.revoked ? 'Signed out.' : 'Signed out locally. Remove this connection in Manage usage to confirm remote revocation.';
+        }));
+        updateButtons();
+        reload().catch(error => { if (current()) controls.subtitle = error.message ?? String(error); });
     }
 
     _secretEntry(settings, provider, title = 'API key') {
@@ -516,7 +648,7 @@ export default class PlyphPreferences extends ExtensionPreferences {
     _setModelOptions(row, settings, provider, models) {
         const current = settings.get_string(`${provider}-model`);
         const options = [...models];
-        if (current && !options.some(model => model.id === current))
+        if (provider !== 'chatgpt' && current && !options.some(model => model.id === current))
             options.unshift({id: current, name: current});
         row._modelIds = options.map(model => model.id);
         row._updating = true;
@@ -524,23 +656,27 @@ export default class PlyphPreferences extends ExtensionPreferences {
             model.name && model.name !== model.id ? `${model.name} — ${model.id}` : model.id));
         row.selected = Math.max(0, row._modelIds.indexOf(current));
         row._updating = false;
+        if (provider === 'chatgpt')
+            settings.set_string('chatgpt-model', row._modelIds[row.selected] ?? '');
     }
 
     async _refreshModels(settings, provider, row, button) {
         button.sensitive = false;
         row.subtitle = 'Loading…';
+        const request = Symbol();
+        row._request = request;
         try {
             const models = await fetchModels(settings, provider);
-            if (this._modelRow !== row)
+            if (this._modelRow !== row || row._request !== request)
                 return;
             this._cacheModels(settings, provider, models);
             this._setModelOptions(row, settings, provider, models);
             row.subtitle = `${models.length} available`;
         } catch (error) {
-            if (this._modelRow === row)
+            if (this._modelRow === row && row._request === request)
                 row.subtitle = error.message ?? String(error);
         } finally {
-            if (this._modelRow === row)
+            if (this._modelRow === row && row._request === request)
                 button.sensitive = true;
         }
     }
