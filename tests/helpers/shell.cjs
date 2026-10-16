@@ -176,6 +176,8 @@ function createShell(version) {
         },
         Gio: {icon_new_for_string: path => path},
         St: {
+            PolicyType: {NEVER: 2, AUTOMATIC: 1},
+            ThemeContext: {get_for_stage: () => ({scale_factor: 1})},
             BoxLayout: Actor, Widget: Actor, Button: Actor, Icon: Actor, Label: Actor, Entry: Actor, ScrollView: Actor,
             Side: {TOP: 0}, ClipboardType: {PRIMARY: 0, CLIPBOARD: 1},
             Clipboard: {get_default: () => ({

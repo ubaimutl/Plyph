@@ -150,6 +150,38 @@ for (const version of versions) {
         shell.assertClean();
     });
 
+    check('long errors remain readable, copyable and clean up on close or disable', () => {
+        const shell = createShell(version);
+        const e = shell.extension;
+        e.enable();
+        const message = 'A detailed error\n' + 'LongWord'.repeat(500) + '\nEnd of error';
+        shell.values['pointer-feedback'] = false;
+        e._showFeedback(message, 'error', 3500);
+        const dialog = e._errorDialog;
+        assert.equal(dialog.isOpen, true);
+        assert.equal(e._feedbackId, null);
+        const scroll = dialog.contentLayout.children[1];
+        const label = scroll.children[0].children[0];
+        assert.equal(label.get_text(), message);
+        assert.equal(label.clutter_text.line_wrap, true);
+        assert.equal(label.clutter_text.ellipsize, 0);
+        assert.equal(label.clutter_text.selectable, true);
+        assert.equal(scroll.hscrollbar_policy, 2);
+        dialog.buttons[0].action();
+        assert.equal(shell.clipboard.get(1), message);
+        assert.equal(dialog.isOpen, true);
+        dialog.buttons[1].action();
+        assert.equal(e._errorDialog, null);
+        e._showFeedback('Another error', 'error');
+        const replaced = e._errorDialog;
+        e._showFeedback(message, 'error');
+        assert.equal(replaced.destroyed, true);
+        const active = e._errorDialog;
+        e.disable();
+        assert.equal(active.destroyed, true);
+        shell.assertClean();
+    });
+
     check('Ask submits once and cancels without submitting', () => {
         const shell = createShell(version);
         for (const cancel of [false, true]) {

@@ -24,6 +24,43 @@ const FLOATING_INITIAL_HIDE_DELAY = 4000;
 const FLOATING_TIMEOUT_CHECK_INTERVAL = 100;
 const DISMISSED_SELECTION_COOLDOWN = 1200000;
 
+const ErrorDialog = GObject.registerClass(
+class ErrorDialog extends ModalDialog.ModalDialog {
+    _init(message, onCopy) {
+        super._init({destroyOnClose: true});
+        this.contentLayout.add_child(new St.Label({
+            text: 'Plyph couldn’t complete the action',
+            style_class: 'modal-dialog-headline',
+        }));
+        const monitor = Main.layoutManager.currentMonitor ?? Main.layoutManager.primaryMonitor;
+        const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
+        const width = Math.max(1, Math.min(600, (monitor.width - 120) / scale));
+        const height = Math.max(1, Math.min(320, (monitor.height - 200) / scale));
+        const scroll = new St.ScrollView({
+            overlay_scrollbars: true,
+            style_class: 'vfade',
+            hscrollbar_policy: St.PolicyType.NEVER,
+            vscrollbar_policy: St.PolicyType.AUTOMATIC,
+            style: `width: ${width}px; max-height: ${height}px;`,
+        });
+        const surface = new St.BoxLayout(SHELL_MAJOR >= 48
+            ? {orientation: Clutter.Orientation.VERTICAL, x_expand: true}
+            : {vertical: true, x_expand: true});
+        const label = new St.Label({text: message, x_expand: true});
+        label.clutter_text.set_line_wrap(true);
+        label.clutter_text.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR);
+        label.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
+        label.clutter_text.set_selectable(true);
+        surface.add_child(label);
+        scroll.set_child(surface);
+        this.contentLayout.add_child(scroll);
+        this.setButtons([
+            {label: 'Copy error', action: () => onCopy(message)},
+            {label: 'Close', key: Clutter.KEY_Escape, default: true, action: () => this.close()},
+        ]);
+    }
+});
+
 const ResultDialog = GObject.registerClass(
 class ResultDialog extends ModalDialog.ModalDialog {
     _init(result, onReplace, onCopy, onCopySelection, onCancel, onClose) {
@@ -625,6 +662,7 @@ export default class PlyphExtension extends Extension {
         this._feedbackId = null;
         this._feedbackFollowId = null;
         this._feedback = null;
+        this._errorDialog = null;
         this._previewDialog = null;
         this._actionPalette = null;
         this._undo = null;
@@ -714,6 +752,8 @@ export default class PlyphExtension extends Extension {
             this._askDialog = null;
         }
         this._destroyActionPalette();
+        this._errorDialog?.destroy();
+        this._errorDialog = null;
 
         if (this._feedbackFollowId) {
             GLib.Source.remove(this._feedbackFollowId);
@@ -1591,10 +1631,21 @@ export default class PlyphExtension extends Extension {
     }
 
     _showFeedback(message, state = 'success', duration = 1500) {
+        if (state === 'error') {
+            this._clearPointerFeedback();
+            this._errorDialog?.destroy();
+            const dialog = new ErrorDialog(message,
+                text => this._clipboard.set_text(St.ClipboardType.CLIPBOARD, text));
+            this._errorDialog = dialog;
+            dialog.connect('destroy', () => {
+                if (this._errorDialog === dialog)
+                    this._errorDialog = null;
+            });
+            dialog.open();
+            return;
+        }
         if (!this._settings?.get_boolean('pointer-feedback')) {
             this._clearPointerFeedback();
-            if (state === 'error')
-                Main.notifyError('Plyph', message);
             return;
         }
 
@@ -1620,7 +1671,9 @@ export default class PlyphExtension extends Extension {
             style_class: 'plyph-feedback-label',
             y_align: Clutter.ActorAlign.CENTER,
         });
-        label.clutter_text.line_wrap = true;
+        label.clutter_text.set_line_wrap(true);
+        label.clutter_text.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR);
+        label.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
         feedback.add_child(label);
         Main.uiGroup.add_child(feedback);
 
