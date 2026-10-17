@@ -1,7 +1,7 @@
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Secret from 'gi://Secret';
-import Soup from 'gi://Soup?version=3.0';
+import Soup from 'gi://Soup';
 
 import {ISSUER, RESOURCE, SCOPES, base64url, sha256, verifyIdToken, callbackResult, chatgptError, ResponsesStream, Utf8StreamDecoder} from './chatgptProtocol.js';
 

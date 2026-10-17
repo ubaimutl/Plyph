@@ -4,7 +4,7 @@ Use AI on selected text anywhere in GNOME.
 
 Correct writing, rewrite text, translate, summarize, fix code, or create your own actions. Select some text, trigger an action, and Plyph can preview or paste the result back automatically.
 
-![Plyph demo](demo.gif)
+![Plyph floating toolbar with Ask, Correct, Rewrite, and Run Prompt actions](demo.png)
 
 ## Features
 
@@ -18,12 +18,14 @@ Correct writing, rewrite text, translate, summarize, fix code, or create your ow
 - Undo the last automatic replacement
 - Reorder or hide custom actions
 - Open actions from the panel or a keyboard action palette
-- Run locally with Ollama or use supported cloud providers
+- Run locally with Ollama, LM Studio, or another OpenAI-compatible server, or use supported cloud providers
+- Sign in with ChatGPT to use your ChatGPT plan without an API key or helper process
 - API credentials stored securely through the system Secret Service
 
 Supported providers:
 
 - Ollama
+- OpenAI-compatible servers, including LM Studio
 - Cloudflare Workers AI
 - B.AI
 - Groq
@@ -31,16 +33,16 @@ Supported providers:
 - OpenRouter
 - Cerebras
 - OpenAI
-- OpenAI-compatible servers, including LM Studio
 - Vercel AI Gateway
+- ChatGPT Account
 
 ## Installation
 
 Install Plyph from [GNOME Shell Extensions](https://extensions.gnome.org/extension/10540/ai-autocorrect/).
 
-Supports GNOME Shell 46–50.
+Supports GNOME Shell 46–51.
 
-After installation, open the extension settings to choose your provider, model, API credentials, shortcuts, and actions.
+After installation, open the extension settings to choose your provider and model, connect your account or add API credentials, and configure shortcuts and actions.
 
 ### Manual installation
 
@@ -52,6 +54,8 @@ gnome-extensions pack --force \
   --extra-source=ai.js \
   --extra-source=models.js \
   --extra-source=secrets.js \
+  --extra-source=chatgpt.js \
+  --extra-source=chatgptProtocol.js \
   --extra-source=stylesheet.css \
   --extra-source=icons \
   --extra-source=LICENSE \
@@ -66,6 +70,8 @@ gnome-extensions enable ai-autocorrect@ubai.dev
 ```
 
 ## Providers
+
+### Local servers and API providers
 
 Add the provider's required API key or token in the extension settings:
 
@@ -92,6 +98,21 @@ Providers with useful free usage options include:
 
 Check the provider's website for current limits and billing terms before selecting a model.
 
+### ChatGPT sign-in
+
+Use your ChatGPT plan directly in Plyph with native GNOME sign-in.
+
+1. Open Plyph settings and choose **ChatGPT Account** as the active provider.
+2. Click **Continue with ChatGPT** and finish signing in through your browser.
+3. Return to Plyph and choose a model. Use **Refresh models** if needed.
+4. Select text and run an action as usual.
+
+You can add and switch between saved accounts, or sign out in settings. Credentials are stored securely in the system keyring, and access tokens refresh automatically.
+
+Requests use your shared ChatGPT allowance. Open **Manage usage** to review usage and account access. Available models depend on your account.
+
+For ChatGPT actions, set the output token limit to **Auto**. Explicit output token limits are not supported.
+
 ## Custom actions
 
 Custom actions can use the active provider and model or override them individually.
@@ -102,7 +123,7 @@ They can also define optional input and output token limits.
 
 **Input limits** use a lightweight token estimate and stop the action before sending if the selection is too large. Plyph never truncates selected text.
 
-**Output limits** control the maximum response size requested from the provider. `Auto` starts at 1000 tokens and grows with the selected text, up to 2000 tokens.
+**Output limits** control the maximum response size requested from providers that support them. `Auto` starts at 1000 tokens and grows with the selected text, up to 2000 tokens. For **ChatGPT Account**, use `Auto`; response length is managed by ChatGPT.
 
 If a provider indicates that a response was cut off because the output limit was reached, Plyph rejects the partial result and asks you to increase the limit.
 
