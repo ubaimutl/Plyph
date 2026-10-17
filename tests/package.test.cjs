@@ -68,6 +68,10 @@ test('upload bundle contains current sources, imports, icons and compilable sett
             '--schemadir', schemaDirectory, 'get', metadata['settings-schema'], 'preview-show-changes',
         ], {encoding: 'utf8', env: {...process.env, GSETTINGS_BACKEND: 'memory'}});
         assert.equal(previewChanges.trim(), 'false', 'Preview changes must be opt-in');
+        const thinking = execFileSync('gsettings', [
+            '--schemadir', schemaDirectory, 'get', metadata['settings-schema'], 'chatgpt-thinking-effort',
+        ], {encoding: 'utf8', env: {...process.env, GSETTINGS_BACKEND: 'memory'}});
+        assert.equal(thinking.trim(), "'auto'", 'Thinking effort must use the model default initially');
     } finally {
         rmSync(temporary, {recursive: true, force: true});
     }

@@ -426,9 +426,13 @@ export class ChatGPTClient {
             throw new Error('Choose a ChatGPT model in Plyph settings first.');
         return this._operation(async cancellable => {
             const access = await this._access(cancellable);
-            const message = this._message(`${RESOURCE}/responses`, {
+            const body = {
                 model, instructions, input: [{role: 'user', content: text}], store: false, stream: true,
-            }, access.token);
+            };
+            const effort = this.settings.get_string('chatgpt-thinking-effort');
+            if (['low', 'medium', 'high'].includes(effort))
+                body.reasoning = {effort};
+            const message = this._message(`${RESOURCE}/responses`, body, access.token);
             const stream = await callAsync(this.session, 'send_async', 'send_finish',
                 [message, GLib.PRIORITY_DEFAULT, cancellable]);
             try {
@@ -441,9 +445,12 @@ export class ChatGPTClient {
                         if (!bytes.get_size()) break;
                         body += decoder.decode(bytes.get_data());
                     }
-                    let code;
-                    try { code = JSON.parse(body).error?.code; } catch {}
-                    throw chatgptError(code, message.status_code);
+                    let error;
+                    try { error = JSON.parse(body).error; } catch {}
+                    if (message.status_code === 400 &&
+                        (error?.param === 'reasoning' || error?.param === 'reasoning.effort'))
+                        throw new Error('This model could not use the selected thinking effort. Set Thinking effort to Auto in Plyph settings or choose another model.');
+                    throw chatgptError(error?.code, message.status_code);
                 }
                 const parser = new ResponsesStream();
                 const decoder = new Utf8StreamDecoder();

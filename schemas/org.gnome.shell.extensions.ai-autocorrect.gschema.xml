@@ -3,6 +3,10 @@
   <schema id="org.gnome.shell.extensions.ai-autocorrect" path="/org/gnome/shell/extensions/ai-autocorrect/">
     <key name="chatgpt-account-id" type="s"><default>''</default></key>
     <key name="chatgpt-model" type="s"><default>''</default></key>
+    <key name="chatgpt-thinking-effort" type="s">
+      <choices><choice value="auto"/><choice value="low"/><choice value="medium"/><choice value="high"/></choices>
+      <default>'auto'</default>
+    </key>
     <key name="chatgpt-welcome-shown" type="b"><default>false</default></key>
     <key name="provider" type="s"><default>'groq'</default></key>
     <key name="ollama-url" type="s"><default>'http://127.0.0.1:11434'</default></key>

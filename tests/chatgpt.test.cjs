@@ -107,7 +107,7 @@ function clientHarness() {
     const requests = [];
     const timers = new Map();
     let nextTimer = 1;
-    const settings = {get_string: () => 'saved'};
+    const settings = {get_string: key => key === 'chatgpt-thinking-effort' ? 'auto' : 'saved'};
     const bus = {
         call(...args) { args.at(-1)(this, {deep_unpack: () => [1]}); },
         call_finish: result => result,
@@ -251,6 +251,29 @@ test('ChatGPT inference closes a disconnected stream without returning partial t
     const h = streamingHarness([event({type: 'response.output_text.delta', delta: 'partial'})]);
     await assert.rejects(h.client.transform('Source', 'Correct', 'model'), /Nothing was replaced/);
     assert.equal(h.closed(), true);
+});
+test('ChatGPT thinking effort applies independently of the action instructions', async () => {
+    for (const effort of ['auto', 'low', 'medium', 'high']) {
+        for (const instructions of ['Correct grammar', 'Rewrite', 'Answer a question', 'Custom prompt']) {
+            const h = streamingHarness([completed('Result')]);
+            h.settings.get_string = key => key === 'chatgpt-thinking-effort' ? effort : 'saved';
+            assert.equal(await h.client.transform('Source', instructions, 'model'), 'Result');
+            const body = h.requests[0].body;
+            assert.equal(body.instructions, instructions);
+            assert.equal(body.reasoning?.effort, effort === 'auto' ? undefined : effort);
+            assert.equal(Object.hasOwn(body, 'reasoning'), effort !== 'auto');
+            assert.equal(h.closed(), true);
+        }
+    }
+});
+test('unsupported thinking effort gives actionable feedback and closes the stream', async () => {
+    for (const param of ['reasoning', 'reasoning.effort']) {
+        const h = streamingHarness([JSON.stringify({error: {param, code: 'unsupported_value'}})], 400);
+        h.settings.get_string = key => key === 'chatgpt-thinking-effort' ? 'high' : 'saved';
+        await assert.rejects(h.client.transform('Source', 'Rewrite', 'model'), /Set Thinking effort to Auto/);
+        assert.equal(h.closed(), true);
+        assert.equal(h.requests.length, 1);
+    }
 });
 test('ChatGPT inference translates HTTP usage errors and closes the stream', async () => {
     const h = streamingHarness([JSON.stringify({error: {code: 'subscription_sharing_usage_unavailable'}})], 400);

@@ -430,6 +430,21 @@ export default class PlyphPreferences extends ExtensionPreferences {
         this._providerRows.push(modelRow);
         this._modelRow = modelRow;
 
+        if (provider === 'chatgpt') {
+            const efforts = ['auto', 'low', 'medium', 'high'];
+            const thinking = new Adw.ComboRow({
+                title: 'Thinking effort',
+                subtitle: 'Applies to all actions using this provider. Higher effort may take longer. Support varies by model.',
+                model: Gtk.StringList.new(['Auto — model default', 'Low', 'Medium', 'High']),
+                selected: Math.max(0, efforts.indexOf(settings.get_string('chatgpt-thinking-effort'))),
+            });
+            thinking.connect('notify::selected', () => {
+                settings.set_string('chatgpt-thinking-effort', efforts[thinking.selected] ?? 'auto');
+            });
+            this._providerSettings.add(thinking);
+            this._providerRows.push(thinking);
+        }
+
         const usageRow = new Adw.ActionRow({
             title: provider === 'chatgpt' ? 'Using ChatGPT plan' : 'Model usage and cost',
             subtitle: provider === 'chatgpt'
