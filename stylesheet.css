@@ -35,14 +35,13 @@
 }
 
 .plyph-result-scroll {
+  border: 1px solid rgba(128, 128, 128, 0.32);
   border-radius: 10px;
+  background-color: rgba(128, 128, 128, 0.11);
 }
 
 .plyph-result-surface {
   padding: 10px 12px;
-  border: 1px solid rgba(128, 128, 128, 0.32);
-  border-radius: 10px;
-  background-color: rgba(128, 128, 128, 0.11);
 }
 
 .plyph-result {
@@ -228,3 +227,18 @@
 .plyph-floating-toolbar.plyph-toolbar-scale-200 .plyph-floating-action-icon { icon-size: 26px; }
 .plyph-floating-toolbar.plyph-toolbar-scale-200 .plyph-floating-status { padding: 8px 20px 8px 12px; }
 .plyph-floating-toolbar.plyph-toolbar-scale-200 .plyph-floating-status-label { max-width: 600px; }
+
+.plyph-preview-dialog {
+  padding: 16px;
+  spacing: 12px;
+}
+
+.plyph-preview-dialog .modal-dialog-content-box {
+  padding: 0;
+  spacing: 12px;
+}
+
+.plyph-preview-dialog .modal-dialog-button-box {
+  padding: 0;
+  margin-top: 0;
+}

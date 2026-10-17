@@ -262,6 +262,14 @@ export default class PlyphPreferences extends ExtensionPreferences {
         });
         settings.bind('preview-results', preview, 'active', Gio.SettingsBindFlags.DEFAULT);
         behavior.add(preview);
+        const previewChanges = new Adw.SwitchRow({
+            title: 'Show changes by default',
+            subtitle: 'Open transformed-text previews in the changes view.',
+        });
+        settings.bind('preview-show-changes', previewChanges, 'active', Gio.SettingsBindFlags.DEFAULT);
+        settings.bind('preview-results', previewChanges, 'sensitive', Gio.SettingsBindFlags.GET);
+        behavior.add(previewChanges);
+
         const plainText = new Adw.SwitchRow({
             title: 'Prefer plain text responses',
             subtitle: 'Use Markdown only when requested or already present in the text being transformed.',

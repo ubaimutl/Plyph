@@ -127,6 +127,17 @@ for (const version of versions) {
             text => calls.push(['copy', text]), text => calls.push(['selection', text]),
             () => calls.push(['cancel']), () => calls.push(['close']));
         dialog.open();
+        assert.match(dialog.contentLayout.get_parent().style, /padding: 16px/);
+        assert.match(dialog.contentLayout.style, /padding: 0/);
+        assert.equal(dialog.contentLayout.y_expand, false);
+        assert.equal(dialog.buttonLayout.x_align, shell.Clutter.ActorAlign.END);
+        assert.equal(dialog.buttonLayout.x_expand, false);
+        assert.equal(dialog.buttonLayout.layout_manager.homogeneous, false);
+        for (const button of dialog.buttonLayout.get_children()) {
+            assert.equal(button.x_expand, false);
+            assert.equal(button.y_expand, false);
+            assert.match(button.style, /padding: 6px 14px/);
+        }
         const surface = dialog._scroll.children[0];
         assert.equal(version >= 48 ? surface.orientation : surface.vertical, version >= 48 ? 1 : true);
         const wrap = dialog.contentLayout.children[0].children[1];
@@ -147,6 +158,94 @@ for (const version of versions) {
         dialog._finish(() => calls.push(['duplicate']));
         assert.deepEqual(calls, [['selection', 'Edited'], ['close'], ['replace', 'Edited']]);
         assert.equal(dialog.destroyed, true);
+        shell.assertClean();
+    });
+
+    check('preview starts roomy and grows with measured result and diff content up to screen space', () => {
+        const shell = createShell(version);
+        const dialog = new shell.ResultDialog('Short', () => {}, () => {}, () => {}, null, null, 'Original');
+        assert.equal(dialog._scroll.height, 260);
+        assert.ok(dialog._scroll.width >= 600);
+        let measuredWidth;
+        dialog._label.get_preferred_height = width => { measuredWidth = width; return [0, 560]; };
+        dialog._label.clutter_text.emit('text-changed');
+        assert.equal(dialog._scroll.height, 584);
+        assert.equal(measuredWidth, dialog._scroll.width - 40);
+        dialog._diffLabel.get_preferred_height = () => [0, 700];
+        dialog._changesButton.checked = true;
+        dialog._changesButton.emit('notify::checked');
+        assert.equal(dialog._scroll.height, 724);
+        dialog._diffLabel.get_preferred_height = () => [0, 10000];
+        dialog._resizePreview();
+        assert.equal(dialog._scroll.height, 920);
+        dialog._changesButton.checked = false;
+        dialog._label.get_preferred_height = () => [0, 40];
+        dialog._changesButton.emit('notify::checked');
+        assert.equal(dialog._scroll.height, 260);
+        dialog.destroy();
+        shell.assertClean();
+    });
+
+    check('preview change preference and labels reflect actual differences', () => {
+        const shell = createShell(version);
+        for (const enabled of [false, true]) {
+            const dialog = new shell.ResultDialog('new', () => {}, () => {}, () => {}, null, null, 'old', enabled);
+            assert.equal(dialog._showChanges, enabled);
+            assert.equal(dialog._changesButton.label, enabled ? 'Show result' : 'Show changes');
+            dialog._changesButton.checked = !enabled;
+            dialog._changesButton.emit('notify::checked');
+            assert.equal(dialog._changesButton.label, enabled ? 'Show changes' : 'Show result');
+            dialog._label.clutter_text.text = 'old';
+            dialog._label.clutter_text.emit('text-changed');
+            assert.equal(dialog._changesButton.label, 'No changes');
+            assert.equal(dialog._changesButton.reactive, false);
+            assert.equal(dialog._showChanges, false);
+            assert.equal(dialog._label.visible, true);
+            dialog._label.clutter_text.text = 'edited';
+            dialog._label.clutter_text.emit('text-changed');
+            assert.equal(dialog._changesButton.label, 'Show changes');
+            assert.equal(dialog._changesButton.reactive, true);
+            dialog.destroy();
+        }
+        const identical = new shell.ResultDialog('same', () => {}, () => {}, () => {}, null, null, 'same', true);
+        assert.equal(identical._changesButton.label, 'No changes');
+        assert.equal(identical._showChanges, false);
+        identical.destroy();
+        const prompt = new shell.ResultDialog('answer', () => {}, () => {}, () => {}, null, null, null, true);
+        assert.equal(prompt._showChanges, false);
+        assert.equal(prompt._changesButton, undefined);
+        prompt.destroy();
+        shell.assertClean();
+    });
+
+    check('preview diff is read-only and Copy and Replace use the edited final text', () => {
+        const shell = createShell(version);
+        for (const operation of ['copy', 'replace']) {
+            const calls = [];
+            const dialog = new shell.ResultDialog('The dog sleeps.', text => calls.push(['replace', text]),
+                text => calls.push(['copy', text]), () => {}, null, null, 'The cat sleeps.');
+            assert.equal(dialog._scroll.height, 260);
+            assert.equal(dialog.styleClass, 'plyph-preview-dialog');
+            dialog._changesButton.checked = true;
+            dialog._changesButton.emit('notify::checked');
+            assert.equal(dialog._label.visible, false);
+            assert.equal(dialog._diffLabel.visible, true);
+            assert.equal(dialog._diffLabel.clutter_text.editable, false);
+            assert.match(dialog._diffLabel.clutter_text.markup, /strikethrough="true">cat/);
+            dialog._changesButton.checked = false;
+            dialog._changesButton.emit('notify::checked');
+            assert.equal(dialog._label.visible, true);
+            dialog._label.clutter_text.text = 'The bird sleeps.';
+            dialog._changesButton.checked = true;
+            dialog._changesButton.emit('notify::checked');
+            assert.match(dialog._diffLabel.clutter_text.markup, /underline="single">bird/);
+            dialog.buttons[operation === 'copy' ? 1 : 2].action();
+            assert.deepEqual(calls, [[operation, 'The bird sleeps.']]);
+        }
+        const prompt = new shell.ResultDialog('Generated answer', () => {}, () => {}, () => {}, null, null);
+        assert.equal(prompt._changesButton, undefined);
+        assert.equal(prompt._scroll.height, 260);
+        prompt.destroy();
         shell.assertClean();
     });
 

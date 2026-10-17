@@ -42,6 +42,7 @@
     <key name="prompt-run-output-limit" type="x"><default>0</default></key>
     <key name="custom-actions" type="s"><default>'[]'</default></key>
     <key name="model-cache" type="s"><default>'{}'</default></key>
+    <key name="preview-show-changes" type="b"><default>false</default></key>
     <key name="preview-results" type="b"><default>true</default></key>
     <key name="prefer-plain-text" type="b">
       <default>true</default>

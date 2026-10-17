@@ -16,6 +16,7 @@ import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 
 import {AiClient} from './ai.js';
 import {readActions} from './actions.js';
+import {diffMarkup} from './diff.js';
 
 const SHELL_MAJOR = Number.parseInt(Config.PACKAGE_VERSION, 10);
 const FLOATING_COLLAPSE_DELAY = 900;
@@ -63,15 +64,22 @@ class ErrorDialog extends ModalDialog.ModalDialog {
 
 const ResultDialog = GObject.registerClass(
 class ResultDialog extends ModalDialog.ModalDialog {
-    _init(result, onReplace, onCopy, onCopySelection, onCancel, onClose) {
-        super._init({destroyOnClose: true});
+    _init(result, onReplace, onCopy, onCopySelection, onCancel, onClose, original = null, showChanges = false) {
+        super._init({destroyOnClose: true, styleClass: 'plyph-preview-dialog'});
+        this.contentLayout.get_parent().set_style('padding: 16px; spacing: 12px; min-width: 0; min-height: 0;');
+        this.contentLayout.y_expand = false;
+        this.buttonLayout.x_align = Clutter.ActorAlign.END;
+        this.buttonLayout.x_expand = false;
+        this.buttonLayout.set_style('padding: 0; margin: 0; min-height: 0;');
+        this.buttonLayout.layout_manager.homogeneous = false;
+        this.buttonLayout.layout_manager.spacing = 8 * St.ThemeContext.get_for_stage(global.stage).scale_factor;
+        this._original = original;
+        this._showChanges = false;
         this._finished = false;
         this._onClose = onClose;
         this._onReplace = onReplace;
         this._onCopySelection = onCopySelection;
         this._expanded = false;
-        this._estimatedLines = result.split('\n').reduce((total, line) =>
-            total + Math.max(1, Math.ceil(line.length / 70)), 0);
 
         const header = new St.BoxLayout({
             style_class: 'plyph-preview-header',
@@ -106,11 +114,24 @@ class ResultDialog extends ModalDialog.ModalDialog {
         });
         expandButton.connect('clicked', () => this._toggleExpanded(expandButton));
         header.add_child(expandButton);
+        if (original !== null) {
+            this._changesButton = new St.Button({
+                label: 'Show changes',
+                style_class: 'button flat plyph-preview-wrap',
+                toggle_mode: true, checked: false, can_focus: true,
+                reactive: true, track_hover: true,
+                accessible_name: 'Show changes from the original text',
+            });
+            this._changesChangedId = this._changesButton.connect('notify::checked', () => this._toggleChanges());
+            header.add_child(this._changesButton);
+        }
         this.contentLayout.add_child(header);
 
         this._scroll = new St.ScrollView({
             overlay_scrollbars: true,
             style_class: 'vfade plyph-result-scroll',
+            hscrollbar_policy: St.PolicyType.NEVER,
+            vscrollbar_policy: St.PolicyType.AUTOMATIC,
         });
         const surface = new St.BoxLayout(SHELL_MAJOR >= 48
             ? {
@@ -137,12 +158,30 @@ class ResultDialog extends ModalDialog.ModalDialog {
         this._label.clutter_text.set_line_wrap(true);
         this._label.clutter_text.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR);
         this._label.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
-        wrapButton.connect('notify::checked', () =>
-            this._label.clutter_text.set_line_wrap(wrapButton.checked));
+        this._diffLabel = new St.Label({
+            visible: false, x_expand: true, style_class: 'plyph-result',
+            y_align: Clutter.ActorAlign.START,
+        });
+        this._diffLabel.clutter_text.set_selectable(true);
+        this._diffLabel.clutter_text.set_reactive(true);
+        this._diffLabel.clutter_text.set_editable(false);
+        this._diffLabel.clutter_text.set_line_wrap(true);
+        this._diffLabel.clutter_text.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR);
+        this._diffLabel.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
+        wrapButton.connect('notify::checked', () => {
+            this._label.clutter_text.set_line_wrap(wrapButton.checked);
+            this._diffLabel.clutter_text.set_line_wrap(wrapButton.checked);
+            this._scroll.hscrollbar_policy = wrapButton.checked ? St.PolicyType.NEVER : St.PolicyType.AUTOMATIC;
+            this._resizePreview();
+        });
+        this._resultChangedId = this._label.clutter_text.connect('text-changed', () => this._toggleChanges());
         surface.add_child(this._label);
+        surface.add_child(this._diffLabel);
         this._scroll.set_child(surface);
         this.contentLayout.add_child(this._scroll);
-        this._resizePreview();
+        if (this._changesButton)
+            this._changesButton.checked = showChanges && original !== result;
+        this._toggleChanges();
 
         this.setButtons([
             {
@@ -160,6 +199,11 @@ class ResultDialog extends ModalDialog.ModalDialog {
                 action: () => this._finish(onReplace, this._label.clutter_text.get_text()),
             },
         ]);
+        for (const button of this.buttonLayout.get_children()) {
+            button.x_expand = false;
+            button.y_expand = false;
+            button.set_style('padding: 6px 14px; min-width: 0; min-height: 0; border-radius: 8px;');
+        }
     }
 
     vfunc_key_press_event(event) {
@@ -168,11 +212,13 @@ class ResultDialog extends ModalDialog.ModalDialog {
         const control = (state & Clutter.ModifierType.CONTROL_MASK) !== 0;
 
         if (control && (key === Clutter.KEY_a || key === Clutter.KEY_A)) {
-            this._label.clutter_text.set_selection(0, -1);
+            (this._showChanges ? this._diffLabel : this._label).clutter_text.set_selection(0, -1);
             return Clutter.EVENT_STOP;
         }
         if (control && (key === Clutter.KEY_c || key === Clutter.KEY_C)) {
-            const selection = this._label.clutter_text.get_selection();
+            const selection = this._showChanges
+                ? this._label.clutter_text.get_text()
+                : this._label.clutter_text.get_selection();
             if (selection)
                 this._onCopySelection(selection);
             return Clutter.EVENT_STOP;
@@ -193,22 +239,61 @@ class ResultDialog extends ModalDialog.ModalDialog {
         this._resizePreview();
     }
 
+    _toggleChanges() {
+        if (!this._changesButton) {
+            this._resizePreview();
+            return;
+        }
+        const hasChanges = this._original !== this._label.clutter_text.get_text();
+        if (!hasChanges)
+            this._changesButton.checked = false;
+        this._changesButton.reactive = hasChanges;
+        this._changesButton.can_focus = hasChanges;
+        this._showChanges = hasChanges && this._changesButton.checked;
+        this._changesButton.label = !hasChanges ? 'No changes'
+            : this._showChanges ? 'Show result' : 'Show changes';
+        this._changesButton.accessible_name = !hasChanges ? 'No changes from the original text'
+            : this._showChanges ? 'Show editable result' : 'Show changes from the original text';
+        if (this._showChanges)
+            this._diffLabel.clutter_text.set_markup(diffMarkup(this._original, this._label.clutter_text.get_text()));
+        this._label.visible = !this._showChanges;
+        this._diffLabel.visible = this._showChanges;
+        this._resizePreview();
+    }
+
     _resizePreview() {
         const monitor = Main.layoutManager.currentMonitor ?? Main.layoutManager.primaryMonitor;
-        const availableWidth = Math.max(480, monitor.width - 160);
-        const availableHeight = Math.max(260, monitor.height - 300);
-        const width = this._expanded
-            ? availableWidth
-            : Math.min(680, Math.max(500, Math.floor(monitor.width * 0.4)));
-        const height = this._expanded
-            ? availableHeight
-            : Math.min(
-                Math.max(200, Math.floor(monitor.height * 0.5)),
-                Math.max(96, this._estimatedLines * 21 + 24));
-        this._scroll.set_size(Math.min(width, availableWidth), Math.min(height, availableHeight));
+        const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
+        const availableWidth = Math.max(1, (monitor.width - 96) / scale);
+        const availableHeight = Math.max(1, monitor.height / scale - 160);
+        const text = this._label.clutter_text.get_text();
+        const longestLine = text.split('\n').reduce((longest, line) => Math.max(longest, line.length), 0);
+        const width = Math.min(availableWidth, this._expanded
+            ? availableWidth : Math.max(600, Math.min(680, longestLine * 8 + 24)));
+        const label = this._showChanges ? this._diffLabel : this._label;
+        const [, naturalHeight] = label.get_preferred_height(Math.max(1, (width - 40) * scale));
+        const height = this._expanded ? availableHeight
+            : Math.min(availableHeight, Math.max(260, Math.ceil(naturalHeight / scale) + 24));
+        this.contentLayout.set_style(`padding: 0; margin: 0; spacing: 8px; min-height: 0; max-width: ${width}px;`);
+        this._scroll.width = width * scale;
+        this._scroll.height = height * scale;
+        this._scroll.set_style(`max-height: ${height}px;`);
     }
 
     destroy() {
+        if (this._changesChangedId) {
+            this._changesButton.disconnect(this._changesChangedId);
+            this._changesChangedId = null;
+        }
+        if (this._resultChangedId) {
+            this._label.clutter_text.disconnect(this._resultChangedId);
+            this._resultChangedId = null;
+        }
+        this._changesButton?.destroy();
+        this._diffLabel?.destroy();
+        this._diffLabel = null;
+        this._original = null;
+        this._changesButton = null;
         this._expandIcon?.destroy();
         this._expandIcon = null;
         this._label?.destroy();
@@ -663,6 +748,7 @@ export default class PlyphExtension extends Extension {
         this._feedbackFollowId = null;
         this._feedback = null;
         this._errorDialog = null;
+        this._errorDialogDestroyId = null;
         this._previewDialog = null;
         this._actionPalette = null;
         this._undo = null;
@@ -752,8 +838,7 @@ export default class PlyphExtension extends Extension {
             this._askDialog = null;
         }
         this._destroyActionPalette();
-        this._errorDialog?.destroy();
-        this._errorDialog = null;
+        this._destroyErrorDialog();
 
         if (this._feedbackFollowId) {
             GLib.Source.remove(this._feedbackFollowId);
@@ -1451,7 +1536,8 @@ export default class PlyphExtension extends Extension {
             if (this._client !== client)
                 return;
             if (this._settings.get_boolean('preview-results'))
-                this._showPreview(output, focusedWindow, selection.primaryText);
+                this._showPreview(output, focusedWindow, selection.primaryText,
+                    mode !== 'prompt' && options.inputMode !== 'prompt' ? text : null);
             else
                 await this._replace(
                     output, false,
@@ -1521,7 +1607,7 @@ export default class PlyphExtension extends Extension {
         }
     }
 
-    _showPreview(output, focusedWindow, primaryText) {
+    _showPreview(output, focusedWindow, primaryText, original = null) {
         if (this._previewDialog)
             this._previewDialog.destroy();
         const dialog = new ResultDialog(output,
@@ -1537,7 +1623,7 @@ export default class PlyphExtension extends Extension {
             () => {
                 if (this._previewDialog === dialog)
                     this._previewDialog = null;
-            });
+            }, original, this._settings.get_boolean('preview-show-changes'));
         this._previewDialog = dialog;
         dialog.open();
         this._restoreDefaultIcon();
@@ -1630,16 +1716,28 @@ export default class PlyphExtension extends Extension {
         }
     }
 
+    _destroyErrorDialog() {
+        if (this._errorDialogDestroyId) {
+            this._errorDialog.disconnect(this._errorDialogDestroyId);
+            this._errorDialogDestroyId = null;
+        }
+        this._errorDialog?.destroy();
+        this._errorDialog = null;
+    }
+
     _showFeedback(message, state = 'success', duration = 1500) {
         if (state === 'error') {
             this._clearPointerFeedback();
-            this._errorDialog?.destroy();
+            this._destroyErrorDialog();
             const dialog = new ErrorDialog(message,
                 text => this._clipboard.set_text(St.ClipboardType.CLIPBOARD, text));
             this._errorDialog = dialog;
-            dialog.connect('destroy', () => {
-                if (this._errorDialog === dialog)
+            this._errorDialogDestroyId = this._errorDialog.connect('destroy', () => {
+                if (this._errorDialog === dialog) {
+                    this._errorDialog.disconnect(this._errorDialogDestroyId);
+                    this._errorDialogDestroyId = null;
                     this._errorDialog = null;
+                }
             });
             dialog.open();
             return;

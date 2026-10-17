@@ -56,6 +56,7 @@ gnome-extensions pack --force \
   --extra-source=secrets.js \
   --extra-source=chatgpt.js \
   --extra-source=chatgptProtocol.js \
+  --extra-source=diff.js \
   --extra-source=stylesheet.css \
   --extra-source=icons \
   --extra-source=LICENSE \

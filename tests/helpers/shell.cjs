@@ -34,6 +34,7 @@ function createShell(version) {
     }
     class Text extends Signals {
         constructor(text = '') { super(); this.text = text; }
+        set_markup(value) { this.markup = value; }
         set_selectable(value) { this.selectable = value; }
         set_editable(value) { this.editable = value; }
         set_cursor_visible(value) { this.cursor_visible = value; }
@@ -58,8 +59,11 @@ function createShell(version) {
         }
         add_child(child) { this.children.push(child); child.parent = this; }
         set_child(child) { this.destroy_all_children(); this.add_child(child); }
+        set_style(value) { this.style = value; }
         set_size(width, height) { Object.assign(this, {width, height}); }
         set_position(x, y) { Object.assign(this, {x, y}); }
+        get_parent() { return this.parent; }
+        get_children() { return [...this.children]; }
         get_preferred_width() { return [this.width, this.width]; }
         get_preferred_height() { return [this.height, this.height]; }
         get_transformed_position() { return [this.x, this.y]; }
@@ -109,8 +113,19 @@ function createShell(version) {
         destroy() { this.menu.destroy(); super.destroy(); }
     }
     class Dialog extends Actor {
-        _init(props) { super._init(props); this.contentLayout = new Actor(); this.add_child(this.contentLayout); }
-        setButtons(buttons) { this.buttons = buttons; }
+        _init(props) {
+            super._init(props);
+            this.contentLayout = new Actor();
+            this.add_child(this.contentLayout);
+            this.buttonLayout = new Actor({layout_manager: {homogeneous: true}});
+            this.add_child(this.buttonLayout);
+        }
+        setButtons(buttons) {
+            this.buttons = buttons;
+            this.buttonLayout.destroy_all_children();
+            for (const info of buttons)
+                this.buttonLayout.add_child(new Actor({label: info.label, x_expand: true, y_expand: true}));
+        }
         setInitialKeyFocus(actor) { this.initialFocus = actor; }
         open() { this.isOpen = true; }
         close() { this.isOpen = false; if (this.destroyOnClose) this.destroy(); }
@@ -206,6 +221,7 @@ function createShell(version) {
         global: {stage, display, get_pointer: () => [300, 300, 0]},
     });
     vm.runInContext(readFileSync(resolve(root, 'actions.js'), 'utf8').replace(/^export /gm, ''), context);
+    vm.runInContext(readFileSync(resolve(root, 'diff.js'), 'utf8').replace(/^export /gm, ''), context);
     vm.runInContext(source, context);
     return {
         extension: new context.PlyphExtension(),
