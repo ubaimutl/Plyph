@@ -157,7 +157,7 @@ function clientHarness() {
         return {token_type: 'Bearer', access_token: 'new-access', refresh_token: 'rotated-refresh', expires_in: 3600};
     };
     return {client, settings, stored: () => stored, writes, requests, cancellable: new Cancellable(),
-        timers, bus, wait: vm.runInContext('wait', sandbox)};
+        timers, bus, wait: client._wait.bind(client)};
 }
 test('simultaneous requests refresh once and atomically persist rotated tokens', async () => {
     const h = clientHarness();
@@ -419,29 +419,67 @@ test('destroying a client during lock contention cancels work and disconnects ex
     assert.equal(h.writes.length, 0);
 });
 
+test('replacing a retry wait removes its old source without cancelling the new wait', async () => {
+    const h = clientHarness();
+    const first = h.wait(100, h.cancellable);
+    const firstRejected = assert.rejects(first, /replaced/);
+    const oldId = h.client._waitTimer;
+    const secondCancel = new h.cancellable.constructor();
+    const second = h.wait(100, secondCancel);
+    assert.equal(h.timers.has(oldId), false);
+    assert.equal(h.timers.size, 1);
+    h.cancellable.cancel();
+    await firstRejected;
+    assert.equal(h.timers.size, 1);
+    const id = h.client._waitTimer;
+    const callback = h.timers.get(id);
+    h.timers.delete(id);
+    callback();
+    await second;
+    assert.equal(h.client._waitTimer, null);
+    assert.equal(h.client._waitReject, null);
+    assert.equal(secondCancel.handlers.size, 0);
+    h.client.destroy();
+});
+
+test('destroy removes a retry wait even outside an operation and prevents recreation', async () => {
+    const h = clientHarness();
+    const waiting = h.wait(100, h.cancellable);
+    h.client.destroy();
+    assert.equal(h.timers.size, 0);
+    assert.equal(h.client._waitTimer, null);
+    await assert.rejects(waiting, /closed/);
+    assert.equal(h.cancellable.handlers.size, 0);
+    await assert.rejects(h.wait(100, h.cancellable), /closed/);
+    assert.equal(h.timers.size, 0);
+    h.client.destroy();
+});
+
 test('real GJS removes the wait source synchronously on cancellation without deadlocking', () => {
     const temporary = mkdtempSync(resolve(tmpdir(), 'plyph-native-cancel-'));
     try {
         const modulePath = resolve(temporary, 'client.js');
         const protocolURL = pathToFileURL(resolve(__dirname, '../chatgptProtocol.js')).href;
         writeFileSync(modulePath, readFileSync(resolve(__dirname, '../chatgpt.js'), 'utf8')
-            .replace("'./chatgptProtocol.js'", JSON.stringify(protocolURL)) + '\nexport {wait};\n');
+            .replace("'./chatgptProtocol.js'", JSON.stringify(protocolURL)));
         const script = resolve(temporary, 'check.js');
         writeFileSync(script, `
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
-import {wait} from './client.js';
+import {ChatGPTClient} from './client.js';
+const client = new ChatGPTClient({});
 const originalTimeout = GLib.timeout_add;
 let sourceId;
 GLib.timeout_add = (...args) => { sourceId = originalTimeout(...args); return sourceId; };
 const cancellable = new Gio.Cancellable();
-const waiting = wait(10000, cancellable);
+const waiting = client._wait(10000, cancellable);
 if (!GLib.MainContext.default().find_source_by_id(sourceId)) throw Error('Missing wait source');
 cancellable.cancel();
 if (GLib.MainContext.default().find_source_by_id(sourceId)) throw Error('Source survived cancellation');
 let rejected = false;
 try { await waiting; } catch (error) { rejected = error.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED); }
 if (!rejected) throw Error('Cancellation was not propagated');
+client.destroy();
 print('passed');
 `);
         assert.equal(execFileSync('gjs', ['-m', script], {encoding: 'utf8', timeout: 5000}).trim(), 'passed');

@@ -71,34 +71,7 @@ function form(values) {
     return Object.entries(values).map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`).join('&');
 }
 
-async function wait(milliseconds, cancellable) {
-    cancellable.set_error_if_cancelled();
-    let timer = null;
-    let signal = null;
-    try {
-        await new Promise((resolve, reject) => {
-            timer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, milliseconds, () => {
-                timer = null;
-                resolve();
-                return GLib.SOURCE_REMOVE;
-            });
-            signal = cancellable.connect(() => {
-                if (timer !== null) {
-                    GLib.Source.remove(timer);
-                    timer = null;
-                }
-                try { cancellable.set_error_if_cancelled(); } catch (error) { reject(error); }
-            });
-        });
-    } finally {
-        if (timer !== null)
-            GLib.Source.remove(timer);
-        if (signal)
-            cancellable.disconnect(signal);
-    }
-}
-
-async function credentialsLocked(cancellable, action) {
+async function credentialsLocked(client, cancellable, action) {
     const previous = credentialQueue;
     let release;
     credentialQueue = new Promise(resolve => { release = resolve; });
@@ -126,7 +99,7 @@ async function credentialsLocked(cancellable, action) {
             if (!owned) {
                 if (GLib.get_monotonic_time() > deadline)
                     throw new Error('Another ChatGPT connection update is in progress. Try again.');
-                await wait(100, cancellable);
+                await client._wait(100, cancellable);
             }
         }
         return await action();
@@ -151,6 +124,8 @@ export class ChatGPTClient {
         this.pending = new Set();
         this.externalSignals = new Map();
         this.destroyed = false;
+        this._waitTimer = null;
+        this._waitReject = null;
     }
 
     destroy() {
@@ -161,8 +136,46 @@ export class ChatGPTClient {
         }
         for (const cancellable of this.pending)
             cancellable.cancel();
+        this._clearWait(new Error('The ChatGPT connection was closed.'));
         this.pending.clear();
         this.session.abort();
+    }
+
+    _clearWait(error) {
+        if (this._waitTimer !== null) {
+            GLib.Source.remove(this._waitTimer);
+            this._waitTimer = null;
+        }
+        const reject = this._waitReject;
+        this._waitReject = null;
+        reject?.(error);
+    }
+
+    async _wait(milliseconds, cancellable) {
+        if (this.destroyed)
+            throw new Error('The ChatGPT connection was closed.');
+        cancellable.set_error_if_cancelled();
+        this._clearWait(new Error('The ChatGPT retry wait was replaced.'));
+        let signal = null;
+        try {
+            await new Promise((resolve, reject) => {
+                this._waitReject = reject;
+                this._waitTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, milliseconds, () => {
+                    this._waitTimer = null;
+                    this._waitReject = null;
+                    resolve();
+                    return GLib.SOURCE_REMOVE;
+                });
+                signal = cancellable.connect(() => {
+                    if (this._waitReject !== reject)
+                        return;
+                    try { cancellable.set_error_if_cancelled(); } catch (error) { this._clearWait(error); }
+                });
+            });
+        } finally {
+            if (signal)
+                cancellable.disconnect(signal);
+        }
     }
 
     async _operation(action, external = null) {
@@ -256,7 +269,7 @@ export class ChatGPTClient {
 
     async signIn(clientId = null, external = null) {
         return this._operation(async cancellable => {
-            const prepared = await credentialsLocked(cancellable, async () => {
+            const prepared = await credentialsLocked(this, cancellable, async () => {
                 const record = await readCredentials(cancellable);
                 if (!record.host_id) {
                     record.host_id = `urn:uuid:${GLib.uuid_string_random()}`;
@@ -334,7 +347,7 @@ export class ChatGPTClient {
                 }, cancellable, null, true);
                 const identity = await this._validate(tokens, callback.clientId, nonce, prepared.previous?.subject ?? null, cancellable);
                 const profile = this._tokens(tokens, {client_id: callback.clientId}, identity);
-                await credentialsLocked(cancellable, async () => {
+                await credentialsLocked(this, cancellable, async () => {
                     const record = await readCredentials(cancellable);
                     const existing = record.profiles[callback.clientId];
                     if (existing && existing.subject !== profile.subject)
@@ -355,7 +368,7 @@ export class ChatGPTClient {
         const id = this.settings.get_string('chatgpt-account-id');
         if (!id)
             throw new Error('Continue with ChatGPT in Plyph settings first.');
-        return credentialsLocked(cancellable, async () => {
+        return credentialsLocked(this, cancellable, async () => {
             const record = await readCredentials(cancellable);
             let profile = record.profiles[id];
             if (!profile?.refresh_token)
@@ -386,7 +399,7 @@ export class ChatGPTClient {
     }
 
     async signOut(id, external = null) {
-        return this._operation(cancellable => credentialsLocked(cancellable, async () => {
+        return this._operation(cancellable => credentialsLocked(this, cancellable, async () => {
             const record = await readCredentials(cancellable);
             const profile = record.profiles[id];
             if (!profile) return {revoked: true};
