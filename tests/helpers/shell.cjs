@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const {readFileSync} = require('node:fs');
 const {resolve} = require('node:path');
 const vm = require('node:vm');
+const {loadShellModules} = require('./modules.cjs');
 
 const root = resolve(__dirname, '../..');
 const source = readFileSync(resolve(root, 'extension.js'), 'utf8')
@@ -222,7 +223,7 @@ function createShell(version) {
         KeyState: {PRESSED: 1, RELEASED: 0},
         EVENT_STOP: true, EVENT_PROPAGATE: false,
         EventType: {MOTION: 'motion', BUTTON_RELEASE: 'release', KEY_PRESS: 'key-press'},
-        EventPhase: {CAPTURE: 1}, KeyController, PanGesture,
+        ...(version >= 51 ? {EventPhase: {CAPTURE: 1}, KeyController, PanGesture} : {}),
         ...Object.fromEntries(['Escape', 'Return', 'KP_Enter', 'Up', 'Down', 'Home', 'Insert', 'Delete', 'Control_L', 'a', 'A', 'c', 'C', 'v', 'V', 'x', 'X', 'z']
             .map(key => [`KEY_${key}`, key])),
         ...(version < 51 ? {get_default_backend: () => backend} : {}),
@@ -289,6 +290,7 @@ function createShell(version) {
     vm.runInContext(readFileSync(resolve(root, 'actions.js'), 'utf8').replace(/^export /gm, ''), context);
     vm.runInContext(readFileSync(resolve(root, 'diff.js'), 'utf8').replace(/^export /gm, ''), context);
     vm.runInContext(readFileSync(resolve(root, 'markdown.js'), 'utf8').replace(/^export /gm, ''), context);
+    loadShellModules(context, root);
     vm.runInContext(source, context);
     return {
         extension: new context.PlyphExtension(),

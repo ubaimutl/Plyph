@@ -19,13 +19,13 @@ test('native Shell clipboard, text selection, divider dragging and Ask validatio
         for (const file of readdirSync(root).filter(name => name.endsWith('.js') && name !== 'extension.js'))
             cpSync(join(root, file), join(extension, file));
         cpSync(join(root, 'icons'), join(extension, 'icons'), {recursive: true});
+        cpSync(join(root, 'shell'), join(extension, 'shell'), {recursive: true});
         cpSync(join(root, 'stylesheet.css'), join(extension, 'stylesheet.css'));
         writeFileSync(join(extension, 'metadata.json'), JSON.stringify({
             uuid: 'plyph-native@local', name: 'Plyph native test',
             description: 'Isolated test harness', 'shell-version': [version],
         }));
-        writeFileSync(join(extension, 'subject.js'), readFileSync(join(root, 'extension.js'), 'utf8') +
-            '\nexport {ResultDialog, AskDialog, ErrorDialog};\n');
+        writeFileSync(join(extension, 'subject.js'), readFileSync(join(root, 'extension.js'), 'utf8'));
         cpSync(join(__dirname, 'native/extension.js'), join(extension, 'extension.js'));
         const script = join(temporary, 'run.sh');
         const log = join(temporary, 'shell.log');

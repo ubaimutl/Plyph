@@ -2,11 +2,12 @@ const assert = require('node:assert/strict');
 const {execFileSync} = require('node:child_process');
 const {mkdtempSync, readFileSync, readdirSync, rmSync} = require('node:fs');
 const {tmpdir} = require('node:os');
-const {join, resolve} = require('node:path');
+const {dirname, join, normalize, resolve} = require('node:path');
 const {test} = require('node:test');
 
 const root = resolve(__dirname, '..');
 const modules = ['extension.js', 'prefs.js', 'actions.js', 'ai.js', 'models.js', 'secrets.js', 'chatgpt.js', 'chatgptProtocol.js', 'diff.js', 'markdown.js'];
+modules.push(...readdirSync(join(root, 'shell')).filter(file => file.endsWith('.js')).map(file => `shell/${file}`));
 const schema = 'org.gnome.shell.extensions.ai-autocorrect.gschema.xml';
 const metadata = JSON.parse(readFileSync(join(root, 'metadata.json'), 'utf8'));
 
@@ -26,7 +27,7 @@ test('upload bundle contains current sources, imports, icons and compilable sett
     try {
         execFileSync('gnome-extensions', [
             'pack', '--force', `--out-dir=${temporary}`,
-            ...['actions.js', 'ai.js', 'models.js', 'secrets.js', 'chatgpt.js', 'chatgptProtocol.js', 'diff.js', 'markdown.js', 'stylesheet.css', 'icons', 'LICENSE']
+            ...['actions.js', 'ai.js', 'models.js', 'secrets.js', 'chatgpt.js', 'chatgptProtocol.js', 'diff.js', 'markdown.js', 'shell', 'stylesheet.css', 'icons', 'LICENSE']
                 .map(file => `--extra-source=${file}`),
             `--schema=schemas/${schema}`, root,
         ], {cwd: root});
@@ -45,8 +46,8 @@ test('upload bundle contains current sources, imports, icons and compilable sett
         }
         for (const file of modules) {
             const source = execFileSync('unzip', ['-p', bundle, file], {encoding: 'utf8'});
-            for (const [, dependency] of source.matchAll(/from\s+['"]\.\/([^'"]+)['"]/g))
-                assert.ok(entries.includes(dependency), `Missing import ${dependency} from ${file}`);
+            for (const [, dependency] of source.matchAll(/from\s+['"](\.[^'"]+)['"]/g))
+                assert.ok(entries.includes(normalize(join(dirname(file), dependency))), `Missing import ${dependency} from ${file}`);
         }
         const unpacked = join(temporary, 'unpacked');
         execFileSync('unzip', ['-q', bundle, '-d', unpacked]);

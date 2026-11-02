@@ -2,6 +2,8 @@ const {readFileSync} = require('node:fs');
 const vm = require('node:vm');
 const assert = require('node:assert/strict');
 const {test} = require('node:test');
+const {resolve} = require('node:path');
+const {loadShellModules} = require('./helpers/modules.cjs');
 
 class Signals {
     handlers = new Map();
@@ -95,6 +97,7 @@ function setup() {
     const source = readFileSync(new URL('../extension.js', `file://${__filename}`), 'utf8')
         .replace(/^import .*;\n/gm, '')
         .replace('export default class PlyphExtension', 'globalThis.PlyphExtension = class PlyphExtension');
+    loadShellModules(context, resolve(__dirname, '..'));
     vm.runInContext(source, context);
     const extension = new context.PlyphExtension();
     extension._settings = settings;

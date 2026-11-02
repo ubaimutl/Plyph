@@ -5,7 +5,8 @@ import GLib from 'gi://GLib';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
-import {ResultDialog, AskDialog, ErrorDialog} from './subject.js';
+import PlyphExtension from './subject.js';
+import {ResultDialog, AskDialog, ErrorDialog} from './shell/dialogs.js';
 Gio._promisify(Shell.Screenshot.prototype, 'screenshot_area');
 const delay = ms => new Promise(resolve => GLib.timeout_add(GLib.PRIORITY_DEFAULT,ms,()=>{resolve();return GLib.SOURCE_REMOVE;}));
 function assert(ok,description){if(!ok)throw new Error(description);print(`PLYPH-NATIVE: PASS ${description}`);}
