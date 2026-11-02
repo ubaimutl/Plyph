@@ -155,17 +155,17 @@ export class ChatGPTClient {
         if (this.destroyed)
             throw new Error('The ChatGPT connection was closed.');
         cancellable.set_error_if_cancelled();
-        this._clearWait(new Error('The ChatGPT retry wait was replaced.'));
         let signal = null;
         try {
             await new Promise((resolve, reject) => {
-                this._waitReject = reject;
+                this._clearWait(new Error('The ChatGPT retry wait was replaced.'));
                 this._waitTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, milliseconds, () => {
                     this._waitTimer = null;
                     this._waitReject = null;
                     resolve();
                     return GLib.SOURCE_REMOVE;
                 });
+                this._waitReject = reject;
                 signal = cancellable.connect(() => {
                     if (this._waitReject !== reject)
                         return;
