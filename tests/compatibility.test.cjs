@@ -151,12 +151,14 @@ for (const version of versions) {
         expand.emit('clicked');
         assert.equal(dialog._scroll.width, initialWidth);
         dialog._label.clutter_text.text = 'Edited';
+        dialog._label.clutter_text.grab_key_focus();
         const event = key => ({get_key_symbol: () => key, get_state: () => shell.Clutter.ModifierType.CONTROL_MASK});
         dialog.vfunc_key_press_event(event('a'));
         dialog.vfunc_key_press_event(event('c'));
         dialog.vfunc_key_press_event(event('Return'));
         dialog._finish(() => calls.push(['duplicate']));
-        assert.deepEqual(calls, [['selection', 'Edited'], ['close'], ['replace', 'Edited']]);
+        assert.equal(shell.clipboard.get(1), 'Edited');
+        assert.deepEqual(calls, [['close'], ['replace', 'Edited']]);
         assert.equal(dialog.destroyed, true);
         shell.assertClean();
     });
@@ -674,6 +676,106 @@ for (const version of versions) {
         dialog._toggleRefinement(true);
         begin();
         dialog.destroy();
+        shell.assertClean();
+    });
+
+
+    check('clipboard shortcuts target each text field and replace Unicode selections correctly', () => {
+        const shell = createShell(version);
+        const dialog = new shell.ResultDialog('Before', () => {}, () => {}, () => {}, null, null, 'Source', false,
+            {destroy: () => {}});
+        const ask = new shell.AskDialog(() => {}, () => {}, () => {});
+        const control = shell.Clutter.ModifierType.CONTROL_MASK;
+        const shift = shell.Clutter.ModifierType.SHIFT_MASK;
+        for (const field of [dialog._label, dialog._refineEntry, ask._entry]) {
+            field.clutter_text.set_text('a🌍bc');
+            field.clutter_text.set_selection(1, 3);
+            shell.sendTextKey(field, shell.Clutter.KEY_c, control);
+            assert.equal(shell.clipboard.get(1), '🌍b');
+            shell.sendTextKey(field, shell.Clutter.KEY_x, control);
+            assert.equal(field.get_text(), 'ac');
+            assert.equal(shell.clipboard.get(1), '🌍b');
+            shell.clipboard.set(1, 'Hi\n🌍');
+            shell.sendTextKey(field, shell.Clutter.KEY_v, control);
+            assert.equal(field.get_text(), 'aHi\n🌍c');
+            shell.sendTextKey(field, shell.Clutter.KEY_a, control);
+            shell.clipboard.set(1, 'Replacement');
+            shell.sendTextKey(field, shell.Clutter.KEY_Insert, shift);
+            assert.equal(field.get_text(), 'Replacement');
+            shell.sendTextKey(field, shell.Clutter.KEY_a, control);
+            shell.sendTextKey(field, shell.Clutter.KEY_Insert, control);
+            assert.equal(shell.clipboard.get(1), 'Replacement');
+            shell.sendTextKey(field, shell.Clutter.KEY_Delete, shift);
+            assert.equal(field.get_text(), '');
+        }
+        dialog._label.clutter_text.set_text('First line');
+        shell.sendTextKey(dialog._label, shell.Clutter.KEY_Return);
+        assert.equal(dialog._label.get_text(), 'First line\n');
+        assert.equal(dialog._finished, false, 'Enter must edit the result rather than Replace');
+        dialog._label.clutter_text.set_text('Current result');
+        dialog._refineEntry.set_text('Different field');
+        shell.sendTextKey(dialog._refineEntry, shell.Clutter.KEY_a, control);
+        shell.sendTextKey(dialog._refineEntry, shell.Clutter.KEY_c, control);
+        assert.equal(shell.clipboard.get(1), 'Different field');
+        assert.equal(dialog._label.get_text(), 'Current result');
+        dialog.destroy();ask.destroy();shell.assertClean();
+    });
+
+    check('read-only text copies the visible selection and never cuts or pastes', () => {
+        const shell = createShell(version);
+        const dialog = new shell.ResultDialog('Result', () => {}, () => {}, () => {}, null, null, 'Source', true,
+            {destroy: () => {}});
+        const error = new shell.ErrorDialog('Error details', () => {});
+        dialog._addDiscussionMessage('assistant', '**Readable reply**');
+        dialog._refineStatus.set_text('Status details');
+        const reply = dialog._discussionMessages.get_children()[0]._body;
+        const errorText = error.contentLayout.get_children()[1].get_children()[0].get_children()[0];
+        for (const field of [dialog._diffLabel, reply, dialog._refineStatus, errorText]) {
+            const original = field.get_text();
+            shell.sendTextKey(field, shell.Clutter.KEY_a, 4);
+            shell.sendTextKey(field, shell.Clutter.KEY_c, 4);
+            assert.equal(shell.clipboard.get(1), original);
+            shell.clipboard.set(1, 'Do not insert');
+            shell.sendTextKey(field, shell.Clutter.KEY_v, 4);
+            shell.sendTextKey(field, shell.Clutter.KEY_x, 4);
+            assert.equal(field.get_text(), original);
+            assert.equal(shell.clipboard.get(1), 'Do not insert');
+        }
+        assert.equal(reply.get_text(), 'Readable reply');
+        assert.equal(reply.clutter_text.reactive, true);
+        assert.equal(reply.clutter_text.selectable, true);
+        assert.equal(reply.clutter_text.editable, false);
+        assert.equal(reply.clutter_text.cursor_visible, true, 'Selection painting must remain enabled');
+        assert.equal(reply.clutter_text.cursor_size, 0, 'Read-only replies do not show an editing caret');
+        reply.emit('style-changed');
+        assert.equal(reply.clutter_text.selection_color, dialog._refineEntry.clutter_text.get_selection_color());
+        assert.equal(reply.clutter_text.selected_text_color, dialog._refineEntry.clutter_text.get_selected_text_color());
+        dialog._refineEntry.clutter_text.set_selection_color('new theme highlight');
+        reply.emit('style-changed');
+        assert.equal(reply.clutter_text.selection_color, 'new theme highlight');
+        dialog.destroy();error.destroy();shell.assertClean();
+    });
+
+    check('delayed pastes cannot edit a different, busy or destroyed field', () => {
+        const shell = createShell(version);
+        shell.values['test-delay-clipboard'] = true;
+        const dialog = new shell.ResultDialog('Draft', () => {}, () => {}, () => {}, null, null, 'Source', false,
+            {destroy: () => {}});
+        shell.clipboard.set(1, 'Paste');
+        shell.sendTextKey(dialog._label, shell.Clutter.KEY_v, 4);
+        dialog._refineEntry.grab_key_focus();
+        shell.clipboardReads.shift()();
+        assert.equal(dialog._label.get_text(), 'Draft');
+        shell.sendTextKey(dialog._label, shell.Clutter.KEY_v, 4);
+        dialog._setRefining(true);
+        shell.clipboardReads.shift()();
+        assert.equal(dialog._label.get_text(), 'Draft');
+        shell.sendTextKey(dialog._label, shell.Clutter.KEY_x, 4);
+        assert.equal(dialog._label.get_text(), 'Draft');
+        dialog._setRefining(false);
+        shell.sendTextKey(dialog._label, shell.Clutter.KEY_v, 4);
+        dialog.destroy();
+        assert.doesNotThrow(() => shell.clipboardReads.shift()());
         shell.assertClean();
     });
 

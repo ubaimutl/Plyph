@@ -25,6 +25,106 @@ const FLOATING_HIDE_DELAY = 2800;
 const FLOATING_INITIAL_HIDE_DELAY = 4000;
 const FLOATING_TIMEOUT_CHECK_INTERVAL = 100;
 const DISMISSED_SELECTION_COOLDOWN = 1200000;
+function installTextClipboard(owner, actor, {editable = false, multiline = false, canEdit = () => true, onSubmit = null} = {}) {
+    const text = actor.clutter_text;
+    actor.can_focus = true;
+    text.set_reactive(true);
+    text.set_selectable(true);
+    if (!editable) {
+        text.set_editable(false);
+        text.set_cursor_visible(true);
+        text.set_cursor_size(0);
+    }
+    let alive = true;
+    let pendingPaste = 0;
+    const insertAtSelection = value => {
+        text.delete_selection();
+        const position = text.get_cursor_position();
+        const start = position < 0 ? Array.from(text.get_text()).length : position;
+        text.insert_text(value, start);
+        const end = start + Array.from(value).length;
+        text.set_selection(end, end);
+    };
+    const handler = event => {
+        const key = event.get_key_symbol();
+        const state = event.get_state();
+        const control = (state & Clutter.ModifierType.CONTROL_MASK) !== 0;
+        const shift = (state & Clutter.ModifierType.SHIFT_MASK) !== 0;
+        if (state & (Clutter.ModifierType.MOD1_MASK | Clutter.ModifierType.SUPER_MASK))
+            return Clutter.EVENT_PROPAGATE;
+        const selectAll = control && (key === Clutter.KEY_a || key === Clutter.KEY_A);
+        const copy = control && (key === Clutter.KEY_c || key === Clutter.KEY_C || key === Clutter.KEY_Insert);
+        const cut = (control && (key === Clutter.KEY_x || key === Clutter.KEY_X)) || (shift && key === Clutter.KEY_Delete);
+        const paste = (control && (key === Clutter.KEY_v || key === Clutter.KEY_V)) || (shift && key === Clutter.KEY_Insert);
+        const newline = multiline && !control && (key === Clutter.KEY_Return || key === Clutter.KEY_KP_Enter);
+        const submit = onSubmit && (key === Clutter.KEY_Return || key === Clutter.KEY_KP_Enter);
+        if (!selectAll && !copy && !cut && !paste && !newline && !submit)
+            return Clutter.EVENT_PROPAGATE;
+        if (submit) {
+            if (canEdit())
+                onSubmit();
+        } else if (selectAll) {
+            text.set_selection(0, -1);
+        } else if (copy || cut) {
+            const selection = text.get_selection();
+            if (selection && (!cut || editable && canEdit())) {
+                St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, selection);
+                if (cut)
+                    text.delete_selection();
+            }
+        } else if (newline) {
+            if (editable && canEdit())
+                insertAtSelection('\n');
+        } else if (editable && canEdit()) {
+            const request = ++pendingPaste;
+            St.Clipboard.get_default().get_text(St.ClipboardType.CLIPBOARD, (_clipboard, value) => {
+                if (!alive || request !== pendingPaste || !canEdit() || !value ||
+                    !actor.contains(global.stage.get_key_focus()))
+                    return;
+                insertAtSelection(value);
+            });
+        }
+        return Clutter.EVENT_STOP;
+    };
+    if (!owner._textClipboardHandlers) {
+        owner._textClipboardHandlers = new Map();
+        const route = event => {
+            const focus = global.stage.get_key_focus();
+            for (const [field, callback] of owner._textClipboardHandlers) {
+                if (field.contains(focus))
+                    return callback(event);
+            }
+            return Clutter.EVENT_PROPAGATE;
+        };
+        let keyId;
+        if (SHELL_MAJOR >= 51) {
+            owner._clipboardKeys = new Clutter.KeyController();
+            owner._clipboardKeys.set_trigger_keybindings(false);
+            keyId = owner._clipboardKeys.connect('key-press', () => route({
+                get_key_symbol: () => owner._clipboardKeys.get_key()[1],
+                get_state: () => {
+                    const [, pressed, latched, locked] = owner._clipboardKeys.get_state();
+                    return pressed | latched | locked;
+                },
+            }));
+            owner.add_action_full('plyph-clipboard', Clutter.EventPhase.CAPTURE, owner._clipboardKeys);
+        } else {
+            keyId = owner.connect('captured-event', (_actor, event) => event.type() === Clutter.EventType.KEY_PRESS
+                ? route(event) : Clutter.EVENT_PROPAGATE);
+        }
+        owner.connect('destroy', () => {
+            (owner._clipboardKeys ?? owner).disconnect(keyId);
+            owner._textClipboardHandlers.clear();
+        });
+    }
+    owner._textClipboardHandlers.set(actor, handler);
+    actor.connect('destroy', () => {
+        alive = false;
+        pendingPaste++;
+        owner._textClipboardHandlers.delete(actor);
+    });
+    return handler;
+}
 
 const ErrorDialog = GObject.registerClass(
 class ErrorDialog extends ModalDialog.ModalDialog {
@@ -53,6 +153,7 @@ class ErrorDialog extends ModalDialog.ModalDialog {
         label.clutter_text.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR);
         label.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
         label.clutter_text.set_selectable(true);
+        installTextClipboard(this, label);
         surface.add_child(label);
         scroll.set_child(surface);
         this.contentLayout.add_child(scroll);
@@ -181,6 +282,9 @@ class ResultDialog extends ModalDialog.ModalDialog {
         this._label.clutter_text.set_editable(true);
         this._label.clutter_text.set_cursor_visible(true);
         this._label.clutter_text.set_reactive(true);
+        this._label.clutter_text.set_single_line_mode(false);
+        this._label.clutter_text.set_activatable(false);
+        this._resultClipboard = installTextClipboard(this, this._label, {editable: true, multiline: true, canEdit: () => !this._refining});
         this._label.clutter_text.set_line_wrap(true);
         this._label.clutter_text.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR);
         this._label.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
@@ -190,6 +294,7 @@ class ResultDialog extends ModalDialog.ModalDialog {
         });
         this._diffLabel.clutter_text.set_selectable(true);
         this._diffLabel.clutter_text.set_reactive(true);
+        this._diffClipboard = installTextClipboard(this, this._diffLabel);
         this._diffLabel.clutter_text.set_editable(false);
         this._diffLabel.clutter_text.set_line_wrap(true);
         this._diffLabel.clutter_text.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR);
@@ -263,6 +368,8 @@ class ResultDialog extends ModalDialog.ModalDialog {
             this._refineRow = new St.BoxLayout({visible: false, style_class: 'plyph-refine-row', x_expand: true});
             this._refineEntry = new St.Entry({hint_text: 'Refine this result…',
                 accessible_name: 'Refinement instruction', can_focus: true, x_expand: true});
+            installTextClipboard(this, this._refineEntry, {editable: true,
+                canEdit: () => !this._refining, onSubmit: () => this._refine()});
             this._refineActivateId = this._refineEntry.clutter_text.connect('activate', () => this._refine());
             this._refineButton = new St.Button({style_class: 'icon-button plyph-refine-submit',
                 child: new St.Icon({gicon: Gio.icon_new_for_string(`${refinement.iconsPath}/plyph-submit-symbolic.svg`), icon_size: 16}),
@@ -277,6 +384,7 @@ class ResultDialog extends ModalDialog.ModalDialog {
             this._refineStatus.clutter_text.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR);
             this._refineStatus.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
             this._refineStatus.clutter_text.set_selectable(true);
+            installTextClipboard(this, this._refineStatus);
             this._statusScroll = new St.ScrollView({visible: false, x_expand: true,
                 hscrollbar_policy: St.PolicyType.NEVER, vscrollbar_policy: St.PolicyType.AUTOMATIC,
                 style: 'max-height: 72px;'});
@@ -437,6 +545,13 @@ class ResultDialog extends ModalDialog.ModalDialog {
         body.clutter_text.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR);
         body.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
         body.clutter_text.set_selectable(true);
+        installTextClipboard(this, body);
+        body.connect('style-changed', () => {
+            this._refineEntry.ensure_style();
+            const source = this._refineEntry.clutter_text;
+            body.clutter_text.set_selection_color(source.get_selection_color());
+            body.clutter_text.set_selected_text_color(source.get_selected_text_color());
+        });
         if (role === 'assistant')
             body.clutter_text.set_markup(markdownMarkup(text));
         message.add_child(body);
@@ -531,7 +646,6 @@ class ResultDialog extends ModalDialog.ModalDialog {
         const key = event.get_key_symbol();
         const state = event.get_state();
         const control = (state & Clutter.ModifierType.CONTROL_MASK) !== 0;
-
         const focus = global.stage.get_key_focus();
         if (this._discussionScroll?.contains(focus) && key !== Clutter.KEY_Escape)
             return Clutter.EVENT_PROPAGATE;
@@ -543,18 +657,11 @@ class ResultDialog extends ModalDialog.ModalDialog {
             return Clutter.EVENT_PROPAGATE;
         }
 
-        if (control && (key === Clutter.KEY_a || key === Clutter.KEY_A)) {
-            (this._showChanges ? this._diffLabel : this._label).clutter_text.set_selection(0, -1);
+
+        if (this._label.contains(focus) && this._resultClipboard(event) === Clutter.EVENT_STOP)
             return Clutter.EVENT_STOP;
-        }
-        if (control && (key === Clutter.KEY_c || key === Clutter.KEY_C)) {
-            const selection = this._showChanges
-                ? this._label.clutter_text.get_text()
-                : this._label.clutter_text.get_selection();
-            if (selection)
-                this._onCopySelection(selection);
+        if (this._diffLabel.contains(focus) && this._diffClipboard(event) === Clutter.EVENT_STOP)
             return Clutter.EVENT_STOP;
-        }
         if (control && (key === Clutter.KEY_Return || key === Clutter.KEY_KP_Enter)) {
             this._finish(this._onReplace, this._label.clutter_text.get_text());
             return Clutter.EVENT_STOP;
@@ -786,6 +893,8 @@ class ResultDialog extends ModalDialog.ModalDialog {
         this._scroll = null;
         this._onReplace = null;
         this._onCopySelection = null;
+        this._resultClipboard = null;
+        this._diffClipboard = null;
         this._onClose = null;
         super.destroy();
     }
@@ -830,6 +939,11 @@ class AskDialog extends ModalDialog.ModalDialog {
             x_expand: true,
         });
         this.contentLayout.add_child(this._entry);
+        installTextClipboard(this, this._entry, {editable: true, onSubmit: () => {
+            const instruction = this._entry.get_text().trim();
+            if (instruction)
+                this._finish(this._onAsk, instruction);
+        }});
 
         this.setButtons([
             {
