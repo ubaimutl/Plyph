@@ -1,6 +1,3 @@
-// Run with: node --test --test-isolation=none tests/floating-button.test.cjs
-// Exercise the extension's actual lifecycle methods with deterministic Shell
-// signals and time, including app input that never emits captured-event.
 const {readFileSync} = require('node:fs');
 const vm = require('node:vm');
 const assert = require('node:assert/strict');
@@ -82,7 +79,6 @@ function setup() {
         get_transformed_size() { return [40, 40]; }
         set_position(x, y) { this.x = x; this.y = y; }
     }
-    // Keep real extension methods, replacing only the GNOME actor implementation.
     const context = vm.createContext({
         console, Clutter, GLib,
         Config: {PACKAGE_VERSION: '50'},
@@ -211,7 +207,6 @@ test('missing hover-leave does not renew an expired timeout', async () => {
     advance(5000);
     assert.equal(e._floatingButton.visible, true);
     pointer[0] = 900;
-    // Deliberately do not emit notify::hover.
     advance(100);
     assert.equal(e._floatingButton.visible, false);
 });

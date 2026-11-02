@@ -186,7 +186,6 @@
   color: #35373c;
 }
 
-/* Toolbar size presets. The unmodified rules above are the 1× default. */
 
 .plyph-floating-toolbar.plyph-toolbar-scale-125 { font-size: 15px; padding: 1.25px; border-width: 1.25px; }
 .plyph-floating-toolbar.plyph-toolbar-scale-125 .plyph-floating-logo { padding: 5px; border-width: 1.25px; }
@@ -241,4 +240,53 @@
 .plyph-preview-dialog .modal-dialog-button-box {
   padding: 0;
   margin-top: 0;
+}
+
+.plyph-refine-row {
+  spacing: 8px;
+}
+
+.plyph-refine-row .button {
+  padding: 6px 12px;
+  min-width: 0;
+}
+
+.plyph-preview-title, .plyph-refine-toggle {
+  spacing: 6px;
+}
+
+.plyph-result-count {
+  color: #aaaaaa;
+  margin-left: 4px;
+}
+
+.plyph-result-nav {
+  padding: 5px;
+  min-width: 0;
+  border-radius: 8px;
+}
+
+.plyph-result-nav:insensitive {
+  color: #777777;
+}
+
+.plyph-refine-submit {
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  min-height: 16px;
+  padding: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background-color: rgba(255, 255, 255, 0.10);
+}
+
+.plyph-refine-submit:hover,
+.plyph-refine-submit:focus {
+  background-color: rgba(255, 255, 255, 0.18);
+}
+
+.plyph-refine-submit:insensitive {
+  color: #888888;
+  background-color: rgba(255, 255, 255, 0.04);
 }

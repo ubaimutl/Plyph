@@ -317,4 +317,148 @@ for (const version of versions) {
         shell.assertClean();
     });
 
+
+    check('follow-up editing preserves original diffs, manual edits and revision history', async () => {
+        const shell = createShell(version);
+        const calls = [];
+        let destroyed = 0;
+        const dialog = new shell.ResultDialog('First result', text => calls.push(['replace', text]),
+            () => {}, () => {}, null, null, 'Original', true, {
+                run: async (text, instruction) => { calls.push([text, instruction]); return 'Refined result'; },
+                destroy: () => destroyed++,
+            });
+        assert.equal(dialog._refineRow.visible, false);
+        assert.equal(dialog._resultCount.visible, false);
+        assert.equal(dialog.initialFocus, dialog._replaceButton);
+        assert.equal(dialog.buttonLayout.get_children()[0], dialog._refineToggle);
+        dialog._toggleRefinement();
+        assert.equal(dialog._refineRow.visible, true);
+        dialog._label.clutter_text.set_text('Manually edited');
+        dialog._refineEntry.set_text('Shorter');
+        await dialog._refine();
+        assert.deepEqual(calls, [['Manually edited', 'Shorter']]);
+        assert.equal(dialog._original, 'Original');
+        assert.equal(dialog._label.get_text(), 'Refined result');
+        assert.equal(dialog._refineEntry.get_text(), '');
+        assert.equal(dialog._previousButton.reactive, true);
+        dialog._refineEntry.set_text('More formal');
+        await dialog._refine();
+        assert.equal(dialog._revisions.length, 3);
+        dialog._switchResult(-1);
+        assert.equal(dialog._label.get_text(), 'Refined result');
+        dialog._switchResult(-1);
+        assert.equal(dialog._label.get_text(), 'Manually edited');
+        assert.equal(dialog._previousButton.reactive, false);
+        assert.equal(dialog._resultCount.text, '1/3');
+        assert.equal(dialog._nextButton.reactive, true);
+        dialog._label.clutter_text.set_text('Edited earlier version');
+        dialog._switchResult(1);
+        assert.equal(dialog._resultCount.text, '2/3');
+        dialog._switchResult(1);
+        assert.equal(dialog._nextButton.reactive, false);
+        dialog._switchResult(1);
+        assert.equal(dialog._resultCount.text, '3/3');
+        dialog._switchResult(-1);
+        dialog._switchResult(-1);
+        assert.equal(dialog._label.get_text(), 'Edited earlier version');
+        dialog._refineEntry.set_text('Another version');
+        await dialog._refine();
+        assert.equal(dialog._resultCount.text, '4/4');
+        assert.equal(dialog._revisions.length, 4);
+        dialog._switchResult(-1);
+        dialog._switchResult(-1);
+        dialog._switchResult(-1);
+        dialog._toggleRefinement();
+        assert.equal(dialog._refineRow.visible, false);
+        dialog.buttons.find(button => button.label === 'Replace').action();
+        assert.deepEqual(calls.at(-1), ['replace', 'Edited earlier version']);
+        assert.equal(destroyed, 1);
+        shell.assertClean();
+    });
+
+    check('follow-up failures preserve result and instruction, and closing ignores late responses', async () => {
+        const shell = createShell(version);
+        let resolve;
+        let requests = 0;
+        let destroyed = 0;
+        let applied = false;
+        const dialog = new shell.ResultDialog('Keep me', () => { applied = true; },
+            () => {}, () => {}, null, null, 'Original', false, {
+                run: () => { requests++; return new Promise(done => { resolve = done; }); },
+                destroy: () => destroyed++,
+            });
+        await dialog._refine();
+        assert.equal(requests, 0);
+        dialog._refineEntry.set_text('Shorter');
+        const pending = dialog._refine();
+        await dialog._refine();
+        assert.equal(requests, 1);
+        assert.equal(dialog._label.clutter_text.editable, false);
+        dialog.buttons.find(button => button.label === 'Replace').action();
+        assert.equal(applied, false);
+        resolve('');
+        await pending;
+        assert.equal(dialog._label.get_text(), 'Keep me');
+        assert.equal(dialog._refineEntry.get_text(), 'Shorter');
+        assert.equal(dialog._statusScroll.visible, true);
+        assert.equal(dialog._revisions.length, 1);
+        const run = dialog._refinement.run;
+        dialog._refinement.run = async () => { throw new Error('Network unavailable'); };
+        await dialog._refine();
+        assert.equal(dialog._refineStatus.text, 'Network unavailable');
+        assert.equal(dialog._label.get_text(), 'Keep me');
+        dialog._refinement.run = run;
+        const late = dialog._refine();
+        dialog.buttons.find(button => button.label === 'Cancel').action();
+        resolve('Late result');
+        await late;
+        assert.equal(destroyed, 1);
+        assert.equal(applied, false);
+        shell.assertClean();
+    });
+
+    check('refinement entry owns Enter and text selection shortcuts', async () => {
+        const shell = createShell(version);
+        let calls = 0;
+        let replaced = false;
+        const dialog = new shell.ResultDialog('Draft', () => { replaced = true; },
+            () => {}, () => {}, null, null, 'Original', false, {
+                run: async () => { calls++; return 'Refined'; }, destroy: () => {},
+            });
+        dialog._refineEntry.set_text('Shorter');
+        dialog._refineEntry.grab_key_focus();
+        const event = (key, modifiers = 0) => ({get_key_symbol: () => key, get_state: () => modifiers});
+        assert.equal(dialog.vfunc_key_press_event(event(shell.Clutter.KEY_a, 4)), false);
+        assert.equal(dialog._label.clutter_text.selection, undefined);
+        assert.equal(dialog.vfunc_key_press_event(event(shell.Clutter.KEY_Return)), true);
+        await new Promise(resolve => setImmediate(resolve));
+        assert.equal(calls, 1);
+        assert.equal(replaced, false);
+        assert.equal(dialog._label.get_text(), 'Refined');
+        dialog.destroy();
+        shell.assertClean();
+    });
+
+    check('preview refinement retains provider options and destroys its independent client', async () => {
+        const shell = createShell(version);
+        const e = shell.extension;
+        e.enable();
+        e._showPreview('Draft', null, 'Selected', 'Original',
+            {provider: 'ollama', model: 'chosen-model', outputLimit: 1000}, 'Original context');
+        const client = shell.clients.at(-1);
+        let request;
+        client.transform = async (...args) => { request = args; return 'New draft'; };
+        const dialog = e._previewDialog;
+        dialog._refineEntry.set_text('Keep the opening');
+        await dialog._refine();
+        assert.equal(request[3].provider, 'ollama');
+        assert.equal(request[3].model, 'chosen-model');
+        assert.equal(request[3].outputLimit, 1000);
+        assert.equal(request[3].inputMode, 'prompt');
+        assert.deepEqual(JSON.parse(request[0]), {original: 'Original context', currentResult: 'Draft', instruction: 'Keep the opening'});
+        e.disable();
+        assert.equal(client.destroyed, true);
+        shell.assertClean();
+    });
+
 }

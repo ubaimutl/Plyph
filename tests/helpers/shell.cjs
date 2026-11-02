@@ -15,6 +15,7 @@ function createShell(version) {
     const bindings = new Map();
     const keyEvents = [];
     const clipboard = new Map();
+    const clipboardReads = [];
     const clients = [];
     let nextTimer = 1;
     class Signals {
@@ -33,22 +34,69 @@ function createShell(version) {
         }
     }
     class Text extends Signals {
+        actions = [];
         constructor(text = '') { super(); this.text = text; }
-        set_markup(value) { this.markup = value; }
+        set_markup(value) {
+            this.markup = value;
+            this.text = value.replace(/<[^>]*>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+        }
         set_selectable(value) { this.selectable = value; }
+        set_selection_color(value) { this.selection_color = value; }
+        get_selection_color() { return this.selection_color ?? 'theme selection'; }
+        set_selected_text_color(value) { this.selected_text_color = value; }
+        get_selected_text_color() { return this.selected_text_color ?? 'theme selected text'; }
         set_editable(value) { this.editable = value; }
         set_cursor_visible(value) { this.cursor_visible = value; }
+        set_cursor_size(value) { this.cursor_size = value; }
         set_reactive(value) { this.reactive = value; }
+        set_single_line_mode(value) { this.single_line_mode = value; }
+        set_activatable(value) { this.activatable = value; }
         set_line_wrap(value) { this.line_wrap = value; }
         set_line_wrap_mode(value) { this.line_wrap_mode = value; }
-        set_selection(start, end) { this.selection = [start, end]; }
-        get_selection() { return this.selection ? this.text : ''; }
+        set_selection(start, end) { this.selection = [start, end]; this.cursor = end; }
+        get_selection() {
+            if (!this.selection) return '';
+            const chars = Array.from(this.text);
+            const [a, b] = this.selection.map(value => value < 0 ? chars.length : value);
+            return chars.slice(Math.min(a, b), Math.max(a, b)).join('');
+        }
+        get_cursor_position() { return this.cursor ?? -1; }
+        delete_selection() {
+            if (!this.selection) return;
+            const chars = Array.from(this.text);
+            const [a, b] = this.selection.map(value => value < 0 ? chars.length : value);
+            const start = Math.min(a, b);
+            chars.splice(start, Math.abs(b - a));
+            this.set_text(chars.join(''));
+            this.cursor = start;
+        }
+        insert_text(value, position) {
+            const chars = Array.from(this.text);
+            chars.splice(position, 0, ...Array.from(value));
+            this.set_text(chars.join(''));
+            this.cursor = position + Array.from(value).length;
+        }
+        add_action_full(_name, _phase, action) { this.actions.push(action); }
+        grab_key_focus() { stage.focus = this; }
         get_text() { return this.text; }
+        set_text(value) { this.text = value; this.selection = undefined; this.cursor = -1; this.emit('text-changed'); }
+    }
+    class KeyController extends Signals {
+        set_trigger_keybindings() {}
+        get_key() { return [0, this.symbol]; }
+        get_state() { return [true, this.state ?? 0, 0, 0]; }
+    }
+    class PanGesture extends Signals {
+        set_begin_threshold() {}
+        set_required_button() {}
+        get_begin_centroid_abs() { return {x: 0, y: this.startY ?? 0}; }
+        get_centroid_abs() { return {x: 0, y: this.y ?? 0}; }
     }
     class Actor extends Signals {
         children = [];
         classes = new Set();
         pseudoClasses = new Set();
+        actions = [];
         constructor(...args) { super(); actors.push(this); this._init(...args); }
         _init(props = {}) {
             assert.ok(version < 51 || !('vertical' in props), 'GNOME 51 removed vertical');
@@ -58,8 +106,10 @@ function createShell(version) {
             if (props.child) this.add_child(props.child);
         }
         add_child(child) { this.children.push(child); child.parent = this; }
+        insert_child_at_index(child, index) { this.children.splice(index, 0, child); child.parent = this; }
         set_child(child) { this.destroy_all_children(); this.add_child(child); }
         set_style(value) { this.style = value; }
+        ensure_style() {}
         set_size(width, height) { Object.assign(this, {width, height}); }
         set_position(x, y) { Object.assign(this, {x, y}); }
         get_parent() { return this.parent; }
@@ -69,7 +119,10 @@ function createShell(version) {
         get_transformed_position() { return [this.x, this.y]; }
         get_transformed_size() { return [this.width, this.height]; }
         get_text() { return this.clutter_text.get_text(); }
-        contains(actor) { return this === actor || this.children.some(child => child.contains(actor)); }
+        set_text(value) { this.clutter_text.set_text(value); }
+        contains(actor) { return this === actor || this.clutter_text === actor || this.children.some(child => child.contains(actor)); }
+        add_action(action) { this.actions.push(action); }
+        add_action_full(_name, _phase, action) { this.actions.push(action); }
         show() { this.visible = true; }
         hide() { this.visible = false; }
         add_style_class_name(name) { this.classes.add(name); }
@@ -85,6 +138,7 @@ function createShell(version) {
             this.destroyed = true;
             this.destroy_all_children();
             this.emit('destroy');
+            for (const action of [...this.actions, ...this.clutter_text.actions]) action.handlers.clear();
             this.handlers.clear();
             this.clutter_text?.handlers.clear();
             if (this.parent) this.parent.children = this.parent.children.filter(child => child !== this);
@@ -132,6 +186,12 @@ function createShell(version) {
         vfunc_key_press_event() { return false; }
     }
     const stage = new Signals();
+    const grabs = new Set();
+    stage.grab = () => {
+        const grab = {dismiss() { grabs.delete(grab); }};
+        grabs.add(grab);
+        return grab;
+    };
     stage.get_key_focus = () => stage.focus;
     const selection = new Signals();
     const display = new Signals();
@@ -161,7 +221,9 @@ function createShell(version) {
         ModifierType: {CONTROL_MASK: 4, SHIFT_MASK: 1, BUTTON1_MASK: 256},
         KeyState: {PRESSED: 1, RELEASED: 0},
         EVENT_STOP: true, EVENT_PROPAGATE: false,
-        ...Object.fromEntries(['Escape', 'Return', 'KP_Enter', 'Up', 'Down', 'Control_L', 'a', 'A', 'c', 'C', 'v', 'z']
+        EventType: {MOTION: 'motion', BUTTON_RELEASE: 'release', KEY_PRESS: 'key-press'},
+        EventPhase: {CAPTURE: 1}, KeyController, PanGesture,
+        ...Object.fromEntries(['Escape', 'Return', 'KP_Enter', 'Up', 'Down', 'Home', 'Insert', 'Delete', 'Control_L', 'a', 'A', 'c', 'C', 'v', 'V', 'x', 'X', 'z']
             .map(key => [`KEY_${key}`, key])),
         ...(version < 51 ? {get_default_backend: () => backend} : {}),
     };
@@ -192,12 +254,16 @@ function createShell(version) {
         Gio: {icon_new_for_string: path => path},
         St: {
             PolicyType: {NEVER: 2, AUTOMATIC: 1},
-            ThemeContext: {get_for_stage: () => ({scale_factor: 1})},
-            BoxLayout: Actor, Widget: Actor, Button: Actor, Icon: Actor, Label: Actor, Entry: Actor, ScrollView: Actor,
+            ThemeContext: {get_for_stage: () => ({scale_factor: values['test-scale'] ?? 1})},
+            BoxLayout: Actor, Bin: Actor, Widget: Actor, Button: Actor, Icon: Actor, Label: Actor, Entry: Actor, ScrollView: Actor,
             Side: {TOP: 0}, ClipboardType: {PRIMARY: 0, CLIPBOARD: 1},
             Clipboard: {get_default: () => ({
                 set_text: (type, text) => clipboard.set(type, text),
-                get_text: (type, callback) => callback(null, clipboard.get(type) ?? ''),
+                get_text: (type, callback) => {
+                    const read = () => callback(null, clipboard.get(type) ?? '');
+                    if (values['test-delay-clipboard']) clipboardReads.push(read);
+                    else read();
+                },
             })},
         },
         Meta: {KeyBindingFlags: {NONE: 0}, SelectionType: {SELECTION_PRIMARY: 0}},
@@ -227,10 +293,26 @@ function createShell(version) {
         extension: new context.PlyphExtension(),
         ResultDialog: vm.runInContext('ResultDialog', context),
         AskDialog: vm.runInContext('AskDialog', context),
+        ErrorDialog: vm.runInContext('ErrorDialog', context),
         values, settings, actors, timers, bindings, keyEvents, clipboard, clients, keyboard, Clutter,
+        stage, grabs, layoutManager: Main.layoutManager,
+        clipboardReads,
+        sendTextKey(actor, symbol, state = 0) {
+            actor.clutter_text.grab_key_focus();
+            let owner = actor;
+            while (!owner._textClipboardHandlers) owner = owner.get_parent();
+            const controller = owner._clipboardKeys;
+            if (version >= 51) {
+                controller.symbol = symbol;
+                controller.state = state;
+                controller.emit('key-press');
+            } else owner.emit('captured-event', {type: () => Clutter.EventType.KEY_PRESS,
+                get_key_symbol: () => symbol, get_state: () => state});
+        },
         assertClean() {
             assert.equal(bindings.size, 0, 'Shortcuts leaked');
             assert.equal(timers.size, 0, 'Timers leaked');
+            assert.equal(grabs.size, 0, 'Pointer grabs leaked');
             assert.equal(uiGroup.children.length, 0, 'Shell actors leaked');
             assert.equal(panel.children.length, 0, 'Panel indicator leaked');
             for (const signal of signals) assert.equal(signal.handlers.size, 0, 'Signal handlers leaked');
