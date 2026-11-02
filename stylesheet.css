@@ -290,3 +290,28 @@
   color: #888888;
   background-color: rgba(255, 255, 255, 0.04);
 }
+
+.plyph-discussion-scroll {
+  padding: 0;
+}
+
+.plyph-discussion-messages {
+  padding: 8px 10px 8px 2px;
+  spacing: 12px;
+}
+
+.plyph-discussion-message {
+  padding: 10px 14px;
+  border-radius: 14px 14px 14px 4px;
+  background-color: rgba(255, 255, 255, 0.045);
+}
+
+.plyph-discussion-message.user {
+  border-radius: 14px 14px 4px 14px;
+  background-color: rgba(255, 255, 255, 0.10);
+}
+
+.plyph-discussion-message.loading {
+  color: #aaaaaa;
+  min-width: 85px;
+}

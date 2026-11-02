@@ -461,4 +461,117 @@ for (const version of versions) {
         shell.assertClean();
     });
 
+
+    check('preview follow-ups retain the action personalization choice', async () => {
+        const shell = createShell(version);
+        const e = shell.extension;
+        e.enable();
+        shell.values['preview-results'] = true;
+        e._readSelection = async () => ({text: 'Selected code', primaryText: 'Selected code'});
+        const calls = [];
+        for (const client of shell.clients) client.transform = async (...args) => { calls.push(args); return 'Draft'; };
+        await e._run('custom', 'Fix code', 'Fix code', {usePersonalPreferences: false});
+        assert.equal(calls[0][3].usePersonalPreferences, false);
+        const dialog = e._previewDialog;
+        shell.clients.at(-1).transform = async (...args) => { calls.push(args); return 'Reply'; };
+        dialog._refineEntry.set_text('Fix the loop');
+        await dialog._refine();
+        assert.equal(calls.at(-1)[3].usePersonalPreferences, false);
+        dialog._toggleRefinement(true);
+        dialog._refineEntry.set_text('Why?');
+        await dialog._refine();
+        assert.equal(calls.at(-1)[3].usePersonalPreferences, false);
+        e.disable();
+        shell.assertClean();
+    });
+
+    check('discussion stays collapsed, preserves drafts and sends result snapshots with history', async () => {
+        const shell = createShell(version);
+        const e = shell.extension;
+        e.enable();
+        e._showPreview('Draft', null, 'Selection', 'Source',
+            {provider: 'ollama', model: 'chosen-model', inputLimit: 5000}, 'Source context',
+            {mode: 'custom', instructions: 'Summarize'});
+        const dialog = e._previewDialog;
+        const client = shell.clients.at(-1);
+        const requests = [];
+        client.transform = async (...args) => { requests.push(args); return '**Explanation**'; };
+        assert.equal(dialog._discussionScroll.visible, false);
+        assert.equal(dialog._refineRow.visible, false);
+        dialog._toggleRefinement();
+        dialog._refineEntry.set_text('Shorter');
+        dialog._toggleRefinement(true);
+        assert.equal(dialog._refineEntry.get_text(), '');
+        dialog._label.clutter_text.set_text('Edited draft');
+        dialog._refineEntry.set_text('Why this wording?');
+        dialog._refineEntry.grab_key_focus();
+        const event = {get_key_symbol: () => shell.Clutter.KEY_Return, get_state: () => 0};
+        assert.equal(dialog.vfunc_key_press_event(event), true);
+        await new Promise(resolve => setImmediate(resolve));
+        const payload = JSON.parse(requests[0][0]);
+        assert.equal(payload.original, 'Source context');
+        assert.equal(payload.initialResult, 'Draft');
+        assert.equal(payload.action.instructions, 'Summarize');
+        assert.deepEqual(payload.conversation, [{role: 'user', content: 'Why this wording?', currentResult: 'Edited draft', revision: 1}]);
+        assert.equal(requests[0][3].model, 'chosen-model');
+        assert.equal(requests[0][3].provider, 'ollama');
+        assert.equal(requests[0][3].inputLimit, 5000);
+        assert.equal(requests[0][3].inputMode, 'prompt');
+        assert.equal(dialog._discussionScroll.visible, true);
+        assert.equal(dialog._discussionMessages.get_children().length, 2);
+        assert.equal(dialog._discussionMessages.get_children()[1]._body.clutter_text.markup, '<b>Explanation</b>');
+        assert.equal(dialog._discussionLoading, null);
+        assert.equal(dialog._discussionLoadingId, null);
+        assert.equal(dialog._label.get_text(), 'Edited draft');
+        assert.equal(dialog._revisions.length, 1);
+        dialog._toggleRefinement(true);
+        assert.equal(dialog._discussionScroll.visible, false);
+        dialog._toggleRefinement();
+        assert.equal(dialog._refineEntry.get_text(), 'Shorter');
+        dialog._toggleRefinement(true);
+        dialog._label.clutter_text.set_text('Another edit');
+        dialog._refineEntry.set_text('And now?');
+        await dialog._refine();
+        const followup = JSON.parse(requests[1][0]);
+        assert.equal(followup.conversation.length, 3);
+        assert.equal(followup.conversation[1].content, '**Explanation**');
+        assert.equal(followup.conversation[2].currentResult, 'Another edit');
+        e.disable();
+        assert.equal(client.destroyed, true);
+        shell.assertClean();
+    });
+
+    check('discussion failure permits retry and closing cancels a pending reply', async () => {
+        const shell = createShell(version);
+        let complete;
+        let destroyed = false;
+        let calls = 0;
+        const dialog = new shell.ResultDialog('Draft', () => {}, () => {}, () => {}, null, null, 'Source', false, {
+            discuss: async () => { calls++; throw new Error('Offline'); },
+            destroy: () => { destroyed = true; },
+        });
+        dialog._toggleRefinement(true);
+        dialog._refineEntry.set_text('Explain');
+        await dialog._refine();
+        assert.equal(dialog._refineEntry.get_text(), 'Explain');
+        assert.equal(dialog._refineStatus.text, 'Offline');
+        assert.equal(dialog._discussion.length, 0);
+        assert.equal(dialog._discussionMessages.get_children().length, 0);
+        dialog._refinement.discuss = () => { calls++; return new Promise(resolve => { complete = resolve; }); };
+        const pending = dialog._refine();
+        await dialog._refine();
+        assert.equal(calls, 2);
+        assert.equal(dialog._discussToggle.reactive, false);
+        assert.equal(dialog._nextButton.reactive, false);
+        assert.equal(dialog._discussionLoading._body.get_text(), 'Replying…');
+        assert.ok(dialog._discussionLoadingId);
+        assert.equal(dialog._discussionMessages.get_children().length, 2);
+        dialog.buttons.find(button => button.label === 'Cancel').action();
+        assert.equal(dialog._discussionLoadingId, null);
+        complete('Late reply');
+        await pending;
+        assert.equal(destroyed, true);
+        shell.assertClean();
+    });
+
 }

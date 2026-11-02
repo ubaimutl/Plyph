@@ -288,6 +288,7 @@ function createShell(version) {
     });
     vm.runInContext(readFileSync(resolve(root, 'actions.js'), 'utf8').replace(/^export /gm, ''), context);
     vm.runInContext(readFileSync(resolve(root, 'diff.js'), 'utf8').replace(/^export /gm, ''), context);
+    vm.runInContext(readFileSync(resolve(root, 'markdown.js'), 'utf8').replace(/^export /gm, ''), context);
     vm.runInContext(source, context);
     return {
         extension: new context.PlyphExtension(),
