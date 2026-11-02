@@ -14,13 +14,6 @@ const INPUT_LIMIT_VALUES = [0, 2000, 4000, 8000, 16000, 32000];
 const INPUT_LIMIT_LABELS = ['Auto', '2K', '4K', '8K', '16K', '32K', 'Custom'];
 const OUTPUT_LIMIT_VALUES = [0, 1000, 2000, 4000, 8000, 16000];
 const OUTPUT_LIMIT_LABELS = ['Auto', '1K', '2K', '4K', '8K', '16K', 'Custom'];
-const PROVIDER_FREE_USAGE = {
-    cloudflare: 'Free tier includes 10,000 Neurons per day.',
-    bai: 'DeepSeek V4 Flash is currently free. Availability and limits may change.',
-    groq: 'Free plan available. Limits vary by model and account.',
-    cerebras: 'Free plan available. Limits vary by model and account.',
-    vercel: 'Free accounts receive $5 of AI Gateway credit every 30 days after the first request.',
-};
 
 function entry(group, settings, key, title) {
     const row = new Adw.EntryRow({title});
@@ -127,6 +120,40 @@ function bindTokenLimit(settings, key, control, values) {
 export default class PlyphPreferences extends ExtensionPreferences {
     fillPreferencesWindow(window) {
         const settings = this.getSettings();
+        window.default_width = 760;
+        window.default_height = 760;
+        window.search_enabled = true;
+        window.add_css_class('plyph-preferences');
+        const appearance = new Gtk.CssProvider();
+        appearance.load_from_data(`
+            .plyph-preferences headerbar viewswitcher button {
+                padding: 6px 14px;
+                margin: 4px 2px;
+                border-radius: 8px;
+                border: none;
+                background-image: none;
+                background-color: transparent;
+                box-shadow: none;
+            }
+            .plyph-preferences headerbar viewswitcher image {
+                -gtk-icon-size: 1px;
+                min-width: 0;
+                min-height: 0;
+                margin: 0;
+                padding: 0;
+                opacity: 0;
+            }
+            .plyph-preferences headerbar viewswitcher button:hover {
+                background-color: alpha(@theme_fg_color, 0.05);
+            }
+            .plyph-preferences headerbar viewswitcher button:checked {
+                background-color: alpha(@theme_fg_color, 0.08);
+                color: @theme_fg_color;
+                box-shadow: inset 0 -2px @accent_bg_color;
+            }
+        `, -1);
+        Gtk.StyleContext.add_provider_for_display(window.get_display(), appearance,
+            Gtk.STYLE_PROVIDER_PRIORITY_USER + 1);
         this._keyCancellable = new Gio.Cancellable();
         const generalPage = new Adw.PreferencesPage({
             title: 'General',
@@ -140,6 +167,8 @@ export default class PlyphPreferences extends ExtensionPreferences {
             title: 'Instructions',
             icon_name: 'document-edit-symbolic',
         });
+        const advancedPage = new Adw.PreferencesPage({title: 'Advanced',
+            icon_name: 'preferences-other-symbolic'});
 
         const providerGroup = new Adw.PreferencesGroup({title: 'Provider'});
         const model = Gtk.StringList.new(PROVIDERS.map(item => item.name));
@@ -199,19 +228,17 @@ export default class PlyphPreferences extends ExtensionPreferences {
             OUTPUT_LIMIT_LABELS,
             settings.get_int64('prompt-run-output-limit'));
         bindTokenLimit(settings, 'prompt-run-output-limit', runOutputLimit, OUTPUT_LIMIT_VALUES);
-        runPrompt.add(runProvider);
-        runPrompt.add(runModel);
-        runPrompt.add(runInputLimit.row);
-        runPrompt.add(runInputLimit.custom);
-        runPrompt.add(runOutputLimit.row);
-        runPrompt.add(runOutputLimit.custom);
-        actionsPage.add(runPrompt);
+        const runAdvanced = new Adw.ExpanderRow({title: 'Provider and limits',
+            subtitle: 'Use the active provider and automatic limits, or customize.'});
+        for (const row of [runProvider, runModel, runInputLimit.row, runInputLimit.custom,
+            runOutputLimit.row, runOutputLimit.custom])
+            runAdvanced.add_row(row);
+        runPrompt.add(runAdvanced);
 
         this._quickActionsGroup = new Adw.PreferencesGroup({
-            title: 'Toolbar Quick Actions',
+            title: 'Toolbar actions',
             description: 'Select which actions appear in the floating toolbar.',
         });
-        actionsPage.add(this._quickActionsGroup);
 
         const actions = new Adw.PreferencesGroup({
             title: 'Custom actions',
@@ -220,7 +247,6 @@ export default class PlyphPreferences extends ExtensionPreferences {
         this._actionsGroup = actions;
         this._actionRows = [];
         this._renderActions(settings);
-        actionsPage.add(actions);
 
         const shortcuts = new Adw.PreferencesGroup({
             title: 'Shortcuts',
@@ -243,7 +269,10 @@ export default class PlyphPreferences extends ExtensionPreferences {
                 palettePositions[actionPalette.selected] ?? 'disabled');
         });
         shortcuts.add(actionPalette);
-        generalPage.add(shortcuts);
+        actionsPage.add(shortcuts);
+        actionsPage.add(this._quickActionsGroup);
+        actionsPage.add(actions);
+        actionsPage.add(runPrompt);
 
         const capture = new Adw.PreferencesGroup({
             title: 'Selection capture',
@@ -256,18 +285,22 @@ export default class PlyphPreferences extends ExtensionPreferences {
         });
         entry(capture, settings, 'explicit-copy-apps', 'Compatibility apps');
 
-        const behavior = new Adw.PreferencesGroup({title: 'Behavior'});
+        const behavior = new Adw.PreferencesGroup({title: 'Results',
+            description: 'Choose how results appear before returning to your app.'});
+        const toolbar = new Adw.PreferencesGroup({title: 'Selection toolbar',
+            description: 'Keep your actions close to the text you select.'});
+        const feedback = new Adw.PreferencesGroup({title: 'Feedback'});
 
         const showFloating = new Adw.SwitchRow({
-            title: 'Show floating action button when selecting text',
+            title: 'Show selection toolbar',
             subtitle: 'An alternative to keyboard shortcuts.',
         });
         settings.bind('show-floating-button', showFloating, 'active', Gio.SettingsBindFlags.DEFAULT);
-        behavior.add(showFloating);
+        toolbar.add(showFloating);
 
         const toolbarScales = [1, 1.25, 1.5, 1.75, 2];
         const toolbarScale = new Adw.ComboRow({
-            title: 'Floating toolbar scale',
+            title: 'Toolbar size',
             subtitle: 'Enlarge the button, icons, and text together.',
             model: Gtk.StringList.new(['1× (Default)', '1.25×', '1.5×', '1.75×', '2×']),
         });
@@ -277,7 +310,7 @@ export default class PlyphPreferences extends ExtensionPreferences {
         toolbarScale.connect('notify::selected', () => {
             settings.set_double('floating-toolbar-scale', toolbarScales[toolbarScale.selected] ?? 1);
         });
-        behavior.add(toolbarScale);
+        toolbar.add(toolbarScale);
 
         const preview = new Adw.SwitchRow({
             title: 'Preview before replacing',
@@ -304,19 +337,20 @@ export default class PlyphPreferences extends ExtensionPreferences {
             subtitle: 'Allow actions to use previously copied text.',
         });
         settings.bind('clipboard-fallback', clipboardFallback, 'active', Gio.SettingsBindFlags.DEFAULT);
-        behavior.add(clipboardFallback);
+        capture.add(clipboardFallback);
         const pointerFeedback = new Adw.SwitchRow({
             title: 'Show action feedback',
             subtitle: 'Display a lightweight on-screen status while actions run.',
         });
         settings.bind('pointer-feedback', pointerFeedback, 'active', Gio.SettingsBindFlags.DEFAULT);
-        behavior.add(pointerFeedback);
+        feedback.add(pointerFeedback);
         const debugLogging = new Adw.SwitchRow({
-            title: 'Debug AI requests',
+            title: 'Log request diagnostics',
             subtitle: 'Write request details and response status to the GNOME system log.',
         });
         settings.bind('debug-logging', debugLogging, 'active', Gio.SettingsBindFlags.DEFAULT);
-        behavior.add(debugLogging);
+        const diagnostics = new Adw.PreferencesGroup({title: 'Diagnostics'});
+        diagnostics.add(debugLogging);
         const feedbackPositions = [
             'top-left', 'top-center', 'top-right',
             'center-left', 'center', 'center-right',
@@ -341,16 +375,19 @@ export default class PlyphPreferences extends ExtensionPreferences {
         pointerFeedback.connect('notify::active', () => {
             feedbackPosition.sensitive = pointerFeedback.active;
         });
-        behavior.add(feedbackPosition);
+        feedback.add(feedbackPosition);
         generalPage.add(behavior);
-        generalPage.add(capture);
+        generalPage.add(toolbar);
+        generalPage.add(feedback);
+        advancedPage.add(capture);
 
         const exclusion = new Adw.PreferencesGroup({
-            title: 'Floating Button Exclusions',
+            title: 'Toolbar exclusions',
             description: 'Comma-separated list of application IDs or WM_CLASS names where the floating button will be hidden.',
         });
         entry(exclusion, settings, 'excluded-apps', 'Excluded apps');
-        generalPage.add(exclusion);
+        advancedPage.add(exclusion);
+        advancedPage.add(diagnostics);
 
         const personal = new Adw.PreferencesGroup({title: 'Personal context',
             description: 'Context to include with your actions.'});
@@ -391,6 +428,7 @@ export default class PlyphPreferences extends ExtensionPreferences {
         promptsPage.add(variables);
 
         window.connect('close-request', () => {
+            Gtk.StyleContext.remove_provider_for_display(window.get_display(), appearance);
             this._chatgptClient?.destroy();
             this._chatgptClient = null;
             abortModelRequests();
@@ -406,6 +444,7 @@ export default class PlyphPreferences extends ExtensionPreferences {
         window.add(generalPage);
         window.add(actionsPage);
         window.add(promptsPage);
+        window.add(advancedPage);
     }
 
     _renderProviderSettings(settings) {
@@ -445,18 +484,8 @@ export default class PlyphPreferences extends ExtensionPreferences {
             this._providerRows.push(this._secretEntry(settings, provider));
         }
 
-        const freeUsage = PROVIDER_FREE_USAGE[provider];
-        if (freeUsage) {
-            const freeUsageRow = new Adw.ActionRow({
-                title: 'Free usage',
-                subtitle: freeUsage,
-            });
-            freeUsageRow.add_prefix(new Gtk.Image({icon_name: 'dialog-information-symbolic'}));
-            this._providerSettings.add(freeUsageRow);
-            this._providerRows.push(freeUsageRow);
-        }
-
-        const modelRow = new Adw.ComboRow({title: 'Model', enable_search: true});
+        const modelRow = new Adw.ComboRow({title: 'Model', enable_search: true,
+            use_subtitle: true, subtitle_lines: 2, use_markup: false});
         const refresh = new Gtk.Button({
             icon_name: 'view-refresh-symbolic',
             tooltip_text: 'Refresh models',
@@ -475,13 +504,18 @@ export default class PlyphPreferences extends ExtensionPreferences {
         this._providerSettings.add(modelRow);
         this._providerRows.push(modelRow);
         this._modelRow = modelRow;
+        const modelStatus = new Adw.ActionRow({title: 'Model refresh failed', visible: false});
+        modelRow._statusRow = modelStatus;
+        this._providerSettings.add(modelStatus);
+        this._providerRows.push(modelStatus);
 
         if (provider === 'chatgpt') {
             const efforts = ['auto', 'low', 'medium', 'high'];
             const thinking = new Adw.ComboRow({
                 title: 'Thinking effort',
-                subtitle: 'Applies to all actions using this provider. Higher effort may take longer. Support varies by model.',
-                model: Gtk.StringList.new(['Auto — model default', 'Low', 'Medium', 'High']),
+                subtitle: 'More effort can take longer.',
+                tooltip_text: 'Applies to all actions using this provider. Support varies by model.',
+                model: Gtk.StringList.new(['Auto', 'Low', 'Medium', 'High']),
                 selected: Math.max(0, efforts.indexOf(settings.get_string('chatgpt-thinking-effort'))),
             });
             thinking.connect('notify::selected', () => {
@@ -490,19 +524,6 @@ export default class PlyphPreferences extends ExtensionPreferences {
             this._providerSettings.add(thinking);
             this._providerRows.push(thinking);
         }
-
-        const usageRow = new Adw.ActionRow({
-            title: provider === 'chatgpt' ? 'Using ChatGPT plan' : 'Model usage and cost',
-            subtitle: provider === 'chatgpt'
-                ? 'Uses your shared ChatGPT allowance. Custom action output limits must be set to Auto.'
-                : 'Larger models may use provider allowances faster or incur charges, depending on your account.',
-        });
-        if (provider === 'chatgpt')
-            usageRow.add_suffix(new Gtk.LinkButton({label: 'Manage usage',
-                uri: 'https://chatgpt.com/settings/usage', valign: Gtk.Align.CENTER}));
-        usageRow.add_prefix(new Gtk.Image({icon_name: 'dialog-warning-symbolic'}));
-        this._providerSettings.add(usageRow);
-        this._providerRows.push(usageRow);
 
         const cached = this._cachedModels(settings, provider);
         this._setModelOptions(modelRow, settings, provider, cached);
@@ -522,20 +543,27 @@ export default class PlyphPreferences extends ExtensionPreferences {
     _chatgptAccounts(settings) {
         const client = new ChatGPTClient(settings);
         this._chatgptClient = client;
-        const row = new Adw.ComboRow({title: 'Account', use_markup: false});
-        const controls = new Adw.ActionRow({title: 'Connect your account', use_markup: false});
+        const row = new Adw.ComboRow({title: 'Account', use_markup: false,
+            use_subtitle: true, subtitle_lines: 2});
+        const controls = new Adw.ExpanderRow({title: 'Connect your account', use_markup: false});
+        const buttons = new Gtk.Box({orientation: Gtk.Orientation.HORIZONTAL, spacing: 8,
+            margin_start: 16, margin_end: 16, margin_top: 12, margin_bottom: 12});
+        controls.add_row(new Adw.PreferencesRow({title: 'Account controls', child: buttons}));
         const connect = new Gtk.Button({label: 'Continue with ChatGPT', valign: Gtk.Align.CENTER});
         const add = new Gtk.Button({label: 'Add account', valign: Gtk.Align.CENTER});
         const signOut = new Gtk.Button({label: 'Sign out', valign: Gtk.Align.CENTER});
         const cancel = new Gtk.Button({label: 'Cancel', visible: false, valign: Gtk.Align.CENTER});
         for (const button of [connect, add, signOut, cancel])
-            controls.add_suffix(button);
+            buttons.append(button);
         for (const item of [row, controls]) {
             this._providerSettings.add(item);
             this._providerRows.push(item);
         }
+        buttons.append(new Gtk.LinkButton({label: 'Manage usage',
+            uri: 'https://chatgpt.com/settings/usage', valign: Gtk.Align.CENTER}));
         let accounts = [];
         let updating = false;
+        let firstLoad = true;
         let pending = null;
         const current = () => this._chatgptClient === client;
         const updateButtons = () => {
@@ -543,13 +571,16 @@ export default class PlyphPreferences extends ExtensionPreferences {
             row.sensitive = !pending && accounts.length > 0;
             connect.visible = !account?.connected || !account?.authorized;
             connect.sensitive = !pending;
-            controls.title = account?.connected ? 'Account settings' : 'Connect your account';
+            controls.title = account?.connected ? 'Account options' : 'Connect your account';
+            if (!account?.connected)
+                controls.expanded = true;
             add.visible = accounts.length > 0;
             add.sensitive = !pending;
             signOut.visible = Boolean(account?.connected);
             signOut.sensitive = !pending;
             cancel.visible = Boolean(pending);
-            row.subtitle = account?.connected ? account.authorized ? 'Connected' : 'Plan access was not granted' : 'Not connected';
+            row.title = account?.connected && account.authorized ? 'Connected account' : 'Account';
+            row.tooltip_text = account?.label ?? 'No saved accounts';
         };
         const reload = async () => {
             const loaded = await client.accounts();
@@ -567,6 +598,10 @@ export default class PlyphPreferences extends ExtensionPreferences {
                     this._refreshChatGPTModels();
             }
             updateButtons();
+            if (firstLoad) {
+                controls.expanded = !accounts[row.selected]?.connected;
+                firstLoad = false;
+            }
         };
         const clearModels = () => {
             abortModelRequests();
@@ -584,6 +619,7 @@ export default class PlyphPreferences extends ExtensionPreferences {
         });
         const run = async action => {
             pending = new Gio.Cancellable();
+            controls.expanded = true;
             controls.subtitle = 'Connecting…';
             updateButtons();
             try {
@@ -606,18 +642,7 @@ export default class PlyphPreferences extends ExtensionPreferences {
             controls.subtitle = result.authorized ? 'Connected to your ChatGPT plan.' : 'Plan access was not granted. Reconnect and allow plan usage.';
             if (result.authorized) {
                 this._refreshChatGPTModels();
-                if (!settings.get_boolean('chatgpt-welcome-shown')) {
-                    const dialog = new Adw.MessageDialog({
-                        transient_for: row.get_root(), modal: true,
-                        heading: 'You’re using your ChatGPT plan',
-                        body: 'Plyph uses your shared ChatGPT allowance. You can review or change access through Manage usage.',
-                    });
-                    dialog.add_response('ok', 'Got it');
-                    dialog.set_default_response('ok');
-                    dialog.set_close_response('ok');
-                    dialog.connect('response', () => settings.set_boolean('chatgpt-welcome-shown', true));
-                    dialog.present();
-                }
+
             }
         });
         connect.connect('clicked', () => login(accounts[row.selected]?.id ?? null));
@@ -730,7 +755,8 @@ export default class PlyphPreferences extends ExtensionPreferences {
 
     async _refreshModels(settings, provider, row, button) {
         button.sensitive = false;
-        row.subtitle = 'Loading…';
+        row.title = 'Loading models…';
+        row._statusRow.visible = false;
         const request = Symbol();
         row._request = request;
         try {
@@ -739,13 +765,16 @@ export default class PlyphPreferences extends ExtensionPreferences {
                 return;
             this._cacheModels(settings, provider, models);
             this._setModelOptions(row, settings, provider, models);
-            row.subtitle = `${models.length} available`;
         } catch (error) {
-            if (this._modelRow === row && row._request === request)
-                row.subtitle = error.message ?? String(error);
+            if (this._modelRow === row && row._request === request) {
+                row._statusRow.subtitle = error.message ?? String(error);
+                row._statusRow.visible = true;
+            }
         } finally {
-            if (this._modelRow === row && row._request === request)
+            if (this._modelRow === row && row._request === request) {
+                row.title = 'Model';
                 button.sensitive = true;
+            }
         }
     }
 
@@ -1016,8 +1045,8 @@ export default class PlyphPreferences extends ExtensionPreferences {
             title: 'Input mode',
             subtitle: 'Transform the selection or use it directly as the user instruction.',
             model: Gtk.StringList.new([
-                'Transform selected text',
-                'Use selected text as prompt',
+                'Transform text',
+                'Run as prompt',
             ]),
             selected: action?.inputMode === 'prompt' ? 1 : 0,
         });
@@ -1102,18 +1131,18 @@ export default class PlyphPreferences extends ExtensionPreferences {
         });
         const personal = new Adw.SwitchRow({title: 'Use personal context',
             active: action?.usePersonalPreferences ?? true});
-        fields.add(personal);
         fields.add(name);
         fields.add(inputMode);
         fields.add(prompt);
-        fields.add(provider);
-        fields.add(model);
-        fields.add(inputLimit.row);
-        fields.add(inputLimit.custom);
-        fields.add(outputLimit.row);
-        fields.add(outputLimit.custom);
         fields.add(visible);
         page.add(fields);
+        const advanced = new Adw.PreferencesGroup();
+        const advancedOptions = new Adw.ExpanderRow({title: 'Advanced options',
+            subtitle: 'Provider, model, and token limits'});
+        for (const row of [personal, provider, model, inputLimit.row, inputLimit.custom, outputLimit.row, outputLimit.custom])
+            advancedOptions.add_row(row);
+        advanced.add(advancedOptions);
+        page.add(advanced);
 
         const buttons = new Gtk.Box({
             orientation: Gtk.Orientation.HORIZONTAL,
@@ -1147,10 +1176,11 @@ export default class PlyphPreferences extends ExtensionPreferences {
             modal: true,
             destroy_with_parent: true,
             transient_for: this._actionsGroup.get_root(),
-            default_width: 520,
-            default_height: 540,
+            default_width: 620,
+            default_height: 680,
             content,
         });
+        dialog.add_css_class('plyph-preferences');
         cancel.connect('clicked', () => dialog.close());
         save.connect('clicked', () => {
             const actionName = name.text.trim();
