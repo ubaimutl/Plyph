@@ -14,6 +14,7 @@ Correct writing, rewrite text, translate, summarize, fix code, or create your ow
 - Use `${language}`, `${tone}`, `${style}`, and `${selection}` variables
 - Override provider and model per custom action
 - Configure input and output token limits for long actions
+- Include optional personal context with any action
 - Preview results before replacing text
 - Undo the last automatic replacement
 - Reorder or hide custom actions
@@ -43,6 +44,8 @@ Install Plyph from [GNOME Shell Extensions](https://extensions.gnome.org/extensi
 Supports GNOME Shell 46–51.
 
 After installation, open the extension settings to choose your provider and model, connect your account or add API credentials, and configure shortcuts and actions.
+
+In **Instructions → Personal context**, you can add background such as “I use Linux, work mainly with Python, and prefer brief explanations.” It is included with all actions by default. Leave it empty to preserve existing behavior, or disable **Use personal context** for a built-in action or under a custom action’s **Advanced options**. Specific requests and action instructions take priority; unrelated context is ignored.
 
 ### Manual installation
 

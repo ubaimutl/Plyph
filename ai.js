@@ -228,6 +228,15 @@ export class AiClient {
             : mode === 'prompt' ? 'prompt-run' : 'prompt-correct';
         const storedPrompt = this._settings.get_string(promptKey);
         let prompt = this._expandPrompt(customPrompt ?? storedPrompt, text);
+        const usePersonalPreferences = options.usePersonalPreferences ?? (mode === 'custom'
+            ? true : this._settings.get_boolean(`${mode}-use-personal-preferences`));
+        const personalPreferences = usePersonalPreferences ? this._settings.get_string('personal-preferences').trim() : '';
+        if (personalPreferences) {
+            prompt = 'Personal context about the user: ' + JSON.stringify(personalPreferences) + '\n' +
+                'Use this background only when relevant to the current task; ignore unrelated details. ' +
+                'Explicit action instructions and user requests take priority. ' +
+                'Preserve meaning, facts, code and required output formats.\n\nAction instructions:\n' + prompt;
+        }
         if (this._settings.get_boolean('prefer-plain-text'))
             prompt = [prompt, PLAIN_TEXT_GUIDANCE].filter(part => part.trim()).join('\n\n');
         debugLog(this._settings,

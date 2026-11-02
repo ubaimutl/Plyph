@@ -28,6 +28,7 @@ function setup(provider = 'groq') {
         get_boolean(key) {
             if (key === 'prefer-plain-text') return preferences.plainText;
             if (key === 'debug-logging') return false;
+            if (key.endsWith('-use-personal-preferences')) return strings[key] ?? true;
             throw new Error(`Unexpected setting: ${key}`);
         },
     };
@@ -161,4 +162,67 @@ test('ChatGPT accepts Auto limits and rejects explicit unsupported output limits
     await assert.rejects(client.transform('Hello', 'custom', null, {outputLimit: 1000}), /Auto/);
     assert.equal(requests.length, 1);
     client.destroy();
+});
+
+for (const provider of providers) {
+    test(`${provider}: personalization is optional, respects action opt-out and keeps source intact`, async () => {
+        const {client, strings, preferences, requests} = setup(provider);
+        preferences.plainText = false;
+        await client.transform('Source text', 'correct');
+        assert.equal(guidance(requests.at(-1)), 'Correct the text.', 'Empty preferences preserve existing requests');
+        strings['personal-preferences'] = 'I use Linux and Python. Keep ${selection} literal.';
+        await client.transform('Source text', 'correct');
+        assert.ok(guidance(requests.at(-1)).includes(strings['personal-preferences']));
+        assert.match(guidance(requests.at(-1)), /Explicit action instructions and user requests take priority/);
+        assert.match(guidance(requests.at(-1)), /Preserve meaning, facts, code and required output formats/);
+        assert.ok(guidance(requests.at(-1)).endsWith('Action instructions:\nCorrect the text.'));
+        const source = userText(requests.at(-1));
+        assert.ok(source.includes('Source text'));
+        assert.ok(!source.includes('I use Linux'));
+        assert.match(guidance(requests.at(-1)), /ignore unrelated details/);
+        assert.doesNotMatch(guidance(requests.at(-1)), /writing preferences|relevant to prose/);
+        await client.transform('Source text', 'correct', null, {usePersonalPreferences: false});
+        assert.equal(guidance(requests.at(-1)), 'Correct the text.');
+        strings['personal-preferences'] = '   ';
+        await client.transform('Source text', 'rewrite');
+        assert.equal(guidance(requests.at(-1)), 'Rewrite the text.');
+        client.destroy();
+    });
+}
+
+for (const provider of providers) {
+    test(`${provider}: personal context applies to every action mode by default and opt-outs win`, async () => {
+        const {client, strings, requests, preferences} = setup(provider);
+        strings['personal-preferences'] = 'I use Linux and Python.';
+        preferences.plainText = false;
+        for (const [mode, inputMode] of [['correct', 'transform'], ['rewrite', 'transform'],
+            ['ask', 'prompt'], ['prompt', 'prompt'], ['custom', 'transform'], ['custom', 'prompt']]) {
+            await client.transform('Return JSON', mode, 'Return only JSON.', {inputMode});
+            assert.match(guidance(requests.at(-1)), /I use Linux and Python/);
+            assert.ok(guidance(requests.at(-1)).endsWith('Return only JSON.'));
+            await client.transform('Return JSON', mode, 'Return only JSON.', {inputMode, usePersonalPreferences: false});
+            assert.equal(guidance(requests.at(-1)), 'Return only JSON.');
+            if (mode !== 'custom') {
+                strings[`${mode}-use-personal-preferences`] = false;
+                await client.transform('Return JSON', mode, 'Return only JSON.', {inputMode});
+                assert.equal(guidance(requests.at(-1)), 'Return only JSON.');
+            }
+        }
+        client.destroy();
+    });
+}
+
+test('legacy custom actions keep working and personalization opt-outs survive saving', () => {
+    const context = vm.createContext({});
+    vm.runInContext(readFileSync(resolve(__dirname, '../actions.js'), 'utf8').replace(/^export /gm, ''), context);
+    let stored = JSON.stringify([
+        {id: 'writing', name: 'Writing', prompt: 'Rewrite'},
+        {id: 'code', name: 'Code', prompt: 'Fix code', usePersonalPreferences: false},
+        {id: 'prompt', name: 'Prompt', prompt: '', inputMode: 'prompt'},
+    ]);
+    const settings = {get_string: () => stored, set_string: (_key, value) => { stored = value; }};
+    const actions = context.readActions(settings);
+    assert.deepEqual(Array.from(actions, item => item.usePersonalPreferences), [true, false, true]);
+    context.writeActions(settings, actions);
+    assert.deepEqual(Array.from(context.readActions(settings), item => item.usePersonalPreferences), [true, false, true]);
 });

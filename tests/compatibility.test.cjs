@@ -296,4 +296,25 @@ for (const version of versions) {
         }
         shell.assertClean();
     });
+
+    check('personalization opt-out reaches custom actions from every entry point', () => {
+        const shell = createShell(version);
+        const e = shell.extension;
+        shell.values['custom-actions'] = JSON.stringify([
+            {id: 'code', name: 'Fix code', prompt: 'Fix code', usePersonalPreferences: false},
+        ]);
+        e.enable();
+        const action = e._getAvailableActions().find(item => item.id === 'code');
+        const calls = [];
+        e._run = (...args) => calls.push(args);
+        e._runAction(action);
+        e._runAvailableAction(action);
+        e._rebuildActions();
+        e._actionsSection.items[0].emit('activate');
+        assert.equal(calls.length, 3);
+        for (const call of calls) assert.equal(call[3].usePersonalPreferences, false);
+        e.disable();
+        shell.assertClean();
+    });
+
 }

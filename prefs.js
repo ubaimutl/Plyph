@@ -43,6 +43,29 @@ function promptPreview(prompt, maximum = 140) {
     return `${characters.slice(0, maximum).join('').trimEnd()}…`;
 }
 
+function textEditor(title, text, onChanged) {
+    const buffer = new Gtk.TextBuffer();
+    buffer.set_text(text, -1);
+    const view = new Gtk.TextView({buffer, wrap_mode: Gtk.WrapMode.WORD_CHAR,
+        left_margin: 12, right_margin: 12, top_margin: 12, bottom_margin: 12,
+        accepts_tab: false});
+    const scroll = new Gtk.ScrolledWindow({child: view,
+        hscrollbar_policy: Gtk.PolicyType.NEVER, vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
+        min_content_height: 112, max_content_height: 200, propagate_natural_height: true});
+    scroll.add_css_class('frame');
+    const box = new Gtk.Box({orientation: Gtk.Orientation.VERTICAL, spacing: 8,
+        margin_start: 12, margin_end: 12, margin_top: 12, margin_bottom: 12});
+    const label = new Gtk.Label({label: title, xalign: 0, wrap: true});
+    box.append(label);
+    box.append(scroll);
+    const row = new Adw.PreferencesRow({title, child: box});
+    buffer.connect('changed', () => {
+        const [start, end] = buffer.get_bounds();
+        onChanged(buffer.get_text(start, end, false));
+    });
+    return row;
+}
+
 function tokenLimitControl(title, subtitle, values, labels, currentValue) {
     const value = Number.isSafeInteger(currentValue) && currentValue > 0
         ? currentValue
@@ -114,7 +137,7 @@ export default class PlyphPreferences extends ExtensionPreferences {
             icon_name: 'emblem-system-symbolic',
         });
         const promptsPage = new Adw.PreferencesPage({
-            title: 'Prompts',
+            title: 'Instructions',
             icon_name: 'document-edit-symbolic',
         });
 
@@ -329,10 +352,33 @@ export default class PlyphPreferences extends ExtensionPreferences {
         entry(exclusion, settings, 'excluded-apps', 'Excluded apps');
         generalPage.add(exclusion);
 
-        const prompts = new Adw.PreferencesGroup({title: 'Built-in prompts'});
-        entry(prompts, settings, 'prompt-correct', 'Correction prompt');
-        entry(prompts, settings, 'prompt-rewrite', 'Rewrite prompt');
-        entry(prompts, settings, 'prompt-run', 'Run-prompt system guidance');
+        const personal = new Adw.PreferencesGroup({title: 'Personal context',
+            description: 'Context to include with your actions.'});
+        const personalRow = new Adw.ExpanderRow({title: 'About you',
+            subtitle: promptPreview(settings.get_string('personal-preferences'), 90) || 'Optional'});
+        personalRow.add_row(textEditor('Personal context', settings.get_string('personal-preferences'), value => {
+            settings.set_string('personal-preferences', value);
+            personalRow.subtitle = promptPreview(value, 90) || 'Optional';
+        }));
+        personal.add(personalRow);
+        promptsPage.add(personal);
+
+        const prompts = new Adw.PreferencesGroup({title: 'Built-in instructions'});
+        for (const [key, title, mode] of [['prompt-correct', 'Correct', 'correct'], ['prompt-rewrite', 'Rewrite', 'rewrite'],
+            ['prompt-run', 'Run selected prompt', 'prompt'], [null, 'Ask', 'ask']]) {
+            const row = new Adw.ExpanderRow({title,
+                subtitle: key ? promptPreview(settings.get_string(key), 90) : ''});
+            if (key) {
+                row.add_row(textEditor(`${title} instructions`, settings.get_string(key), value => {
+                    settings.set_string(key, value);
+                    row.subtitle = promptPreview(value, 90);
+                }));
+            }
+            const context = new Adw.SwitchRow({title: 'Use personal context'});
+            settings.bind(`${mode}-use-personal-preferences`, context, 'active', Gio.SettingsBindFlags.DEFAULT);
+            row.add_row(context);
+            prompts.add(row);
+        }
         promptsPage.add(prompts);
 
         const variables = new Adw.PreferencesGroup({
@@ -662,7 +708,6 @@ export default class PlyphPreferences extends ExtensionPreferences {
             if (parsed && typeof parsed === 'object' && !Array.isArray(parsed))
                 cache = parsed;
         } catch {
-            // Replace an invalid cache.
         }
         cache[provider] = models;
         settings.set_string('model-cache', JSON.stringify(cache));
@@ -1055,6 +1100,9 @@ export default class PlyphPreferences extends ExtensionPreferences {
             title: 'Show in panel menu',
             active: action?.enabled !== false,
         });
+        const personal = new Adw.SwitchRow({title: 'Use personal context',
+            active: action?.usePersonalPreferences ?? true});
+        fields.add(personal);
         fields.add(name);
         fields.add(inputMode);
         fields.add(prompt);
@@ -1125,6 +1173,7 @@ export default class PlyphPreferences extends ExtensionPreferences {
                 provider: providerId,
                 model: providerId ? model.text.trim() : '',
                 inputMode: inputModeValue,
+                usePersonalPreferences: personal.active,
                 inputLimit: inputLimitValue,
                 outputLimit: outputLimitValue,
             };

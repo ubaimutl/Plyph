@@ -657,8 +657,6 @@ class FloatingToolbar extends St.BoxLayout {
         this._actionsBox.destroy_all_children();
 
         const allActions = this._getActions();
-
-        // Read quick action references from settings if available, else default
         let quickActionIds = [];
         try {
             quickActionIds = JSON.parse(this._settings?.get_string('quick-actions') || '[]');
@@ -671,8 +669,6 @@ class FloatingToolbar extends St.BoxLayout {
         const quickActions = quickActionIds.map(id => {
             const action = allActions.find(a => a.id === id || a.mode === id);
             if (!action) return null;
-
-            // Make built-in action names compact for the toolbar
             let compactName = action.name;
             if (action.mode === 'ask') compactName = 'Ask';
             if (action.mode === 'correct') compactName = 'Correct';
@@ -886,6 +882,7 @@ export default class PlyphExtension extends Extension {
             action.mode, action.prompt,
             action.mode === 'custom' ? action.name : null,
             {
+                usePersonalPreferences: action.usePersonalPreferences,
                 provider: action.provider ?? '',
                 model: action.model ?? '',
                 inputMode: action.inputMode ?? 'transform',
@@ -906,6 +903,7 @@ export default class PlyphExtension extends Extension {
             action.mode, action.prompt,
             action.mode === 'custom' ? action.name : null,
             {
+                usePersonalPreferences: action.usePersonalPreferences,
                 provider: action.provider ?? '',
                 model: action.model ?? '',
                 inputMode: action.inputMode ?? 'transform',
@@ -930,8 +928,6 @@ export default class PlyphExtension extends Extension {
         this._applyFloatingToolbarScale();
         this._floatingToolbarScaleId = this._settings.connect('changed::floating-toolbar-scale', () =>
             this._applyFloatingToolbarScale());
-        // CSS scaling changes the actual allocation, keeping text sharp and
-        // pointer targets aligned with the visible controls.
         this._floatingButtonSizeSignalIds = [
             this._floatingButton.connect('notify::width', () => this._clampFloatingToolbar()),
             this._floatingButton.connect('notify::height', () => this._clampFloatingToolbar()),
@@ -965,7 +961,6 @@ export default class PlyphExtension extends Extension {
             const window = global.display.focus_window;
             if (window === this._floatingSourceWindow)
                 return;
-            // Shell controls may temporarily take focus from the source window.
             if (!window && (this._actionPalette || this._isPointerInsideFloatingButton(0)))
                 return;
             this._hideFloatingButton(true);
@@ -1057,9 +1052,6 @@ export default class PlyphExtension extends Extension {
 
         this._clearFloatingSourceWindow();
         this._floatingSourceWindow = window;
-        // Wayland delivers application input before Clutter's captured-event.
-        // Mutter updates user-time for clicks, touch and keys in that window,
-        // including clicks that clear a selection without releasing PRIMARY.
         this._floatingSourceSignalIds = [
             window.connect('notify::user-time', () => this._hideFloatingButton(true)),
             window.connect('unmanaged', () => this._hideFloatingButton(true)),
@@ -1125,8 +1117,6 @@ export default class PlyphExtension extends Extension {
 
         if (!await this._delay(120) || !isCurrent())
             return;
-
-        // Wait until a drag/Shift-selection finishes before placing the button.
         const selectingMask = Clutter.ModifierType.BUTTON1_MASK | Clutter.ModifierType.SHIFT_MASK;
         while (global.get_pointer()[2] & selectingMask) {
             if (!await this._delay(50) || !isCurrent())
@@ -1322,8 +1312,6 @@ export default class PlyphExtension extends Extension {
         const deadline = GLib.get_monotonic_time() + this._floatingButtonDismissDelay * 1000;
         this._floatingButtonTimeoutId = GLib.timeout_add(
             GLib.PRIORITY_DEFAULT, FLOATING_TIMEOUT_CHECK_INTERVAL, () => {
-                // Keep the deadline while hovered, so a missed leave event cannot
-                // extend it by another full timeout every time we check.
                 if (GLib.get_monotonic_time() < deadline || this._isPointerInsideFloatingButton())
                     return GLib.SOURCE_CONTINUE;
                 this._floatingButtonTimeoutId = null;
@@ -1351,9 +1339,6 @@ export default class PlyphExtension extends Extension {
 
         if (!this._floatingButton?.visible)
             return;
-
-        // Hide synchronously: repeated input/hover callbacks must not restart a
-        // fade or leave an invisible reactive actor over the application.
         this._hidingFloatingButton = true;
         try {
             this._floatingButton.remove_transition('opacity');
@@ -1377,6 +1362,7 @@ export default class PlyphExtension extends Extension {
             item.connect('activate', () => this._run(
                 'custom', action.prompt, action.name,
                 {
+                    usePersonalPreferences: action.usePersonalPreferences,
                     provider: action.provider,
                     model: action.model,
                     inputMode: action.inputMode,
@@ -1400,6 +1386,7 @@ export default class PlyphExtension extends Extension {
                     name: action.name,
                     mode: 'custom',
                     prompt: action.prompt,
+                    usePersonalPreferences: action.usePersonalPreferences,
                     provider: action.provider,
                     model: action.model,
                     inputMode: action.inputMode,
@@ -1500,6 +1487,7 @@ export default class PlyphExtension extends Extension {
             model: this._settings.get_string('prompt-run-model'),
             inputLimit: this._settings.get_int64('prompt-run-input-limit'),
             outputLimit: this._settings.get_int64('prompt-run-output-limit'),
+            usePersonalPreferences: this._settings.get_boolean('prompt-use-personal-preferences'),
         };
     }
 
@@ -1531,7 +1519,10 @@ export default class PlyphExtension extends Extension {
                 return;
             }
 
-            const requestOptions = mode === 'prompt' ? this._promptOptions() : options;
+            const requestOptions = mode === 'prompt' ? this._promptOptions() : {...options,
+                usePersonalPreferences: options.usePersonalPreferences ?? (mode === 'custom'
+                    ? true : this._settings.get_boolean(`${mode}-use-personal-preferences`))};
+
             const output = await client.transform(text, mode, customPrompt, requestOptions);
             if (this._client !== client)
                 return;
@@ -1588,7 +1579,8 @@ export default class PlyphExtension extends Extension {
         this._setIcon('content-loading-symbolic');
         this._showFeedback('Working…', 'working', 0);
         try {
-            const output = await client.transform(text, 'ask', prompt, { inputMode: 'prompt' });
+            const output = await client.transform(text, 'ask', prompt, {inputMode: 'prompt',
+                usePersonalPreferences: this._settings.get_boolean('ask-use-personal-preferences')});
             if (this._client !== client)
                 return;
             if (this._settings.get_boolean('preview-results'))

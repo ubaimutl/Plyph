@@ -16,6 +16,8 @@ export function readActions(settings) {
             provider: typeof action.provider === 'string' ? action.provider : '',
             model: typeof action.model === 'string' ? action.model : '',
             inputMode: action.inputMode === 'prompt' ? 'prompt' : 'transform',
+            usePersonalPreferences: typeof action.usePersonalPreferences === 'boolean'
+                ? action.usePersonalPreferences : true,
             inputLimit: Number.isSafeInteger(action.inputLimit) && action.inputLimit > 0
                 ? action.inputLimit
                 : 0,
