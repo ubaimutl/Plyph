@@ -831,4 +831,19 @@ for (const version of versions) {
         dialog.destroy();shell.assertClean();
     });
 
+    check('restarting discussion loading replaces the old timer and bubble', () => {
+        const shell = createShell(version);
+        const dialog = new shell.ResultDialog('Result', () => {}, () => {}, () => {}, null, null, 'Source', false,
+            {destroy: () => {}});
+        dialog._showDiscussionLoading();
+        const oldTimer = dialog._discussionLoadingId;
+        const oldBubble = dialog._discussionLoading;
+        dialog._showDiscussionLoading();
+        assert.equal(shell.timers.has(oldTimer), false);
+        assert.equal(oldBubble.destroyed, true);
+        assert.equal(shell.timers.size, 1);
+        assert.equal(dialog._discussionMessages.get_children().length, 1);
+        dialog.destroy();shell.assertClean();
+    });
+
 }

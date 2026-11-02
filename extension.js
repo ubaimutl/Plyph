@@ -179,7 +179,6 @@ class ResultDialog extends ModalDialog.ModalDialog {
         this._revisions = [result];
         this._revisionIndex = 0;
         this._refining = false;
-        this._disposed = false;
         this._original = original;
         this._showChanges = false;
         this._finished = false;
@@ -493,7 +492,8 @@ class ResultDialog extends ModalDialog.ModalDialog {
     }
 
     async _refine() {
-        if (this._refining || this._disposed || this._finished)
+        const refinement = this._refinement;
+        if (!refinement || this._refining || this._finished)
             return;
         if (this._discussing) {
             await this._discuss();
@@ -507,8 +507,8 @@ class ResultDialog extends ModalDialog.ModalDialog {
         this._setRefining(true);
         this._resizePreview();
         try {
-            const result = await this._refinement.run(previous, instruction);
-            if (this._disposed || this._finished)
+            const result = await refinement.run(previous, instruction);
+            if (this._refinement !== refinement || this._finished)
                 return;
             if (typeof result !== 'string' || !result.trim())
                 throw new Error('No text was returned. Try another instruction.');
@@ -520,12 +520,12 @@ class ResultDialog extends ModalDialog.ModalDialog {
             this._followUpDrafts.refine = '';
             this._toggleChanges();
         } catch (error) {
-            if (!this._disposed && !this._finished) {
+            if (this._refinement === refinement && !this._finished) {
                 this._refineStatus.text = error.message ?? String(error);
                 this._statusScroll.visible = true;
             }
         } finally {
-            if (!this._disposed && !this._finished) {
+            if (this._refinement === refinement && !this._finished) {
                 this._setRefining(false);
                 this._resizePreview();
                 this._refineEntry.grab_key_focus();
@@ -601,6 +601,7 @@ class ResultDialog extends ModalDialog.ModalDialog {
     }
 
     _showDiscussionLoading() {
+        this._clearDiscussionLoading();
         this._discussionLoading = this._addDiscussionMessage('assistant', 'Replying…', {loading: true});
         this._discussionLoading._bubble.add_style_class_name('loading');
         let dots = 0;
@@ -621,6 +622,9 @@ class ResultDialog extends ModalDialog.ModalDialog {
     }
 
     async _discuss() {
+        const refinement = this._refinement;
+        if (!refinement || this._refining || this._finished)
+            return;
         const question = this._refineEntry.get_text().trim();
         if (!question)
             return;
@@ -633,8 +637,8 @@ class ResultDialog extends ModalDialog.ModalDialog {
         this._discussionScroll.visible = true;
         this._resizePreview();
         try {
-            const answer = await this._refinement.discuss([...this._discussion, turn]);
-            if (this._disposed || this._finished)
+            const answer = await refinement.discuss([...this._discussion, turn]);
+            if (this._refinement !== refinement || this._finished)
                 return;
             if (typeof answer !== 'string' || !answer.trim())
                 throw new Error('No reply was returned. Try again.');
@@ -644,7 +648,7 @@ class ResultDialog extends ModalDialog.ModalDialog {
             this._refineEntry.set_text('');
             this._followUpDrafts.discuss = '';
         } catch (error) {
-            if (!this._disposed && !this._finished) {
+            if (this._refinement === refinement && !this._finished) {
                 this._clearDiscussionLoading();
                 this._discussionMessages.get_children().at(-1)?.destroy();
                 this._discussionScroll.visible = this._discussion.length > 0;
@@ -652,7 +656,7 @@ class ResultDialog extends ModalDialog.ModalDialog {
                 this._statusScroll.visible = true;
             }
         } finally {
-            if (!this._disposed && !this._finished) {
+            if (this._refinement === refinement && !this._finished) {
                 this._setRefining(false);
                 this._resizePreview();
                 this._refineEntry.grab_key_focus();
@@ -840,9 +844,6 @@ class ResultDialog extends ModalDialog.ModalDialog {
     }
 
     destroy() {
-        if (this._disposed)
-            return;
-        this._disposed = true;
         this._endDividerDrag();
         for (const id of this._dividerPanIds ?? [])
             this._dividerPan.disconnect(id);
