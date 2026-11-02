@@ -939,11 +939,16 @@ class AskDialog extends ModalDialog.ModalDialog {
             x_expand: true,
         });
         this.contentLayout.add_child(this._entry);
-        installTextClipboard(this, this._entry, {editable: true, onSubmit: () => {
-            const instruction = this._entry.get_text().trim();
-            if (instruction)
-                this._finish(this._onAsk, instruction);
-        }});
+        installTextClipboard(this, this._entry, {editable: true, onSubmit: () => this._submit()});
+        this._inputError = new St.Label({text: 'Enter an instruction to continue.', visible: false,
+            style_class: 'plyph-input-error'});
+        this.contentLayout.add_child(this._inputError);
+        this._entryChangedId = this._entry.clutter_text.connect('text-changed', () => {
+            if (this._entry.get_text().trim()) {
+                this._inputError.visible = false;
+                this._entry.remove_style_class_name('error');
+            }
+        });
 
         this.setButtons([
             {
@@ -954,18 +959,22 @@ class AskDialog extends ModalDialog.ModalDialog {
             {
                 label: 'Ask',
                 default: true,
-                action: () => this._finish(onAsk, this._entry.get_text()),
+                action: () => this._submit(),
             },
         ]);
 
         this._entryActivateId = this._entry.clutter_text.connect('activate', () => {
-            this._finish(onAsk, this._entry.get_text());
+            this._submit();
         });
 
         this.setInitialKeyFocus(this._entry.clutter_text);
     }
 
     destroy() {
+        if (this._entryChangedId) {
+            this._entry.clutter_text.disconnect(this._entryChangedId);
+            this._entryChangedId = null;
+        }
         if (this._entryActivateId) {
             this._entry.clutter_text.disconnect(this._entryActivateId);
             this._entryActivateId = null;
@@ -975,6 +984,19 @@ class AskDialog extends ModalDialog.ModalDialog {
         this._onAsk = null;
         this._onClose = null;
         super.destroy();
+    }
+
+    _submit() {
+        if (this._finished)
+            return;
+        const instruction = this._entry.get_text().trim();
+        if (!instruction) {
+            this._inputError.visible = true;
+            this._entry.add_style_class_name('error');
+            this._entry.grab_key_focus();
+            return;
+        }
+        this._finish(this._onAsk, instruction);
     }
 
     _finish(action = null, value = undefined) {

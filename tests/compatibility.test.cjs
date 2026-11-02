@@ -779,4 +779,28 @@ for (const version of versions) {
         shell.assertClean();
     });
 
+
+    check('empty Ask stays open with feedback and supports a later valid submission or cancellation', () => {
+        const shell = createShell(version);
+        const calls = [];
+        const ask = new shell.AskDialog(text => calls.push(text), () => calls.push('cancel'), () => calls.push('close'));
+        ask.buttons[1].action();
+        assert.equal(ask._finished, false);
+        assert.equal(ask._inputError.visible, true);
+        assert.equal(shell.stage.get_key_focus(), ask._entry);
+        ask._entry.set_text('   ');
+        ask._entry.clutter_text.emit('activate');
+        assert.equal(ask._finished, false);
+        assert.deepEqual(calls, []);
+        ask._entry.set_text('  Explain this  ');
+        assert.equal(ask._inputError.visible, false);
+        ask.buttons[1].action();
+        assert.deepEqual(calls, ['close', 'Explain this']);
+        const cancel = new shell.AskDialog(() => calls.push('unexpected'), () => calls.push('cancel'), () => {});
+        cancel.buttons[1].action();
+        cancel.buttons[0].action();
+        assert.equal(calls.at(-1), 'cancel');
+        shell.assertClean();
+    });
+
 }
