@@ -16,6 +16,9 @@ Correct writing, rewrite text, translate, summarize, fix code, or create your ow
 - Configure input and output token limits for long actions
 - Include optional personal context with any action
 - Preview results before replacing text
+- Refine results with follow-up instructions and browse earlier revisions
+- Discuss a result without changing it, with formatted replies and individual copy controls
+- Enlarge the preview and resize the result and discussion panes
 - Undo the last automatic replacement
 - Reorder or hide custom actions
 - Open actions from the panel or a keyboard action palette
@@ -92,18 +95,6 @@ Add the provider's required API key or token in the extension settings:
 - OpenAI-compatible: set the base URL for LM Studio or another compatible server. LM Studio commonly uses `http://127.0.0.1:1234/v1`.
 - Vercel AI Gateway: https://vercel.com/ai-gateway
 
-Plyph itself does not charge anything. Provider pricing and free-tier limits depend on the provider and may change.
-
-Providers with useful free usage options include:
-
-- Cloudflare Workers AI: 10,000 Neurons per day on Workers Free.
-- B.AI: DeepSeek V4 Flash is currently free; availability and limits may change.
-- Groq: free plan available; limits vary by model and account.
-- Cerebras: free plan available; limits vary by model and account.
-- Vercel AI Gateway: free accounts receive $5 of credit every 30 days after the first request.
-
-Check the provider's website for current limits and billing terms before selecting a model.
-
 ### ChatGPT sign-in
 
 Use your ChatGPT plan directly in Plyph with native GNOME sign-in.
@@ -115,7 +106,7 @@ Use your ChatGPT plan directly in Plyph with native GNOME sign-in.
 
 You can add and switch between saved accounts, or sign out in settings. Credentials are stored securely in the system keyring, and access tokens refresh automatically.
 
-Requests use your shared ChatGPT allowance. Open **Manage usage** to review usage and account access. Available models depend on your account.
+Available models depend on your account.
 
 For ChatGPT actions, set the output token limit to **Auto**. Explicit output token limits are not supported.
 
@@ -135,7 +126,7 @@ If a provider indicates that a response was cut off because the output limit was
 
 ### Debugging failed AI requests
 
-Enable **Debug AI requests** in Settings to write the provider, model, estimated input size, requested output limit, sanitized endpoint, and HTTP status to the GNOME system log. Plyph does not log selected text, prompts, API keys, authorization headers, or response bodies.
+Enable **Advanced → Diagnostics → Log request diagnostics** in Settings to write the provider, model, estimated input size, requested output limit, sanitized endpoint, and HTTP status to the GNOME system log. Plyph does not log selected text, prompts, API keys, authorization headers, or response bodies.
 
 View the entries while reproducing the issue with:
 
@@ -155,7 +146,9 @@ This makes custom actions available without moving the pointer to the top panel.
 
 ## Privacy
 
-Clipboard or selected text is sent to your chosen provider only when you explicitly run an action.
+Clipboard or selected text is sent to your chosen provider only when you explicitly run an action or submit a refinement or discussion question. Personal context is included when enabled for that action.
+
+Discussion requests include the source text, action details, initial result, conversation history, and the current result and revision associated with each question.
 
 Using previously copied clipboard text as a fallback is optional and disabled by default.
 
@@ -177,4 +170,40 @@ Other application IDs can be added in Settings if needed.
 
 AI responses can be incorrect. Enable **Preview before replacing** if you want to inspect generated text first.
 
+The result can be edited before you use **Copy** or **Replace**. **Show changes** compares the result with the original selection when available. **Wrap** controls line wrapping, and **Enlarge preview** opens a bounded larger view instead of filling the screen.
+
+### Refine
+
+Open **Refine**, enter an instruction, and submit it to create another revision. The previous and next controls let you browse revisions while keeping manual edits. Copying or replacing uses the result currently displayed.
+
+### Discuss
+
+Open **Discuss** to ask about the result. The conversation stays hidden until you open it and scrolls independently of the result. Replies display Markdown formatting when provided and remain read-only. Select part of a reply and press `Ctrl+C`, or use the copy icon beneath it to copy the complete reply, preserving Markdown and code.
+
+Discussion does not change the result. Use **Refine** to apply a follow-up instruction. With a conversation visible, drag the divider to adjust the space between the result and discussion. Focus the divider and use `Up` or `Down` to resize it with the keyboard, or `Home` to reset it.
+
 After an automatic replacement, **Undo last replacement** remains available in the panel menu for 60 seconds and uses the target application's native undo action.
+
+## Development checks
+
+Run the automated tests from the repository root:
+
+```bash
+node --test tests/*.test.cjs
+```
+
+The compatibility tests exercise GNOME Shell 46–51 API branches with mocks. To also run the native interaction test in a separate headless compositor with temporary settings:
+
+```bash
+PLYPH_NATIVE_SHELL_TEST=1 node --test tests/*.test.cjs
+```
+
+The native test requires GNOME Shell with headless Wayland support and checks clipboard shortcuts, visible text selection, reply copying, pane dragging, and empty Ask submissions. The latest native verification was on GNOME Shell 51.1; GNOME 46–50 still need real-session smoke tests before release. Check the same interactions, settings layout, themes, and display scaling on those versions.
+
+After building the ZIP using the manual installation command, run Shexli against the package:
+
+```bash
+shexli --format json ai-autocorrect@ubai.dev.shell-extension.zip
+```
+
+Shexli 0.2.1 requires manual review for clipboard access and incorrectly flags GNOME 51 because its version rule caps releases at 50. These findings need to be assessed against the declared clipboard behavior and the current GNOME release calendar.
