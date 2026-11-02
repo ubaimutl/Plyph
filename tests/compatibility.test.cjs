@@ -174,10 +174,10 @@ for (const version of versions) {
         dialog._diffLabel.get_preferred_height = () => [0, 700];
         dialog._changesButton.checked = true;
         dialog._changesButton.emit('notify::checked');
-        assert.equal(dialog._scroll.height, 724);
+        assert.equal(dialog._scroll.height, 704);
         dialog._diffLabel.get_preferred_height = () => [0, 10000];
         dialog._resizePreview();
-        assert.equal(dialog._scroll.height, 920);
+        assert.equal(dialog._scroll.height, 704);
         dialog._changesButton.checked = false;
         dialog._label.get_preferred_height = () => [0, 40];
         dialog._changesButton.emit('notify::checked');
@@ -571,6 +571,109 @@ for (const version of versions) {
         complete('Late reply');
         await pending;
         assert.equal(destroyed, true);
+        shell.assertClean();
+    });
+
+
+    check('larger preview stays bounded on wide and scaled monitors and prioritizes discussion', () => {
+        for (const [width, height, scale] of [[3440, 1440, 1], [3840, 2160, 2], [1366, 768, 1], [1600, 1200, 1.5]]) {
+            const shell = createShell(version);
+            shell.layoutManager.currentMonitor = {x: 0, y: 0, width, height};
+            shell.values['test-scale'] = scale;
+            const dialog = new shell.ResultDialog('Short result', () => {}, () => {}, () => {}, null, null, 'Source', false,
+                {destroy: () => {}});
+            const compactWidth = dialog._scroll.width;
+            dialog._toggleExpanded({});
+            assert.ok(dialog._scroll.width / scale <= 1000);
+            assert.ok(dialog._scroll.width <= width - 96);
+            assert.equal(dialog._scroll.height / scale, 260, 'Short results must not stretch to fill the screen');
+            dialog._label.get_preferred_height = () => [0, 10000];
+            dialog._resizePreview();
+            assert.ok(dialog._scroll.height / scale + 160 <= height / scale * 0.8 + 0.01);
+            dialog._label.get_preferred_height = () => [0, 40 * scale];
+            dialog._toggleRefinement(true);
+            dialog._discussion.push({role: 'assistant', content: 'Reply'});
+            dialog._addDiscussionMessage('assistant', 'Reply');
+            dialog._discussionScroll.visible = true;
+            dialog._resizePreview();
+            assert.equal(dialog._divider.visible, true);
+            assert.ok(dialog._scroll.height < dialog._discussionScroll.height);
+            const total = (dialog._scroll.height + dialog._discussionScroll.height) / scale;
+            assert.ok(total + 28 + 220 <= height / scale * 0.8 + 0.01);
+            dialog._statusScroll.visible = true;
+            dialog._resizePreview();
+            assert.ok((dialog._scroll.height + dialog._discussionScroll.height) / scale + 28 + 300 <= height / scale * 0.8 + 0.01);
+            dialog._statusScroll.visible = false;
+            dialog._toggleExpanded({});
+            assert.equal(dialog._scroll.width, compactWidth);
+            dialog._toggleRefinement(true);
+            assert.equal(dialog._divider.visible, false);
+            assert.equal(dialog._discussionScroll.visible, false);
+            assert.equal(dialog._scroll.height / scale, 260);
+            dialog.destroy();
+            shell.assertClean();
+        }
+    });
+
+    check('discussion divider clamps dragging, supports keyboard reset and cleans up pointer capture', () => {
+        const shell = createShell(version);
+        shell.values['test-scale'] = 2;
+        shell.layoutManager.currentMonitor = {x: 0, y: 0, width: 3840, height: 2160};
+        const dialog = new shell.ResultDialog('Result', () => {}, () => {}, () => {}, null, null, 'Source', false,
+            {destroy: () => {}});
+        dialog._toggleRefinement(true);
+        dialog._discussion.push({role: 'assistant', content: 'Reply'});
+        dialog._discussionScroll.visible = true;
+        dialog._toggleExpanded({});
+        const total = dialog._scroll.height + dialog._discussionScroll.height;
+        const pointer = (type, y, button = 1) => ({type: () => type, get_coords: () => [300, y], get_button: () => button});
+        const press = pointer(null, 400);
+        assert.equal(dialog._beginDividerDrag(pointer(null, 400, 3)), false);
+        const begin = () => {
+            if (version >= 51) {
+                dialog._dividerPan.startY = 400;
+                dialog._dividerPan.emit('recognize');
+            } else assert.equal(dialog._beginDividerDrag(press), true);
+            assert.ok(dialog._dividerGrab);
+        };
+        const motion = y => {
+            if (version >= 51) {
+                dialog._dividerPan.y = y;
+                dialog._dividerPan.emit('pan-update');
+            } else shell.stage.emit('captured-event', pointer(shell.Clutter.EventType.MOTION, y));
+        };
+        const keypress = symbol => {
+            if (version >= 51) {
+                dialog._dividerKeys.symbol = symbol;
+                dialog._dividerKeys.emit('key-press');
+            } else dialog._divider.emit('key-press-event', {get_key_symbol: () => symbol});
+        };
+        begin();
+        motion(600);
+        assert.equal(dialog._scroll.height / 2, 200, 'Pointer movement must respect stage scale');
+        motion(100000);
+        assert.ok(dialog._discussionScroll.height / 2 >= 160);
+        assert.equal(dialog._scroll.height + dialog._discussionScroll.height, total);
+        motion(-100000);
+        assert.equal(dialog._scroll.height / 2, 100);
+        if (version >= 51) dialog._dividerPan.emit('end');
+        else shell.stage.emit('captured-event', pointer(shell.Clutter.EventType.BUTTON_RELEASE, 0));
+        assert.equal(dialog._dividerGrab, null);
+        keypress(shell.Clutter.KEY_Down);
+        assert.equal(dialog._scroll.height / 2, 132);
+        keypress(shell.Clutter.KEY_Home);
+        assert.equal(dialog._splitRatio, null);
+        assert.equal(dialog._scroll.height / 2, 100);
+        begin();
+        keypress(shell.Clutter.KEY_Escape);
+        assert.equal(dialog._dividerGrab, null);
+        assert.equal(dialog._finished, false);
+        begin();
+        dialog._toggleRefinement(true);
+        assert.equal(dialog._dividerGrab, null, 'Hiding discussion must end a drag');
+        dialog._toggleRefinement(true);
+        begin();
+        dialog.destroy();
         shell.assertClean();
     });
 

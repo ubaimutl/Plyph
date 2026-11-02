@@ -295,6 +295,27 @@
   padding: 0;
 }
 
+.plyph-preview-divider {
+  height: 12px;
+  min-height: 12px;
+  padding: 0;
+  border: none;
+  background-color: transparent;
+}
+
+.plyph-preview-divider-grip {
+  width: 38px;
+  height: 3px;
+  border-radius: 2px;
+  background-color: rgba(128, 128, 128, 0.5);
+}
+
+.plyph-preview-divider:hover .plyph-preview-divider-grip,
+.plyph-preview-divider:focus .plyph-preview-divider-grip,
+.plyph-preview-divider:active .plyph-preview-divider-grip {
+  background-color: rgba(128, 128, 128, 0.95);
+}
+
 .plyph-discussion-messages {
   padding: 8px 10px 8px 2px;
   spacing: 12px;

@@ -86,6 +86,7 @@ class ResultDialog extends ModalDialog.ModalDialog {
         this._onReplace = onReplace;
         this._onCopySelection = onCopySelection;
         this._expanded = false;
+        this._splitRatio = null;
         this._discussion = [];
         this._discussing = false;
         this._followUpDrafts = {refine: '', discuss: ''};
@@ -209,6 +210,41 @@ class ResultDialog extends ModalDialog.ModalDialog {
         this._toggleChanges();
 
         if (refinement) {
+            this._divider = new St.Bin({visible: false, x_expand: true, can_focus: true,
+                reactive: true, track_hover: true, style_class: 'plyph-preview-divider',
+                accessible_name: 'Resize result and discussion. Use Up and Down to adjust, Home to reset.',
+                child: new St.Widget({style_class: 'plyph-preview-divider-grip',
+                    x_align: Clutter.ActorAlign.CENTER, y_align: Clutter.ActorAlign.CENTER})});
+            if (SHELL_MAJOR >= 51) {
+                this._dividerPan = new Clutter.PanGesture();
+                this._dividerPan.set_begin_threshold(0);
+                this._dividerPan.set_required_button(1);
+                this._dividerPanIds = [this._dividerPan.connect('recognize', () => {
+                    this._endDividerDrag();
+                    this._dividerStartHeight = this._scroll.height / St.ThemeContext.get_for_stage(global.stage).scale_factor;
+                    this._dividerStartY = this._dividerPan.get_begin_centroid_abs().y;
+                    this._dividerGrab = global.stage.grab(this._divider);
+                    this._divider.add_style_pseudo_class('active');
+                    this._divider.grab_key_focus();
+                    return Clutter.EVENT_STOP;
+                }), this._dividerPan.connect('pan-update', () => {
+                    if (!this._dividerGrab)
+                        return;
+                    const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
+                    this._adjustSplit(this._dividerStartHeight + (this._dividerPan.get_centroid_abs().y - this._dividerStartY) / scale);
+                }), this._dividerPan.connect('end', () => this._endDividerDrag())];
+                this._divider.add_action(this._dividerPan);
+                this._dividerKeys = new Clutter.KeyController();
+                this._dividerKeys.set_trigger_keybindings(false);
+                this._dividerKeyControllerId = this._dividerKeys.connect('key-press', () =>
+                    this._handleDividerKey(this._dividerKeys.get_key()[1]));
+                this._divider.add_action_full('plyph-divider-keys', Clutter.EventPhase.CAPTURE, this._dividerKeys);
+            } else {
+                this._dividerPressId = this._divider.connect('button-press-event', (_actor, event) => this._beginDividerDrag(event));
+                this._dividerKeyId = this._divider.connect('key-press-event', (_actor, event) =>
+                    this._handleDividerKey(event.get_key_symbol()));
+            }
+            this.contentLayout.add_child(this._divider);
             this._discussionScroll = new St.ScrollView({visible: false, x_expand: true,
                 style_class: 'plyph-discussion-scroll',
                 hscrollbar_policy: St.PolicyType.NEVER, vscrollbar_policy: St.PolicyType.AUTOMATIC});
@@ -535,6 +571,68 @@ class ResultDialog extends ModalDialog.ModalDialog {
         this._resizePreview();
     }
 
+    _adjustSplit(resultHeight) {
+        if (!this._splitHeight)
+            return;
+        const minimumResult = Math.min(100, this._splitHeight * 0.4);
+        const minimumDiscussion = Math.min(160, this._splitHeight * 0.5);
+        this._splitRatio = Math.max(minimumResult, Math.min(this._splitHeight - minimumDiscussion, resultHeight))
+            / this._splitHeight;
+        this._resizePreview();
+    }
+
+    _handleDividerKey(key) {
+        if (key === Clutter.KEY_Escape && this._dividerGrab) {
+            this._endDividerDrag();
+        } else if (key === Clutter.KEY_Home) {
+            this._splitRatio = null;
+            this._resizePreview();
+        } else if (key === Clutter.KEY_Up || key === Clutter.KEY_Down) {
+            this._adjustSplit(this._scroll.height / St.ThemeContext.get_for_stage(global.stage).scale_factor
+                + (key === Clutter.KEY_Up ? -32 : 32));
+        } else {
+            return Clutter.EVENT_PROPAGATE;
+        }
+        return Clutter.EVENT_STOP;
+    }
+
+    _beginDividerDrag(event) {
+        if (event.get_button() !== 1 || !this._discussionScroll.visible)
+            return Clutter.EVENT_PROPAGATE;
+        this._endDividerDrag();
+        const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
+        const startY = event.get_coords()[1];
+        const startHeight = this._scroll.height / scale;
+        this._dividerGrab = global.stage.grab(this._divider);
+        this._divider.add_style_pseudo_class('active');
+        this._divider.grab_key_focus();
+        this._dividerDragId = global.stage.connect('captured-event', (_stage, captured) => {
+            const type = captured.type();
+            if (type === Clutter.EventType.MOTION) {
+                this._adjustSplit(startHeight + (captured.get_coords()[1] - startY) / scale);
+                return Clutter.EVENT_STOP;
+            }
+            if ((type === Clutter.EventType.BUTTON_RELEASE && captured.get_button() === 1) ||
+                (type === Clutter.EventType.KEY_PRESS && captured.get_key_symbol() === Clutter.KEY_Escape)) {
+                this._endDividerDrag();
+                return Clutter.EVENT_STOP;
+            }
+            return Clutter.EVENT_PROPAGATE;
+        });
+        return Clutter.EVENT_STOP;
+    }
+
+    _endDividerDrag() {
+        const grab = this._dividerGrab;
+        this._dividerGrab = null;
+        grab?.dismiss();
+        if (this._dividerDragId) {
+            global.stage.disconnect(this._dividerDragId);
+            this._dividerDragId = null;
+        }
+        this._divider?.remove_style_pseudo_class('active');
+    }
+
     _toggleChanges() {
         if (!this._changesButton) {
             this._resizePreview();
@@ -561,23 +659,43 @@ class ResultDialog extends ModalDialog.ModalDialog {
         const monitor = Main.layoutManager.currentMonitor ?? Main.layoutManager.primaryMonitor;
         const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
         const availableWidth = Math.max(1, (monitor.width - 96) / scale);
-        const availableHeight = Math.max(1, monitor.height / scale - 160 - (this._refineRow?.visible ? 60 : 0)
-            - (this._discussionScroll?.visible ? 240 : 0));
+        const monitorHeight = monitor.height / scale;
+        const availableHeight = Math.max(1, Math.min(monitorHeight * 0.8, monitorHeight - 64)
+            - (this._refineRow?.visible ? 220 : 160) - (this._statusScroll?.visible ? 80 : 0));
+        const discussing = Boolean(this._discussionScroll?.visible);
         const text = this._label.clutter_text.get_text();
         const longestLine = text.split('\n').reduce((longest, line) => Math.max(longest, line.length), 0);
         const width = Math.min(availableWidth, this._expanded
-            ? availableWidth : Math.max(600, Math.min(680, longestLine * 8 + 24)));
+            ? 1000 : Math.max(600, Math.min(680, longestLine * 8 + 24)));
         const label = this._showChanges ? this._diffLabel : this._label;
         const [, naturalHeight] = label.get_preferred_height(Math.max(1, (width - 40) * scale));
-        const height = this._expanded ? availableHeight
-            : Math.min(availableHeight, Math.max(260, Math.ceil(naturalHeight / scale) + 24));
+        const naturalPreviewHeight = Math.ceil(naturalHeight / scale) + 24;
+        let height = Math.min(availableHeight, Math.max(260, naturalPreviewHeight));
+        let discussionHeight = 0;
+        if (discussing) {
+            const paneHeight = this._expanded ? availableHeight : Math.min(availableHeight,
+                Math.max(100, Math.min(160, naturalPreviewHeight)) + Math.min(300, monitorHeight * 0.32) + 28);
+            this._splitHeight = Math.max(2, paneHeight - 28);
+            const minimumResult = Math.min(100, this._splitHeight * 0.4);
+            const minimumDiscussion = Math.min(160, this._splitHeight * 0.5);
+            const preferredResult = this._splitRatio === null
+                ? Math.min(naturalPreviewHeight, this._expanded ? this._splitHeight / 3 : 160)
+                : this._splitHeight * this._splitRatio;
+            height = Math.max(minimumResult, Math.min(this._splitHeight - minimumDiscussion, preferredResult));
+            discussionHeight = this._splitHeight - height;
+        } else {
+            this._splitHeight = 0;
+            this._endDividerDrag();
+        }
+        if (this._divider)
+            this._divider.visible = discussing;
         this.contentLayout.set_style(`padding: 0; margin: 0; spacing: 8px; min-height: 0; max-width: ${width}px;`);
         this._scroll.width = width * scale;
         this._scroll.height = height * scale;
         this._scroll.set_style(`max-height: ${height}px;`);
         if (this._discussionScroll) {
             this._discussionScroll.width = width * scale;
-            this._discussionScroll.height = 220 * scale;
+            this._discussionScroll.height = discussionHeight * scale;
             this._discussionBubbleWidth = Math.floor((width - 32) * 0.82);
             for (const row of this._discussionMessages.get_children())
                 row._bubble.set_style(`max-width: ${this._discussionBubbleWidth}px;`);
@@ -588,6 +706,19 @@ class ResultDialog extends ModalDialog.ModalDialog {
         if (this._disposed)
             return;
         this._disposed = true;
+        this._endDividerDrag();
+        for (const id of this._dividerPanIds ?? [])
+            this._dividerPan.disconnect(id);
+        if (this._dividerKeyControllerId)
+            this._dividerKeys.disconnect(this._dividerKeyControllerId);
+        if (this._dividerPressId)
+            this._divider.disconnect(this._dividerPressId);
+        if (this._dividerKeyId)
+            this._divider.disconnect(this._dividerKeyId);
+        this._divider?.destroy();
+        this._divider = null;
+        this._dividerPan = null;
+        this._dividerKeys = null;
         this._clearDiscussionLoading();
         this._refinement?.destroy();
         this._refinement = null;
