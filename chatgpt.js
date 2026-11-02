@@ -123,22 +123,22 @@ export class ChatGPTClient {
         this.session = new Soup.Session({timeout: 90});
         this.pending = new Set();
         this.externalSignals = new Map();
-        this.destroyed = false;
         this._waitTimer = null;
         this._waitReject = null;
     }
 
     destroy() {
-        this.destroyed = true;
+        this._clearWait(new Error('The ChatGPT connection was closed.'));
         for (const [cancellable, {external, signal}] of this.externalSignals) {
             external.disconnect(signal);
             this.externalSignals.delete(cancellable);
         }
         for (const cancellable of this.pending)
             cancellable.cancel();
-        this._clearWait(new Error('The ChatGPT connection was closed.'));
         this.pending.clear();
-        this.session.abort();
+        this.session?.abort();
+        this.session = null;
+        this.settings = null;
     }
 
     _clearWait(error) {
@@ -152,7 +152,7 @@ export class ChatGPTClient {
     }
 
     async _wait(milliseconds, cancellable) {
-        if (this.destroyed)
+        if (!this.session)
             throw new Error('The ChatGPT connection was closed.');
         cancellable.set_error_if_cancelled();
         let signal = null;
@@ -179,7 +179,7 @@ export class ChatGPTClient {
     }
 
     async _operation(action, external = null) {
-        if (this.destroyed)
+        if (!this.session)
             throw new Error('The ChatGPT connection was closed.');
         const cancellable = new Gio.Cancellable();
         this.pending.add(cancellable);

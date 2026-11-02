@@ -414,7 +414,7 @@ test('destroying a client during lock contention cancels work and disconnects ex
     assert.equal(h.timers.size, 0);
     assert.equal(h.cancellable.handlers.size, 0);
     assert.equal(h.client.pending.size, 0);
-    await assert.rejects(running, /Cancelled/);
+    await assert.rejects(running, /closed/);
     await assert.rejects(h.client.accounts(), /closed/);
     assert.equal(h.writes.length, 0);
 });
@@ -449,6 +449,8 @@ test('destroy removes a retry wait even outside an operation and prevents recrea
     assert.equal(h.timers.size, 0);
     assert.equal(h.client._waitTimer, null);
     await assert.rejects(waiting, /closed/);
+    assert.equal(h.client.session, null);
+    assert.equal(h.client.settings, null);
     assert.equal(h.cancellable.handlers.size, 0);
     await assert.rejects(h.wait(100, h.cancellable), /closed/);
     assert.equal(h.timers.size, 0);
