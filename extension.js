@@ -535,6 +535,9 @@ class ResultDialog extends ModalDialog.ModalDialog {
 
     _addDiscussionMessage(role, text, {loading = false} = {}) {
         const row = new St.BoxLayout({x_expand: true, style_class: 'plyph-discussion-row'});
+        const column = new St.BoxLayout(SHELL_MAJOR >= 48
+            ? {orientation: Clutter.Orientation.VERTICAL, style_class: 'plyph-discussion-column'}
+            : {vertical: true, style_class: 'plyph-discussion-column'});
         const message = new St.BoxLayout(SHELL_MAJOR >= 48
             ? {orientation: Clutter.Orientation.VERTICAL, style_class: `plyph-discussion-message ${role}`}
             : {vertical: true, style_class: `plyph-discussion-message ${role}`});
@@ -555,10 +558,37 @@ class ResultDialog extends ModalDialog.ModalDialog {
         if (role === 'assistant')
             body.clutter_text.set_markup(markdownMarkup(text));
         message.add_child(body);
+        column.add_child(message);
+        if (role === 'assistant' && !loading) {
+            const icon = new St.Icon({icon_name: 'edit-copy-symbolic', icon_size: 16});
+            const copy = new St.Button({style_class: 'icon-button flat plyph-discussion-copy',
+                accessible_name: 'Copy response', can_focus: true,
+                x_align: Clutter.ActorAlign.START, child: icon});
+            let feedbackId = 0;
+            copy.connect('clicked', () => {
+                St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, text);
+                icon.icon_name = 'object-select-symbolic';
+                copy.accessible_name = 'Response copied';
+                if (feedbackId)
+                    GLib.Source.remove(feedbackId);
+                feedbackId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1500, () => {
+                    feedbackId = 0;
+                    icon.icon_name = 'edit-copy-symbolic';
+                    copy.accessible_name = 'Copy response';
+                    return GLib.SOURCE_REMOVE;
+                });
+            });
+            copy.connect('destroy', () => {
+                if (feedbackId)
+                    GLib.Source.remove(feedbackId);
+            });
+            column.add_child(copy);
+            row._copyButton = copy;
+        }
         const spacer = new St.Widget({x_expand: true});
         if (role === 'user')
             row.add_child(spacer);
-        row.add_child(message);
+        row.add_child(column);
         if (role !== 'user')
             row.add_child(spacer);
         row._bubble = message;

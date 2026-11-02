@@ -803,4 +803,32 @@ for (const version of versions) {
         shell.assertClean();
     });
 
+
+    check('each completed reply has a copy control with feedback and no leaked timers', () => {
+        const shell = createShell(version);
+        const dialog = new shell.ResultDialog('Result', () => {}, () => {}, () => {}, null, null, 'Source', false,
+            {destroy: () => {}});
+        const answer = '**Heading**\n\n```js\nconst name = "🌍";\n```';
+        const row = dialog._addDiscussionMessage('assistant', answer);
+        const second = dialog._addDiscussionMessage('assistant', 'Another reply');
+        const user = dialog._addDiscussionMessage('user', 'My question');
+        dialog._showDiscussionLoading();
+        assert.equal(user._copyButton, undefined);
+        assert.equal(dialog._discussionLoading._copyButton, undefined);
+        row._copyButton.emit('clicked');
+        assert.equal(shell.clipboard.get(1), answer, 'Full reply retains its formatting and code');
+        assert.equal(row._copyButton.accessible_name, 'Response copied');
+        assert.equal(row._copyButton.get_children()[0].icon_name, 'object-select-symbolic');
+        row._copyButton.emit('clicked');
+        assert.equal(shell.timers.size, 2, 'Repeated clicks replace feedback timer; loading has its own timer');
+        const [id, timer] = [...shell.timers].find(([, value]) => value.delay === 1500);
+        shell.timers.delete(id);
+        timer.callback();
+        assert.equal(row._copyButton.get_children()[0].icon_name, 'edit-copy-symbolic');
+        second._copyButton.emit('clicked');
+        assert.equal(shell.clipboard.get(1), 'Another reply');
+        assert.equal(second._copyButton.accessible_name, 'Response copied');
+        dialog.destroy();shell.assertClean();
+    });
+
 }

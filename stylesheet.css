@@ -321,6 +321,16 @@
   spacing: 12px;
 }
 
+.plyph-discussion-column {
+  spacing: 3px;
+}
+
+.plyph-discussion-copy {
+  padding: 6px;
+  min-width: 0;
+  border-radius: 7px;
+}
+
 .plyph-discussion-message {
   padding: 10px 14px;
   border-radius: 14px 14px 14px 4px;
