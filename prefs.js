@@ -476,6 +476,11 @@ export default class PlyphPreferences extends ExtensionPreferences {
             this._providerRows.push(entry(
                 this._providerSettings, settings, 'openai-compatible-url', 'Base URL'));
             this._providerRows.push(this._secretEntry(settings, provider, 'API key (optional)'));
+        } else if (provider === 'hermes-remote' || provider === 'hermes-cloud' ||
+                   provider === 'opencode' || provider === 'go-api') {
+            this._providerRows.push(entry(
+                this._providerSettings, settings, `${provider}-url`, 'Base URL'));
+            this._providerRows.push(this._secretEntry(settings, provider, 'API key (optional)'));
         } else if (provider === 'cloudflare') {
             this._providerRows.push(entry(
                 this._providerSettings, settings, 'cloudflare-account-id', 'Account ID'));

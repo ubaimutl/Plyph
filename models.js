@@ -17,6 +17,10 @@ export const PROVIDERS = [
     {id: 'openai', name: 'OpenAI', key: 'openai-api-key'},
     {id: 'openai-compatible', name: 'OpenAI-compatible', key: 'openai-compatible-api-key'},
     {id: 'vercel', name: 'Vercel AI Gateway', key: 'vercel-api-key'},
+    {id: 'hermes-remote', name: 'Hermes Remote Gateway', key: 'hermes-remote-api-key'},
+    {id: 'hermes-cloud', name: 'Hermes Cloud Gateway', key: 'hermes-cloud-api-key'},
+    {id: 'opencode', name: 'OpenCode Zen', key: 'opencode-api-key'},
+    {id: 'go-api', name: 'Go API', key: 'go-api-api-key'},
 ];
 
 const activeSessions = new Set();

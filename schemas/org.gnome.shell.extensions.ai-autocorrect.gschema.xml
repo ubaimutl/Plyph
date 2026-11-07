@@ -31,6 +31,18 @@
     <key name="vercel-model" type="s"><default>'openai/gpt-5.4-mini'</default></key>
     <key name="cerebras-api-key" type="s"><default>''</default></key>
     <key name="cerebras-model" type="s"><default>'gpt-oss-120b'</default></key>
+    <key name="hermes-remote-url" type="s"><default>'http://127.0.0.1:8645/v1'</default></key>
+    <key name="hermes-remote-api-key" type="s"><default>''</default></key>
+    <key name="hermes-remote-model" type="s"><default>'hermes-agent'</default></key>
+    <key name="hermes-cloud-url" type="s"><default>''</default></key>
+    <key name="hermes-cloud-api-key" type="s"><default>''</default></key>
+    <key name="hermes-cloud-model" type="s"><default>'hermes-agent'</default></key>
+    <key name="opencode-url" type="s"><default>'https://opencode.ai/api/v1'</default></key>
+    <key name="opencode-api-key" type="s"><default>''</default></key>
+    <key name="opencode-model" type="s"><default>'opencode-zen'</default></key>
+    <key name="go-api-url" type="s"><default>'http://127.0.0.1:8080/v1'</default></key>
+    <key name="go-api-api-key" type="s"><default>''</default></key>
+    <key name="go-api-model" type="s"><default>'go-model'</default></key>
     <key name="prompt-correct" type="s">
       <default>'Correct grammar, spelling, punctuation, clarity, and style. Preserve the language, meaning, and tone. Return only the corrected text, unchanged if already correct.'</default>
     </key>

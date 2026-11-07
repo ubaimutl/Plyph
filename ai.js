@@ -17,6 +17,10 @@ const PROVIDER_NAMES = {
     openai: 'OpenAI',
     'openai-compatible': 'OpenAI-compatible',
     vercel: 'Vercel AI Gateway',
+    'hermes-remote': 'Hermes Remote Gateway',
+    'hermes-cloud': 'Hermes Cloud Gateway',
+    opencode: 'OpenCode Zen',
+    'go-api': 'Go API',
 };
 
 const PLAIN_TEXT_GUIDANCE = 'Output formatting: Use plain text by default. ' +
@@ -261,6 +265,9 @@ export class AiClient {
                 return await this._openAi(text, prompt, model, inputMode, outputLimit);
             if (provider === 'openai-compatible')
                 return await this._openAiCompatible(text, prompt, model, inputMode, outputLimit);
+            if (provider === 'hermes-remote' || provider === 'hermes-cloud' ||
+                provider === 'opencode' || provider === 'go-api')
+                return await this._gateway(provider, text, prompt, model, inputMode, outputLimit);
             if (provider === 'gemini')
                 return await this._gemini(text, prompt, model, inputMode, outputLimit);
             if (provider === 'openrouter')
@@ -371,6 +378,33 @@ export class AiClient {
             headers,
             openAiBody(model, prompt, text, inputMode, outputLimit), this._cancellable, this._settings);
         return outputOrError(result, 'openai-compatible', model, inputMode);
+    }
+
+    async _gateway(provider, text, prompt, model, inputMode, outputLimit) {
+        const urlKey = `${provider}-url`;
+        const keyName = `${provider}-api-key`;
+        let baseUrl = '';
+        try {
+            baseUrl = this._settings.get_string(urlKey).replace(/\/$/, '');
+        } catch (error) {
+            baseUrl = '';
+        }
+        if (!baseUrl) {
+            if (provider === 'hermes-remote') baseUrl = 'http://127.0.0.1:8645/v1';
+            else if (provider === 'hermes-cloud') baseUrl = '';
+            else if (provider === 'opencode') baseUrl = 'https://opencode.ai/api/v1';
+            else if (provider === 'go-api') baseUrl = 'http://127.0.0.1:8080/v1';
+        }
+        if (provider === 'hermes-cloud' && !baseUrl) {
+            throw new Error('Add your Hermes Cloud Gateway URL in Settings.');
+        }
+        const key = await optionalApiKey(this._settings, provider, this._cancellable);
+        const headers = key ? {Authorization: `Bearer ${key}`} : {};
+        const result = await requestJson(this._session,
+            `${baseUrl}/chat/completions`,
+            headers,
+            openAiBody(model, prompt, text, inputMode, outputLimit), this._cancellable, this._settings);
+        return outputOrError(result, provider, model, inputMode);
     }
 
     async _gemini(text, prompt, model, inputMode, outputLimit) {
