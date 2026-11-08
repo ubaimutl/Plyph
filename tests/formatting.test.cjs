@@ -1,3 +1,4 @@
+const {loadProviders} = require('./helpers/modules.cjs');
 const assert = require('node:assert/strict');
 const {readFileSync} = require('node:fs');
 const {resolve} = require('node:path');
@@ -14,6 +15,7 @@ function setup(provider = 'groq') {
     const requests = [];
     const preferences = {plainText: true};
     const strings = {
+        'custom-providers': '[]',
         provider, [`${provider}-model`]: 'test-model',
         'cloudflare-account-id': 'test-account',
         'ollama-url': 'http://localhost:11434',
@@ -25,6 +27,7 @@ function setup(provider = 'groq') {
     const response = {text: 'Result'};
     const settings = {
         get_string: key => strings[key] ?? '',
+        get_int: () => 0,
         get_boolean(key) {
             if (key === 'prefer-plain-text') return preferences.plainText;
             if (key === 'debug-logging') return false;
@@ -42,7 +45,7 @@ function setup(provider = 'groq') {
             destroy() {}
         },
         getApiKey: async () => 'test-key',
-        Gio: {Cancellable: class { cancel() {} }},
+        Gio: {Cancellable: class { cancel() {} is_cancelled() { return false; } }},
         GLib: {Error: class extends Error {}, PRIORITY_DEFAULT: 0, Bytes: class { constructor(value) { this.value = value; } }},
         Soup: {
             Message: {new: (_method, url) => ({
@@ -68,6 +71,7 @@ function setup(provider = 'groq') {
             },
         },
     });
+    loadProviders(context, resolve(__dirname, '..'));
     vm.runInContext(source, context);
     return {client: new context.AiClient(settings), preferences, strings, response, requests};
 }

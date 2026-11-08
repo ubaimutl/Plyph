@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const {readFileSync} = require('node:fs');
 const {resolve} = require('node:path');
 const vm = require('node:vm');
-const {loadShellModules} = require('./modules.cjs');
+const {loadShellModules, loadProviders} = require('./modules.cjs');
 
 const root = resolve(__dirname, '../..');
 const source = readFileSync(resolve(root, 'extension.js'), 'utf8')
@@ -200,13 +200,14 @@ function createShell(version) {
     const overview = new Signals();
     const settings = new Signals();
     const values = {
-        'custom-actions': '[]', 'quick-actions': '[]', 'floating-toolbar-scale': 1,
+        provider: 'groq', 'groq-model': 'test-model', 'custom-actions': '[]', 'custom-providers': '[]', 'quick-actions': '[]', 'floating-toolbar-scale': 1,
         'show-floating-button': true, 'pointer-feedback': true,
         'action-palette-position': 'disabled', 'feedback-position': 'bottom-center',
     };
     settings.get_string = key => values[key] ?? '';
     settings.get_boolean = key => values[key] ?? false;
     settings.get_double = key => values[key];
+    settings.get_int = () => 0;
     settings.get_int64 = key => values[key] ?? 0;
     const keyboard = {notify_keyval: (time, key, state) => keyEvents.push({time, key, state})};
     const backend = {get_default_seat: () => ({create_virtual_device(type) {
@@ -252,7 +253,8 @@ function createShell(version) {
             timeout_add(_priority, delay, callback) { const id = nextTimer++; timers.set(id, {delay, callback}); return id; },
             Source: {remove: id => assert.ok(timers.delete(id), `Unknown timer ${id}`)},
         },
-        Gio: {icon_new_for_string: path => path},
+        migrateProviderSettings: async () => {},
+        Gio: {Cancellable: class { cancel() {} }, icon_new_for_string: path => path},
         St: {
             PolicyType: {NEVER: 2, AUTOMATIC: 1},
             ThemeContext: {get_for_stage: () => ({scale_factor: values['test-scale'] ?? 1})},
@@ -290,6 +292,7 @@ function createShell(version) {
     vm.runInContext(readFileSync(resolve(root, 'actions.js'), 'utf8').replace(/^export /gm, ''), context);
     vm.runInContext(readFileSync(resolve(root, 'diff.js'), 'utf8').replace(/^export /gm, ''), context);
     vm.runInContext(readFileSync(resolve(root, 'markdown.js'), 'utf8').replace(/^export /gm, ''), context);
+    loadProviders(context, root);
     loadShellModules(context, root);
     vm.runInContext(source, context);
     return {

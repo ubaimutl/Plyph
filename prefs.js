@@ -6,8 +6,9 @@ import Gtk from 'gi://Gtk';
 
 import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 import {readActions, writeActions} from './actions.js';
-import {abortModelRequests, fetchModels, PROVIDERS} from './models.js';
-import {getApiKey, setApiKey} from './secrets.js';
+import {abortModelRequests, fetchModels} from './models.js';
+import {listProviders, providerLabels, readProviders, validateProvider, resolveProvider, providerModel, setProviderModel, saveProvider, providerReferences, PROVIDER_PRESETS} from './providers.js';
+import {migrateProviderSettings, deleteProvider, getApiKey, setApiKey} from './secrets.js';
 import {ChatGPTClient} from './chatgpt.js';
 
 const INPUT_LIMIT_VALUES = [0, 2000, 4000, 8000, 16000, 32000];
@@ -118,8 +119,22 @@ function bindTokenLimit(settings, key, control, values) {
 }
 
 export default class PlyphPreferences extends ExtensionPreferences {
-    fillPreferencesWindow(window) {
+    async fillPreferencesWindow(window) {
         const settings = this.getSettings();
+        this._keyCancellable = new Gio.Cancellable();
+        const cancellable = this._keyCancellable;
+        window.connect('close-request', () => cancellable.cancel());
+        window.connect('unrealize', () => cancellable.cancel());
+        let migrationError = '';
+        try {
+            await migrateProviderSettings(settings, cancellable);
+        } catch (error) {
+            migrationError = error.message ?? String(error);
+        }
+        if (cancellable.is_cancelled())
+            return;
+        this._providerChoices = listProviders(settings);
+        this._providerSelectors = [];
         window.default_width = 760;
         window.default_height = 760;
         window.search_enabled = true;
@@ -154,7 +169,6 @@ export default class PlyphPreferences extends ExtensionPreferences {
         `, -1);
         Gtk.StyleContext.add_provider_for_display(window.get_display(), appearance,
             Gtk.STYLE_PROVIDER_PRIORITY_USER + 1);
-        this._keyCancellable = new Gio.Cancellable();
         const generalPage = new Adw.PreferencesPage({
             title: 'General',
             icon_name: 'preferences-system-symbolic',
@@ -171,48 +185,41 @@ export default class PlyphPreferences extends ExtensionPreferences {
             icon_name: 'preferences-other-symbolic'});
 
         const providerGroup = new Adw.PreferencesGroup({title: 'Provider'});
-        const model = Gtk.StringList.new(PROVIDERS.map(item => item.name));
-        const provider = new Adw.ComboRow({title: 'Active provider', model});
-        provider.selected = Math.max(0, PROVIDERS.findIndex(item => item.id === settings.get_string('provider')));
+        const provider = new Adw.ComboRow({title: 'Active provider'});
         providerGroup.add(provider);
         generalPage.add(providerGroup);
+        this._bindProviderSelector(provider, settings, 'provider', false, () => {
+            this._renderProviderSettings(settings);
+        });
 
         this._providerSettings = new Adw.PreferencesGroup({title: 'Provider settings'});
         this._providerRows = [];
         this._renderProviderSettings(settings);
         generalPage.add(this._providerSettings);
-        provider.connect('notify::selected', () => {
-            const selected = PROVIDERS[provider.selected];
-            if (!selected)
-                return;
-            settings.set_string('provider', selected.id);
-            this._renderProviderSettings(settings);
-        });
+        this._customProvidersGroup = new Adw.PreferencesGroup({title: 'Saved providers'});
+        this._customProviderRows = [];
+        this._renderCustomProviders(settings);
+        generalPage.add(this._customProvidersGroup);
+        if (migrationError) {
+            const warning = new Adw.ActionRow({title: 'Provider migration could not finish',
+                subtitle: 'Existing settings were kept. Unlock Passwords and Keys, then reopen Settings.',
+                tooltip_text: migrationError});
+            this._customProvidersGroup.add(warning);
+        }
 
         const runPrompt = new Adw.PreferencesGroup({
             title: 'Run selected prompt',
             description: 'Selected text is sent directly as the user instruction.',
         });
-        const runProviderIds = ['', ...PROVIDERS.map(item => item.id)];
-        const runProvider = new Adw.ComboRow({
-            title: 'Provider override',
-            model: Gtk.StringList.new([
-                'Use active provider',
-                ...PROVIDERS.map(item => item.name),
-            ]),
-        });
-        runProvider.selected = Math.max(0,
-            runProviderIds.indexOf(settings.get_string('prompt-run-provider')));
+        const runProvider = new Adw.ComboRow({title: 'Provider override'});
         const runModel = new Adw.EntryRow({
             title: 'Model override (optional)',
             text: settings.get_string('prompt-run-model'),
-            sensitive: runProvider.selected > 0,
+            sensitive: Boolean(settings.get_string('prompt-run-provider')),
         });
         settings.bind('prompt-run-model', runModel, 'text', Gio.SettingsBindFlags.DEFAULT);
-        runProvider.connect('notify::selected', () => {
-            settings.set_string('prompt-run-provider',
-                runProviderIds[runProvider.selected] ?? '');
-            runModel.sensitive = runProvider.selected > 0;
+        this._bindProviderSelector(runProvider, settings, 'prompt-run-provider', true, () => {
+            runModel.sensitive = Boolean(settings.get_string('prompt-run-provider'));
         });
         const runInputLimit = tokenLimitControl(
             'Input limit',
@@ -247,6 +254,30 @@ export default class PlyphPreferences extends ExtensionPreferences {
         this._actionsGroup = actions;
         this._actionRows = [];
         this._renderActions(settings);
+        let previousProviders = listProviders(settings);
+        const connection = item => item ? [item.id, item.name, item.url, item.adapter] : null;
+        const providersChanged = settings.connect('changed::custom-providers', () => {
+            const next = listProviders(settings);
+            const selected = settings.get_string('provider');
+            const previous = previousProviders.find(item => item.id === selected);
+            const current = next.find(item => item.id === selected);
+            const listChanged = JSON.stringify(previousProviders.map(connection)) !==
+                JSON.stringify(next.map(connection));
+            previousProviders = next;
+            this._providerChoices = next;
+            if (listChanged) {
+                for (const selector of this._providerSelectors)
+                    selector();
+                this._renderCustomProviders(settings);
+                this._renderActions(settings);
+            }
+            if (JSON.stringify(connection(previous)) !== JSON.stringify(connection(current)))
+                this._renderProviderSettings(settings);
+            else if (current && previous?.model !== current.model && this._modelRow &&
+                this._modelRow._modelIds?.[this._modelRow.selected] !== current.model)
+                this._setModelOptions(this._modelRow, settings, selected, this._cachedModels(settings, selected));
+        });
+
 
         const shortcuts = new Adw.PreferencesGroup({
             title: 'Shortcuts',
@@ -428,6 +459,10 @@ export default class PlyphPreferences extends ExtensionPreferences {
         promptsPage.add(variables);
 
         window.connect('close-request', () => {
+            settings.disconnect(providersChanged);
+            this._providerSelectors = [];
+            this._customProvidersGroup = null;
+            this._customProviderRows = null;
             Gtk.StyleContext.remove_provider_for_display(window.get_display(), appearance);
             this._chatgptClient?.destroy();
             this._chatgptClient = null;
@@ -447,6 +482,204 @@ export default class PlyphPreferences extends ExtensionPreferences {
         window.add(advancedPage);
     }
 
+    _bindProviderSelector(row, settings, key, optional, changed) {
+        let ids = [];
+        let updating = false;
+        const refresh = () => {
+            updating = true;
+            const choices = listProviders(settings);
+            ids = [...(optional ? [''] : []), ...choices.map(item => item.id)];
+            const names = [...(optional ? ['Use active provider'] : []), ...providerLabels(choices)];
+            const current = settings.get_string(key);
+            if (!ids.includes(current)) {
+                ids.push(current);
+                names.push('Unavailable provider');
+            }
+            row.model = Gtk.StringList.new(names);
+            row.selected = ids.indexOf(current);
+            updating = false;
+        };
+        refresh();
+        this._providerSelectors.push(refresh);
+        row.connect('notify::selected', () => {
+            if (updating || ids[row.selected] === undefined)
+                return;
+            settings.set_string(key, ids[row.selected]);
+            changed();
+        });
+    }
+
+    _renderCustomProviders(settings) {
+        for (const row of this._customProviderRows)
+            this._customProvidersGroup.remove(row);
+        this._customProviderRows = [];
+        const profiles = readProviders(settings);
+        const labels = providerLabels(profiles);
+        for (const [index, profile] of profiles.entries()) {
+            const row = new Adw.ActionRow({title: labels[index], subtitle: profile.url,
+                use_markup: false, activatable: true});
+            row.add_suffix(new Gtk.Image({icon_name: 'go-next-symbolic'}));
+            row.connect('activated', () => this._editProvider(settings, resolveProvider(settings, profile.id)));
+            this._customProvidersGroup.add(row);
+            this._customProviderRows.push(row);
+        }
+        const add = new Adw.ActionRow({title: 'Add provider', activatable: true});
+        add.add_prefix(new Gtk.Image({icon_name: 'list-add-symbolic'}));
+        add.connect('activated', () => this._editProvider(settings));
+        this._customProvidersGroup.add(add);
+        this._customProviderRows.push(add);
+    }
+
+    _editProvider(settings, existing = null) {
+        const profile = existing ? {...existing} : {id: `custom:${GLib.uuid_string_random()}`,
+            name: '', url: '', model: '', adapter: ''};
+        const window = new Adw.Window({title: existing ? 'Edit provider' : 'Add provider',
+            transient_for: this._providerSettings.get_root(), modal: true,
+            destroy_with_parent: true, default_width: 520, default_height: 500});
+        const box = new Gtk.Box({orientation: Gtk.Orientation.VERTICAL});
+        const header = new Adw.HeaderBar();
+        box.append(header);
+        const page = new Adw.PreferencesPage();
+        const group = new Adw.PreferencesGroup();
+        page.add(group);
+        box.append(page);
+        window.content = box;
+        const name = new Adw.EntryRow({title: 'Name', text: profile.name});
+        const url = new Adw.EntryRow({title: 'Base URL', text: profile.url});
+        const key = new Adw.PasswordEntryRow({title: 'API key (optional)', sensitive: !existing});
+        const model = new Adw.EntryRow({title: 'Default model (optional)', text: profile.model});
+        if (!existing) {
+            const preset = new Adw.ComboRow({title: 'Start with',
+                model: Gtk.StringList.new(['Custom connection', ...PROVIDER_PRESETS.map(item => item.name)])});
+            group.add(preset);
+            preset.connect('notify::selected', () => {
+                const selected = PROVIDER_PRESETS[preset.selected - 1];
+                profile.adapter = selected?.adapter ?? '';
+                name.text = selected?.name ?? '';
+                url.text = selected?.url ?? '';
+                model.text = '';
+            });
+        }
+        for (const row of [name, url, key, model])
+            group.add(row);
+        const status = new Adw.ActionRow({title: '', visible: false, use_markup: false});
+        group.add(status);
+        const showError = error => {
+            status.title = error.message ?? String(error);
+            status.visible = true;
+        };
+        const save = new Gtk.Button({label: 'Save', valign: Gtk.Align.CENTER, sensitive: !existing});
+        save.add_css_class('suggested-action');
+        header.pack_end(save);
+        const cancellable = new Gio.Cancellable();
+        window.connect('close-request', () => cancellable.cancel());
+        window.connect('unrealize', () => cancellable.cancel());
+        let originalKey = '';
+        let removeButton = null;
+        if (existing) {
+            getApiKey(settings, profile.id, cancellable).then(value => {
+                if (cancellable.is_cancelled())
+                    return;
+                originalKey = value;
+                key.text = value;
+                key.sensitive = true;
+                save.sensitive = true;
+                if (removeButton)
+                    removeButton.sensitive = true;
+            }).catch(error => {
+                if (!cancellable.is_cancelled())
+                    showError(error);
+            });
+        }
+        save.connect('clicked', async () => {
+            save.sensitive = false;
+            group.sensitive = false;
+            try {
+                const candidate = {...profile, name: name.text, url: url.text, model: model.text};
+                const validated = validateProvider(candidate, false);
+                if (key.text !== originalKey)
+                    await setApiKey(settings, profile.id, key.text, cancellable);
+                if (cancellable.is_cancelled())
+                    return;
+                const connectionChanged = !existing || existing.url !== validated.url ||
+                    existing.adapter !== validated.adapter;
+                if (connectionChanged || key.text !== originalKey) {
+                    this._cacheModels(settings, profile.id, []);
+                    if (settings.get_string('provider') === profile.id) {
+                        abortModelRequests();
+                        if (this._modelRow) {
+                            this._modelRow._request = null;
+                            this._modelRow._refreshButton.sensitive = true;
+                            this._modelRow._statusRow.visible = false;
+                            this._modelRow.title = 'Model';
+                            this._setModelOptions(this._modelRow, settings, profile.id, []);
+                        }
+                    }
+                }
+                saveProvider(settings, validated);
+                window.close();
+            } catch (error) {
+                if (!cancellable.is_cancelled())
+                    showError(error);
+            } finally {
+                if (!cancellable.is_cancelled()) {
+                    save.sensitive = key.sensitive;
+                    group.sensitive = true;
+                }
+            }
+        });
+        if (existing) {
+            const remove = new Gtk.Button({label: 'Delete provider', valign: Gtk.Align.CENTER,
+                sensitive: key.sensitive});
+            removeButton = remove;
+            remove.add_css_class('destructive-action');
+            const deletion = new Adw.ActionRow({title: 'Remove this connection'});
+            deletion.add_suffix(remove);
+            group.add(deletion);
+            remove.connect('clicked', async () => {
+                remove.sensitive = false;
+                save.sensitive = false;
+                group.sensitive = false;
+                try {
+                    if (settings.get_int('provider-migration-version') < 1)
+                        throw new Error('Finish provider migration before deleting a provider.');
+                    const references = providerReferences(settings, profile.id);
+                    if (references.length)
+                        throw new Error(`Choose another provider first for: ${references.join(', ')}.`);
+                    const confirmed = await new Promise(resolve => {
+                        const confirmation = new Adw.MessageDialog({transient_for: window,
+                            modal: true, destroy_with_parent: true,
+                            heading: 'Delete provider?',
+                            body: `Remove “${profile.name}” and its saved API key?`,
+                            default_response: 'cancel', close_response: 'cancel'});
+                        confirmation.add_response('cancel', 'Cancel');
+                        confirmation.add_response('delete', 'Delete');
+                        confirmation.set_response_appearance('delete', Adw.ResponseAppearance.DESTRUCTIVE);
+                        confirmation.connect('response', (_dialog, response) => resolve(response === 'delete'));
+                        confirmation.present();
+                    });
+                    if (!confirmed || cancellable.is_cancelled())
+                        return;
+                    await deleteProvider(settings, profile.id, cancellable);
+                    if (cancellable.is_cancelled())
+                        return;
+                    this._cacheModels(settings, profile.id, []);
+                    window.close();
+                } catch (error) {
+                    if (!cancellable.is_cancelled())
+                        showError(error);
+                } finally {
+                    if (!cancellable.is_cancelled()) {
+                        remove.sensitive = true;
+                        save.sensitive = key.sensitive;
+                        group.sensitive = true;
+                    }
+                }
+            });
+        }
+        window.present();
+    }
+
     _renderProviderSettings(settings) {
         this._chatgptClient?.destroy();
         this._chatgptClient = null;
@@ -456,8 +689,16 @@ export default class PlyphPreferences extends ExtensionPreferences {
         this._providerRows = [];
 
         let provider = settings.get_string('provider');
-        const info = PROVIDERS.find(item => item.id === provider) ?? PROVIDERS[0];
-        provider = info.id;
+        let info;
+        try {
+            info = resolveProvider(settings, provider);
+        } catch (error) {
+            this._providerSettings.title = 'Provider unavailable';
+            const row = new Adw.ActionRow({title: error.message});
+            this._providerSettings.add(row);
+            this._providerRows.push(row);
+            return;
+        }
         this._providerSettings.title = info.name;
         this._providerSettings.description = provider === 'chatgpt'
             ? 'Use your ChatGPT plan. Credentials are stored securely in Passwords and Keys.'
@@ -472,10 +713,13 @@ export default class PlyphPreferences extends ExtensionPreferences {
             this._chatgptAccounts(settings);
         else if (provider === 'ollama')
             this._providerRows.push(entry(this._providerSettings, settings, 'ollama-url', 'Address'));
-        else if (provider === 'openai-compatible') {
-            this._providerRows.push(entry(
-                this._providerSettings, settings, 'openai-compatible-url', 'Base URL'));
-            this._providerRows.push(this._secretEntry(settings, provider, 'API key (optional)'));
+        else if (info.url !== undefined) {
+            const edit = new Adw.ActionRow({title: 'Connection', subtitle: info.url,
+                activatable: true});
+            edit.add_suffix(new Gtk.Image({icon_name: 'document-edit-symbolic'}));
+            edit.connect('activated', () => this._editProvider(settings, info));
+            this._providerSettings.add(edit);
+            this._providerRows.push(edit);
         } else if (provider === 'cloudflare') {
             this._providerRows.push(entry(
                 this._providerSettings, settings, 'cloudflare-account-id', 'Account ID'));
@@ -503,6 +747,7 @@ export default class PlyphPreferences extends ExtensionPreferences {
             modelRow.add_suffix(custom);
         this._providerSettings.add(modelRow);
         this._providerRows.push(modelRow);
+        modelRow._refreshButton = refresh;
         this._modelRow = modelRow;
         const modelStatus = new Adw.ActionRow({title: 'Model refresh failed', visible: false});
         modelRow._statusRow = modelStatus;
@@ -531,8 +776,8 @@ export default class PlyphPreferences extends ExtensionPreferences {
             if (modelRow._updating)
                 return;
             const id = modelRow._modelIds?.[modelRow.selected];
-            if (id)
-                settings.set_string(`${provider}-model`, id);
+            if (id !== undefined)
+                setProviderModel(settings, provider, id);
         });
         refresh.connect('clicked', () => this._refreshModels(settings, provider, modelRow, refresh));
         custom.connect('clicked', () => this._customModel(settings, provider, modelRow));
@@ -739,14 +984,17 @@ export default class PlyphPreferences extends ExtensionPreferences {
     }
 
     _setModelOptions(row, settings, provider, models) {
-        const current = settings.get_string(`${provider}-model`);
+        const current = providerModel(settings, provider);
         const options = [...models];
+        if (!current && provider !== 'chatgpt')
+            options.unshift({id: '', name: 'Choose a model'});
         if (provider !== 'chatgpt' && current && !options.some(model => model.id === current))
             options.unshift({id: current, name: current});
         row._modelIds = options.map(model => model.id);
         row._updating = true;
         row.model = Gtk.StringList.new(options.map(model =>
-            model.name && model.name !== model.id ? `${model.name} — ${model.id}` : model.id));
+            !model.id ? model.name :
+                model.name && model.name !== model.id ? `${model.name} — ${model.id}` : model.id));
         row.selected = Math.max(0, row._modelIds.indexOf(current));
         row._updating = false;
         if (provider === 'chatgpt')
@@ -781,7 +1029,7 @@ export default class PlyphPreferences extends ExtensionPreferences {
     _customModel(settings, provider, modelRow) {
         const field = new Adw.EntryRow({
             title: 'Model ID',
-            text: settings.get_string(`${provider}-model`),
+            text: providerModel(settings, provider),
             show_apply_button: true,
         });
         const group = new Adw.PreferencesGroup();
@@ -801,7 +1049,7 @@ export default class PlyphPreferences extends ExtensionPreferences {
             const id = field.text.trim();
             if (!id)
                 return;
-            settings.set_string(`${provider}-model`, id);
+            setProviderModel(settings, provider, id);
             this._setModelOptions(modelRow, settings, provider, this._cachedModels(settings, provider));
             dialog.close();
         };
@@ -817,10 +1065,10 @@ export default class PlyphPreferences extends ExtensionPreferences {
 
         const storedActions = readActions(settings);
         storedActions.forEach((action, index) => {
-            const provider = PROVIDERS.find(item => item.id === action.provider);
+            const provider = this._providerChoices.find(item => item.id === action.provider);
             const override = provider
                 ? `${provider.name}${action.model ? ` — ${action.model}` : ''}`
-                : 'Uses active provider and model';
+                : action.provider ? 'Provider unavailable — choose another provider' : 'Uses active provider and model';
             const limits = action.inputLimit || action.outputLimit
                 ? `Limits: input ${formatTokenLimit(action.inputLimit)}, ` +
                     `output ${formatTokenLimit(action.outputLimit)}`
@@ -1098,13 +1346,16 @@ export default class PlyphPreferences extends ExtensionPreferences {
         };
         inputMode.connect('notify::selected', updatePromptLabel);
         updatePromptLabel();
-        const providerNames = ['Use active provider', ...PROVIDERS.map(item => item.name)];
+        const choices = listProviders(settings);
+        if (action?.provider && !choices.some(item => item.id === action.provider))
+            choices.push({id: action.provider, name: 'Unavailable provider'});
+        const providerNames = ['Use active provider', ...providerLabels(choices)];
         const provider = new Adw.ComboRow({
             title: 'Provider override',
             model: Gtk.StringList.new(providerNames),
         });
         provider.selected = Math.max(0,
-            PROVIDERS.findIndex(item => item.id === action?.provider) + 1);
+            choices.findIndex(item => item.id === action?.provider) + 1);
         const model = new Adw.EntryRow({
             title: 'Model override (optional)',
             text: action?.model ?? '',
@@ -1194,7 +1445,7 @@ export default class PlyphPreferences extends ExtensionPreferences {
             if (inputLimitValue === null || outputLimitValue === null)
                 return;
             const actions = readActions(settings);
-            const providerId = provider.selected > 0 ? PROVIDERS[provider.selected - 1]?.id ?? '' : '';
+            const providerId = provider.selected > 0 ? choices[provider.selected - 1]?.id ?? '' : '';
             const next = {
                 id: action?.id ?? GLib.uuid_string_random(),
                 name: actionName,

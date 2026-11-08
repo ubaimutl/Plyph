@@ -12,6 +12,8 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 
+import {providerModel} from './providers.js';
+import {migrateProviderSettings} from './secrets.js';
 import {AiClient} from './ai.js';
 import {readActions} from './actions.js';
 import {ErrorDialog, ResultDialog, AskDialog} from './shell/dialogs.js';
@@ -39,6 +41,12 @@ export default class PlyphExtension extends Extension {
         this._undoClearId = null;
         this._pendingDelays = new Map();
         this._settings = this.getSettings();
+        this._providerMigration = new Gio.Cancellable();
+        const migration = this._providerMigration;
+        migrateProviderSettings(this._settings, migration).catch(error => {
+            if (!migration.is_cancelled())
+                console.error(`Plyph provider migration: ${error.message}`);
+        });
         this._client = new AiClient(this._settings);
         this._clipboard = St.Clipboard.get_default();
         const backend = SHELL_MAJOR >= 51
@@ -102,6 +110,8 @@ export default class PlyphExtension extends Extension {
     }
 
     disable() {
+        this._providerMigration?.cancel();
+        this._providerMigration = null;
         this._destroyFloatingButton();
 
         Main.wm.removeKeybinding('ask-shortcut');
@@ -901,7 +911,7 @@ export default class PlyphExtension extends Extension {
         const refinementClient = new AiClient(this._settings);
         const provider = options.provider || this._settings.get_string('provider');
         const refinementOptions = {...options, provider,
-            model: options.model || this._settings.get_string(`${provider}-model`), inputMode: 'prompt'};
+            model: options.model || providerModel(this._settings, provider), inputMode: 'prompt'};
         const refinement = {
             iconsPath: `${this.path}/icons`,
             run: (result, instruction) => refinementClient.transform(

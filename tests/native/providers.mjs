@@ -1,0 +1,101 @@
+import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
+import Adw from 'gi://Adw';
+import Gtk from 'gi://Gtk';
+Gio.resources_register(Gio.Resource.load('/usr/share/gnome-shell/org.gnome.Shell.Extensions.src.gresource'));
+const directory = GLib.getenv('PLYPH_TEST_SOURCE');
+const moduleUrl = file => GLib.filename_to_uri(`${directory}/${file}`, null);
+const {default: Preferences} = await import(moduleUrl('prefs.js'));
+const providers = await import(moduleUrl('providers.js'));
+const secrets = await import(moduleUrl('secrets.js'));
+Adw.init();
+const app = new Adw.Application({application_id: 'dev.ubai.Plyph.ProviderTest', flags: Gio.ApplicationFlags.NON_UNIQUE});
+let runPromise;
+function assert(value, message) { if (!value) throw new Error(message); print(`PASS ${message}`); }
+function widgets(widget, result = []) {
+    result.push(widget);
+    for (let child = widget.get_first_child?.(); child; child = child.get_next_sibling())
+        widgets(child, result);
+    return result;
+}
+const wait = ms => new Promise(resolve => GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => {resolve(); return GLib.SOURCE_REMOVE;}));
+async function run() {
+    const source = Gio.SettingsSchemaSource.new_from_directory(GLib.getenv('PLYPH_TEST_SCHEMA'), Gio.SettingsSchemaSource.get_default(), false);
+    const settings = new Gio.Settings({settings_schema: source.lookup('org.gnome.shell.extensions.ai-autocorrect', false)});
+    settings.set_string('provider', 'openai-compatible');
+    settings.set_string('openai-compatible-url', 'http://127.0.0.1:9999/custom/v1');
+    settings.set_string('groq-model', 'old-groq-model');
+    await secrets.setApiKey(settings, 'openai', 'test-only-key');
+    const window = new Adw.PreferencesWindow({application: app});
+    const prefs = new Preferences({uuid: 'ai-autocorrect@ubai.dev', name: 'Plyph', path: directory, dir: Gio.File.new_for_path(directory)});
+    prefs.getSettings = () => settings;
+    await prefs.fillPreferencesWindow(window);
+    window.present();
+    await wait(180);
+    assert(settings.get_int('provider-migration-version') === 1, 'real GSettings migration completes');
+    assert(providers.readProviders(settings).length === 3, 'configured and keyring-only providers imported');
+    assert(await secrets.getApiKey(settings, 'openai') === 'test-only-key', 'existing credential ID remains accessible through the test store');
+    prefs._editProvider(settings);
+    await wait(120);
+    const editor = Gtk.Window.get_toplevels().get_item(0) === window ? Gtk.Window.get_toplevels().get_item(1) : Gtk.Window.get_toplevels().get_item(0);
+    const all = widgets(editor);
+    const field = title => all.find(w => w instanceof Adw.EntryRow && w.title === title);
+    assert(Boolean(field('Name')), 'native provider editor opens');
+    field('Name').text = 'Local test provider';
+    field('Base URL').text = 'http://localhost:4321/custom/v1';
+    all.find(w => w instanceof Gtk.Button && w.label === 'Save').emit('clicked');
+    await wait(180);
+    const custom = providers.readProviders(settings).find(p => p.name === 'Local test provider');
+    assert(Boolean(custom), 'native Save creates a custom profile');
+    assert(prefs._providerChoices.some(p => p.id === custom.id), 'open provider selectors refresh');
+    assert(custom.model === '', 'native Save accepts a connection without a model');
+    const active = widgets(window).find(w => w instanceof Adw.ComboRow && w.title === 'Active provider');
+    active.selected = prefs._providerChoices.findIndex(p => p.id === custom.id);
+    await wait(100);
+    const modelRow = prefs._modelRow;
+    const models = [{id: 'first-model', name: 'First model'}, {id: 'second-model', name: 'Second model'}];
+    prefs._cacheModels(settings, custom.id, models);
+    prefs._setModelOptions(modelRow, settings, custom.id, models);
+    assert(modelRow._modelIds[modelRow.selected] === '', 'model list awaits an explicit choice');
+    modelRow.selected = 1;
+    assert(providers.providerModel(settings, custom.id) === 'first-model', 'first fetched model can be selected');
+    assert(prefs._modelRow === modelRow, 'model selection preserves the model selector');
+    modelRow.selected = 2;
+    assert(prefs._modelRow === modelRow, 'another model choice keeps the same selector');
+    providers.setProviderModel(settings, custom.id, 'external-model');
+    assert(prefs._modelRow === modelRow && modelRow._modelIds[modelRow.selected] === 'external-model',
+        'external model changes update the existing selector');
+    active.selected = prefs._providerChoices.findIndex(p => p.id === 'openai-compatible');
+
+    prefs._editProvider(settings, providers.resolveProvider(settings, custom.id));
+    await wait(180);
+    const edit = Array.from({length: Gtk.Window.get_toplevels().get_n_items()}, (_, i) => Gtk.Window.get_toplevels().get_item(i)).find(w => w !== window);
+    const editWidgets = widgets(edit);
+    editWidgets.find(w => w instanceof Adw.EntryRow && w.title === 'Name').text = 'Renamed test';
+    editWidgets.find(w => w instanceof Gtk.Button && w.label === 'Save').emit('clicked');
+    await wait(150);
+    assert(providers.resolveProvider(settings, custom.id).name === 'Renamed test', 'native edit keeps stable ID');
+    prefs._editProvider(settings, providers.resolveProvider(settings, custom.id));
+    await wait(150);
+    const deletion = Array.from({length: Gtk.Window.get_toplevels().get_n_items()}, (_, i) => Gtk.Window.get_toplevels().get_item(i)).find(w => w !== window);
+    widgets(deletion).find(w => w instanceof Gtk.Button && w.label === 'Delete provider').emit('clicked');
+    await wait(100);
+    const confirmation = () => Array.from({length: Gtk.Window.get_toplevels().get_n_items()},
+        (_, i) => Gtk.Window.get_toplevels().get_item(i)).find(w => w instanceof Adw.MessageDialog);
+    assert(Boolean(confirmation()), 'provider deletion requests confirmation');
+    widgets(confirmation()).find(w => w instanceof Gtk.Button && w.label === 'Cancel').emit('clicked');
+    await wait(100);
+    assert(providers.readProviders(settings).some(p => p.id === custom.id), 'canceling deletion preserves the provider');
+    widgets(deletion).find(w => w instanceof Gtk.Button && w.label === 'Delete provider').emit('clicked');
+    await wait(100);
+    widgets(confirmation()).find(w => w instanceof Gtk.Button && w.label === 'Delete').emit('clicked');
+    await wait(180);
+    assert(!providers.readProviders(settings).some(p => p.id === custom.id), 'native Delete removes unreferenced profile');
+    window.close();
+    await wait(60);
+    print('ALL PROVIDER UI CHECKS PASSED');
+}
+app.connect('activate', () => { runPromise = run(); });
+app.register(null);
+app.activate();
+await runPromise;

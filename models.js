@@ -2,24 +2,12 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Soup from 'gi://Soup';
 
+import {resolveProvider, validateProvider} from './providers.js';
 import {getApiKey} from './secrets.js';
 import {ChatGPTClient} from './chatgpt.js';
 
-export const PROVIDERS = [
-    {id: 'ollama', name: 'Ollama (local)', key: null},
-    {id: 'chatgpt', name: 'ChatGPT Account', key: null},
-    {id: 'groq', name: 'Groq', key: 'groq-api-key'},
-    {id: 'cloudflare', name: 'Cloudflare Workers AI', key: 'cloudflare-api-key'},
-    {id: 'bai', name: 'B.AI', key: 'bai-api-key'},
-    {id: 'gemini', name: 'Gemini', key: 'gemini-api-key'},
-    {id: 'openrouter', name: 'OpenRouter', key: 'openrouter-api-key'},
-    {id: 'cerebras', name: 'Cerebras', key: 'cerebras-api-key'},
-    {id: 'openai', name: 'OpenAI', key: 'openai-api-key'},
-    {id: 'openai-compatible', name: 'OpenAI-compatible', key: 'openai-compatible-api-key'},
-    {id: 'vercel', name: 'Vercel AI Gateway', key: 'vercel-api-key'},
-];
-
 const activeSessions = new Set();
+const activeKeyRequests = new Set();
 const activeChatGPTClients = new Set();
 let requestGeneration = 0;
 
@@ -28,6 +16,9 @@ export function abortModelRequests() {
     for (const session of activeSessions)
         session.abort();
     activeSessions.clear();
+    for (const cancellable of activeKeyRequests)
+        cancellable.cancel();
+    activeKeyRequests.clear();
     for (const client of activeChatGPTClients)
         client.destroy();
     activeChatGPTClients.clear();
@@ -94,21 +85,23 @@ function getJson(url, headers = {}, provider = 'Provider') {
     });
 }
 
+async function modelKey(settings, provider) {
+    const cancellable = new Gio.Cancellable();
+    activeKeyRequests.add(cancellable);
+    try {
+        return await getApiKey(settings, provider, cancellable);
+    } finally {
+        activeKeyRequests.delete(cancellable);
+    }
+}
+
 async function requiredKey(settings, provider) {
-    const value = await getApiKey(settings, provider);
+    const value = await modelKey(settings, provider);
     if (!value)
         throw new Error(provider === 'cloudflare'
             ? 'Add a Cloudflare Workers AI API token first.'
-            : `Add a ${PROVIDERS.find(item => item.id === provider)?.name} API key first.`);
+            : `Add a ${resolveProvider(settings, provider).name} API key first.`);
     return value;
-}
-
-async function optionalKey(settings, provider) {
-    try {
-        return await getApiKey(settings, provider);
-    } catch {
-        return settings.get_string(`${provider}-api-key`).trim();
-    }
 }
 
 function uniqueModels(models) {
@@ -120,6 +113,7 @@ function uniqueModels(models) {
 }
 
 export async function fetchModels(settings, provider) {
+    const info = resolveProvider(settings, provider);
     const generation = requestGeneration;
     const ensureCurrent = () => {
         if (generation !== requestGeneration)
@@ -166,35 +160,24 @@ export async function fetchModels(settings, provider) {
             .filter(model => model.supportedGenerationMethods?.includes('generateContent'))
             .map(model => ({id: model.name.replace(/^models\//, ''), name: model.displayName}));
     } else {
-        const info = PROVIDERS.find(item => item.id === provider);
-        const key = provider === 'vercel'
-            ? await requiredKey(settings, 'vercel')
-            : provider === 'openai-compatible'
-                ? await optionalKey(settings, provider)
-                : info?.key ? await requiredKey(settings, provider) : '';
+        const profile = validateProvider(info, false);
+        const key = await modelKey(settings, provider);
         ensureCurrent();
-        const openAiCompatibleUrl = settings.get_string('openai-compatible-url').replace(/\/$/, '');
-        const endpoints = {
-            groq: 'https://api.groq.com/openai/v1/models',
-            bai: 'https://api.b.ai/v1/models',
-            openrouter: 'https://openrouter.ai/api/v1/models?output_modalities=text',
-            cerebras: 'https://api.cerebras.ai/v1/models',
-            openai: 'https://api.openai.com/v1/models',
-            'openai-compatible': `${openAiCompatibleUrl}/models`,
-            vercel: 'https://ai-gateway.vercel.sh/v1/models',
-        };
-        data = await getJson(endpoints[provider], key ? {Authorization: `Bearer ${key}`} : {}, info.name);
+        const suffix = info.adapter === 'openrouter' ? '/models?output_modalities=text' : '/models';
+        const headers = key ? {Authorization: `Bearer ${key}`} : {};
+        data = await getJson(`${profile.url}${suffix}`, headers, info.name);
         models = (data.data ?? [])
-            .filter(model => provider !== 'bai' ||
+            .filter(model => info.adapter !== 'bai' ||
                 !model.supported_endpoint_types || model.supported_endpoint_types.includes('openai'))
             .filter(model => model.type ? model.type === 'language' : true)
             .map(model => ({id: model.id, name: model.name ?? model.id}));
-        if (provider === 'openai') {
+        if (info.adapter === 'openai') {
             models = models.filter(model => /^(gpt-|o\d)/.test(model.id) &&
                 !/(audio|image|realtime|search|transcribe|tts)/.test(model.id));
-        } else if (provider === 'groq') {
+        } else if (info.adapter === 'groq') {
             models = models.filter(model => !/(guard|whisper|tts)/i.test(model.id));
         }
     }
+    ensureCurrent();
     return uniqueModels(models);
 }

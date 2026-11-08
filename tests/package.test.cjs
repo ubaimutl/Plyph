@@ -6,7 +6,7 @@ const {dirname, join, normalize, resolve} = require('node:path');
 const {test} = require('node:test');
 
 const root = resolve(__dirname, '..');
-const modules = ['extension.js', 'prefs.js', 'actions.js', 'ai.js', 'models.js', 'secrets.js', 'chatgpt.js', 'chatgptProtocol.js', 'diff.js', 'markdown.js'];
+const modules = ['extension.js', 'prefs.js', 'actions.js', 'ai.js', 'models.js', 'providers.js', 'secrets.js', 'chatgpt.js', 'chatgptProtocol.js', 'diff.js', 'markdown.js'];
 modules.push(...readdirSync(join(root, 'shell')).filter(file => file.endsWith('.js')).map(file => `shell/${file}`));
 const schema = 'org.gnome.shell.extensions.ai-autocorrect.gschema.xml';
 const metadata = JSON.parse(readFileSync(join(root, 'metadata.json'), 'utf8'));
@@ -27,7 +27,7 @@ test('upload bundle contains current sources, imports, icons and compilable sett
     try {
         execFileSync('gnome-extensions', [
             'pack', '--force', `--out-dir=${temporary}`,
-            ...['actions.js', 'ai.js', 'models.js', 'secrets.js', 'chatgpt.js', 'chatgptProtocol.js', 'diff.js', 'markdown.js', 'shell', 'stylesheet.css', 'icons', 'LICENSE']
+            ...['actions.js', 'ai.js', 'models.js', 'providers.js', 'secrets.js', 'chatgpt.js', 'chatgptProtocol.js', 'diff.js', 'markdown.js', 'shell', 'stylesheet.css', 'icons', 'LICENSE']
                 .map(file => `--extra-source=${file}`),
             `--schema=schemas/${schema}`, root,
         ], {cwd: root});

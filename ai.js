@@ -2,6 +2,7 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Soup from 'gi://Soup';
 
+import {resolveProvider, providerModel, validateProvider} from './providers.js';
 import {getApiKey} from './secrets.js';
 import {ChatGPTClient} from './chatgpt.js';
 
@@ -117,8 +118,8 @@ function openAiBody(model, prompt, text, inputMode, outputLimit = 0, cerebras = 
     return body;
 }
 
-function providerError(result, provider, model) {
-    const name = PROVIDER_NAMES[provider] ?? 'Provider';
+function providerError(result, provider, model, displayName = null) {
+    const name = displayName ?? PROVIDER_NAMES[provider] ?? 'Provider';
     const providerDetail = result.data?.error?.message ?? result.data?.error;
     const detail = typeof providerDetail === 'string' ? providerDetail : '';
     if (result.status === 401 || result.status === 403)
@@ -161,24 +162,13 @@ function outputLimitError() {
         'Response reached the output limit. Try a custom action with a higher output limit, or select less text.');
 }
 
-function outputOrError(result, provider, model, inputMode) {
+function outputOrError(result, provider, model, inputMode, displayName = null) {
     if (result.data?.choices?.[0]?.finish_reason === 'length')
         throw outputLimitError();
     const output = result.data?.choices?.[0]?.message?.content?.trim();
     if (output)
         return cleanOutput(output, inputMode);
-    throw providerError(result, provider, model);
-}
-
-async function optionalApiKey(settings, provider, cancellable = null) {
-    try {
-        return await getApiKey(settings, provider, cancellable);
-    } catch (error) {
-        if (error instanceof GLib.Error &&
-            error.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
-            throw error;
-        return settings.get_string(`${provider}-api-key`).trim();
-    }
+    throw providerError(result, provider, model, displayName);
 }
 
 export class AiClient {
@@ -221,8 +211,11 @@ export class AiClient {
             outputLimit = 2000;
         this._cancellable = new Gio.Cancellable();
         const selectedProvider = options.provider || this._settings.get_string('provider');
-        const provider = PROVIDER_NAMES[selectedProvider] ? selectedProvider : 'groq';
-        const model = options.model || this._settings.get_string(`${provider}-model`);
+        const info = resolveProvider(this._settings, selectedProvider);
+        const provider = info.id;
+        const model = options.model || providerModel(this._settings, provider);
+        if (info.url !== undefined && !model.trim())
+            throw new Error(`Choose a model for “${info.name}” in Settings before running an action.`);
         const promptKey = mode === 'rewrite'
             ? 'prompt-rewrite'
             : mode === 'prompt' ? 'prompt-run' : 'prompt-correct';
@@ -243,6 +236,8 @@ export class AiClient {
             `AI request: provider=${provider}, model=${model}, action=${mode}, ` +
             `input-tokens≈${estimatedTokens}, output-limit=${provider === 'chatgpt' ? 'managed by ChatGPT' : maxTokens(text, outputLimit)}`);
         try {
+            if (info.url !== undefined)
+                return await this._compatible(info, text, prompt, model, inputMode, outputLimit);
             if (provider === 'chatgpt') {
                 if (hasActionLimits && tokenLimit(options.outputLimit))
                     throw new Error('ChatGPT does not support output token limits. Set this action’s output limit to Auto.');
@@ -255,21 +250,9 @@ export class AiClient {
                 return await this._ollama(text, prompt, model, inputMode, outputLimit);
             if (provider === 'cloudflare')
                 return await this._cloudflare(text, prompt, model, inputMode, outputLimit);
-            if (provider === 'bai')
-                return await this._bai(text, prompt, model, inputMode, outputLimit);
-            if (provider === 'openai')
-                return await this._openAi(text, prompt, model, inputMode, outputLimit);
-            if (provider === 'openai-compatible')
-                return await this._openAiCompatible(text, prompt, model, inputMode, outputLimit);
             if (provider === 'gemini')
                 return await this._gemini(text, prompt, model, inputMode, outputLimit);
-            if (provider === 'openrouter')
-                return await this._openRouter(text, prompt, model, inputMode, outputLimit);
-            if (provider === 'vercel')
-                return await this._vercel(text, prompt, model, inputMode, outputLimit);
-            if (provider === 'cerebras')
-                return await this._cerebras(text, prompt, model, inputMode, outputLimit);
-            return await this._groq(text, prompt, model, inputMode, outputLimit);
+            throw new Error('Unsupported provider connection.');
         } catch (error) {
             const normalizedError = networkError(error);
             debugLog(this._settings,
@@ -299,20 +282,6 @@ export class AiClient {
         return value;
     }
 
-    async _groq(text, prompt, model, inputMode, outputLimit) {
-        const key = await this._required('groq');
-        const body = openAiBody(model, prompt, text, inputMode, outputLimit);
-        if (model.startsWith('openai/gpt-oss-')) {
-            body.reasoning_effort = 'low';
-            body.include_reasoning = false;
-        }
-        const result = await requestJson(this._session,
-            'https://api.groq.com/openai/v1/chat/completions',
-            {Authorization: `Bearer ${key}`},
-            body, this._cancellable, this._settings);
-        return outputOrError(result, 'groq', model, inputMode);
-    }
-
     async _cloudflare(text, prompt, model, inputMode, outputLimit) {
         const key = await this._required('cloudflare');
         const accountId = this._settings.get_string('cloudflare-account-id').trim();
@@ -323,15 +292,6 @@ export class AiClient {
             {Authorization: `Bearer ${key}`},
             openAiBody(model, prompt, text, inputMode, outputLimit), this._cancellable, this._settings);
         return outputOrError(result, 'cloudflare', model, inputMode);
-    }
-
-    async _bai(text, prompt, model, inputMode, outputLimit) {
-        const key = await this._required('bai');
-        const result = await requestJson(this._session,
-            'https://api.b.ai/v1/chat/completions',
-            {Authorization: `Bearer ${key}`},
-            openAiBody(model, prompt, text, inputMode, outputLimit), this._cancellable, this._settings);
-        return outputOrError(result, 'bai', model, inputMode);
     }
 
     async _ollama(text, prompt, model, inputMode, outputLimit) {
@@ -353,24 +313,24 @@ export class AiClient {
         throw providerError(result, 'ollama', model);
     }
 
-    async _openAi(text, prompt, model, inputMode, outputLimit) {
-        const key = await this._required('openai');
-        const result = await requestJson(this._session,
-            'https://api.openai.com/v1/chat/completions',
-            {Authorization: `Bearer ${key}`},
-            openAiBody(model, prompt, text, inputMode, outputLimit), this._cancellable, this._settings);
-        return outputOrError(result, 'openai', model, inputMode);
-    }
-
-    async _openAiCompatible(text, prompt, model, inputMode, outputLimit) {
-        const baseUrl = this._settings.get_string('openai-compatible-url').replace(/\/$/, '');
-        const key = await optionalApiKey(this._settings, 'openai-compatible', this._cancellable);
+    async _compatible(info, text, prompt, model, inputMode, outputLimit) {
+        const profile = validateProvider({...info, model});
+        const cancellable = this._cancellable;
+        const session = this._session;
+        const key = await getApiKey(this._settings, info.id, cancellable);
+        if (this._cancellable !== cancellable || cancellable.is_cancelled())
+            throw new GLib.Error(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED, 'Request cancelled');
         const headers = key ? {Authorization: `Bearer ${key}`} : {};
-        const result = await requestJson(this._session,
-            `${baseUrl}/chat/completions`,
-            headers,
-            openAiBody(model, prompt, text, inputMode, outputLimit), this._cancellable, this._settings);
-        return outputOrError(result, 'openai-compatible', model, inputMode);
+        if (info.adapter === 'openrouter')
+            headers['X-Title'] = 'Plyph';
+        const body = openAiBody(model, prompt, text, inputMode, outputLimit, info.adapter === 'cerebras');
+        if (info.adapter === 'groq' && model.startsWith('openai/gpt-oss-')) {
+            body.reasoning_effort = 'low';
+            body.include_reasoning = false;
+        }
+        const result = await requestJson(session, `${profile.url}/chat/completions`,
+            headers, body, cancellable, this._settings);
+        return outputOrError(result, info.id, model, inputMode, info.name);
     }
 
     async _gemini(text, prompt, model, inputMode, outputLimit) {
@@ -396,30 +356,4 @@ export class AiClient {
         throw providerError(result, 'gemini', model);
     }
 
-    async _openRouter(text, prompt, model, inputMode, outputLimit) {
-        const key = await this._required('openrouter');
-        const result = await requestJson(this._session,
-            'https://openrouter.ai/api/v1/chat/completions',
-            {Authorization: `Bearer ${key}`, 'X-Title': 'Plyph'},
-            openAiBody(model, prompt, text, inputMode, outputLimit), this._cancellable, this._settings);
-        return outputOrError(result, 'openrouter', model, inputMode);
-    }
-
-    async _vercel(text, prompt, model, inputMode, outputLimit) {
-        const key = await this._required('vercel');
-        const result = await requestJson(this._session,
-            'https://ai-gateway.vercel.sh/v1/chat/completions',
-            {Authorization: `Bearer ${key}`},
-            openAiBody(model, prompt, text, inputMode, outputLimit), this._cancellable, this._settings);
-        return outputOrError(result, 'vercel', model, inputMode);
-    }
-
-    async _cerebras(text, prompt, model, inputMode, outputLimit) {
-        const key = await this._required('cerebras');
-        const result = await requestJson(this._session,
-            'https://api.cerebras.ai/v1/chat/completions',
-            {Authorization: `Bearer ${key}`},
-            openAiBody(model, prompt, text, inputMode, outputLimit, true), this._cancellable, this._settings);
-        return outputOrError(result, 'cerebras', model, inputMode);
-    }
 }

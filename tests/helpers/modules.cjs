@@ -12,4 +12,13 @@ function loadShellModules(context, root) {
     }
 }
 
-module.exports = {loadShellModules};
+function loadProviders(context, root) {
+    for (const file of ['actions.js', 'providers.js']) {
+        const source = readFileSync(resolve(root, file), 'utf8');
+        const exports = [...source.matchAll(/^export (?:async )?(?:const|function|class) (\w+)/gm)].map(match => match[1]);
+        const body = source.replace(/^import .*;\n/gm, '').replace(/^export /gm, '');
+        vm.runInContext(`(() => {\n${body}\nObject.assign(globalThis, {${exports.join(', ')}});\n})();`, context);
+    }
+}
+
+module.exports = {loadShellModules, loadProviders};
