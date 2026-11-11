@@ -223,7 +223,7 @@ function createShell(version) {
         ModifierType: {CONTROL_MASK: 4, SHIFT_MASK: 1, BUTTON1_MASK: 256},
         KeyState: {PRESSED: 1, RELEASED: 0},
         EVENT_STOP: true, EVENT_PROPAGATE: false,
-        EventType: {MOTION: 'motion', BUTTON_RELEASE: 'release', KEY_PRESS: 'key-press'},
+        EventType: {MOTION: 'motion', BUTTON_RELEASE: 'release', TOUCH_END: 'touch-end', TOUCH_CANCEL: 'touch-cancel', KEY_PRESS: 'key-press'},
         ...(version >= 51 ? {EventPhase: {CAPTURE: 1}, KeyController, PanGesture} : {}),
         ...Object.fromEntries(['Escape', 'Return', 'KP_Enter', 'Up', 'Down', 'Home', 'Insert', 'Delete', 'Control_L', 'a', 'A', 'c', 'C', 'v', 'V', 'x', 'X', 'z']
             .map(key => [`KEY_${key}`, key])),
@@ -248,7 +248,7 @@ function createShell(version) {
         Config: {PACKAGE_VERSION: `${version}.0`},
         GObject: {registerClass: cls => cls},
         GLib: {
-            PRIORITY_DEFAULT: 0, SOURCE_REMOVE: false,
+            PRIORITY_DEFAULT: 0, SOURCE_REMOVE: false, SOURCE_CONTINUE: true,
             get_monotonic_time: () => 1000000,
             timeout_add(_priority, delay, callback) { const id = nextTimer++; timers.set(id, {delay, callback}); return id; },
             Source: {remove: id => assert.ok(timers.delete(id), `Unknown timer ${id}`)},
@@ -287,7 +287,7 @@ function createShell(version) {
             constructor() { clients.push(this); }
             destroy() { this.destroyed = true; }
         },
-        global: {stage, display, get_pointer: () => [300, 300, 0]},
+        global: {stage, display, get_pointer: () => values['test-pointer'] ?? [300, 300, 0]},
     });
     vm.runInContext(readFileSync(resolve(root, 'actions.js'), 'utf8').replace(/^export /gm, ''), context);
     vm.runInContext(readFileSync(resolve(root, 'diff.js'), 'utf8').replace(/^export /gm, ''), context);

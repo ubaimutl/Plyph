@@ -628,7 +628,8 @@ for (const version of versions) {
         dialog._discussionScroll.visible = true;
         dialog._toggleExpanded({});
         const total = dialog._scroll.height + dialog._discussionScroll.height;
-        const pointer = (type, y, button = 1) => ({type: () => type, get_coords: () => [300, y], get_button: () => button});
+        const pointer = (type, y, button = 1, state = shell.Clutter.ModifierType.BUTTON1_MASK) => ({
+            type: () => type, get_coords: () => [300, y], get_button: () => button, get_state: () => state});
         const press = pointer(null, 400);
         assert.equal(dialog._beginDividerDrag(pointer(null, 400, 3)), false);
         const begin = () => {
@@ -636,7 +637,11 @@ for (const version of versions) {
                 dialog._dividerPan.startY = 400;
                 dialog._dividerPan.emit('recognize');
             } else assert.equal(dialog._beginDividerDrag(press), true);
-            assert.ok(dialog._dividerGrab);
+            if (version >= 51) assert.ok(dialog._dividerGrab);
+            else {
+                assert.ok(dialog._dividerDragId);
+                assert.equal(shell.grabs.size, 0, 'Legacy dragging must reuse the dialog modal grab');
+            }
         };
         const motion = y => {
             if (version >= 51) {
@@ -670,6 +675,36 @@ for (const version of versions) {
         keypress(shell.Clutter.KEY_Escape);
         assert.equal(dialog._dividerGrab, null);
         assert.equal(dialog._finished, false);
+        if (version < 51) {
+            begin();
+            const pollId = dialog._dividerPollId;
+            const poll = shell.timers.get(pollId).callback;
+            shell.values['test-pointer'] = [300, 600, shell.Clutter.ModifierType.BUTTON1_MASK];
+            assert.equal(poll(), true);
+            assert.equal(dialog._scroll.height / 2, 200, 'Dragging must resize even when the modal grab prevents stage motion delivery');
+            shell.values['test-pointer'] = [300, 600, 0];
+            shell.timers.delete(pollId);
+            assert.equal(poll(), false);
+            assert.equal(dialog._dividerPollId, null);
+            assert.equal(dialog._dividerDragId, null, 'Polling must detect releases without stage events');
+            begin();
+            shell.stage.emit('captured-event', pointer(shell.Clutter.EventType.BUTTON_RELEASE, 0, 0));
+            assert.equal(dialog._dividerGrab, null, 'Any button release must end drag');
+            assert.equal(dialog._dividerDragId, null);
+            begin();
+            shell.stage.emit('captured-event', pointer(shell.Clutter.EventType.TOUCH_END, 0));
+            assert.equal(dialog._dividerGrab, null, 'Touch end must end drag');
+            begin();
+            dialog._divider.emit('button-release-event');
+            assert.equal(dialog._dividerGrab, null, 'Direct divider release must end drag');
+            begin();
+            dialog._divider.emit('touch-event', pointer(shell.Clutter.EventType.TOUCH_END, 0));
+            assert.equal(dialog._dividerGrab, null, 'Direct divider touch end must end drag');
+            assert.equal(dialog._dividerDragId, null);
+            begin();
+            shell.stage.emit('captured-event', pointer(shell.Clutter.EventType.MOTION, 500, 1, 0));
+            assert.equal(dialog._dividerDragId, null, 'Missing release events are recovered when the button is no longer held');
+        }
         begin();
         dialog._toggleRefinement(true);
         assert.equal(dialog._dividerGrab, null, 'Hiding discussion must end a drag');

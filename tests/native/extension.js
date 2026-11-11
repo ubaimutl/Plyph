@@ -141,7 +141,7 @@ export default class NativeTest extends Extension {
         d._refineStatus.set_text('Failure details');d._statusScroll.visible=true;d._resizePreview();await delay(100);
         await copy(d._refineStatus,'Inline status','Failure details');
         d._statusScroll.visible=false;
-        const drag=async(label)=>{
+        const drag=async(label,legacy=false)=>{
             await delay(120);
             const before=d._scroll.height;
             const [x,y]=d._divider.get_transformed_position();const [width,height]=d._divider.get_transformed_size();
@@ -150,14 +150,23 @@ export default class NativeTest extends Extension {
                 const [px,py]=global.get_pointer();pointer.notify_relative_motion(time(),x+width/2-px,y+height/2-py);await delay(50);
             }
             pointer.notify_button(time(),1,Clutter.ButtonState.PRESSED);await delay(80);
+            if(legacy){
+                d._endDividerDrag();
+                const [px,py]=global.get_pointer();
+                d._beginDividerDrag({get_button:()=>1,get_coords:()=>[px,py]});
+                global.stage.disconnect(d._dividerDragId);d._dividerDragId=null;
+            }
             for(let step=0;step<4;step++){pointer.notify_relative_motion(time(),0,20);await delay(40);}
             pointer.notify_button(time(),1,Clutter.ButtonState.RELEASED);await delay(100);
             assert(d._scroll.height>before+30,`${label}: native mouse drag resizes result (${before} -> ${d._scroll.height}, divider ${x},${y},${width},${height})`);
             assert(!d._dividerGrab,`${label}: releases pointer grab`);
+            assert(!d._dividerPollId,`${label}: stops pointer tracking on release`);
         };
         d._label.clutter_text.set_text('Short');d._splitRatio=null;d._resizePreview();await drag('Short result');
         d._label.clutter_text.set_text(('Long result with multiple lines.\n').repeat(60));d._splitRatio=null;d._resizePreview();await drag('Long result');
         d._toggleExpanded({});d._splitRatio=null;d._resizePreview();await drag('Enlarged result');
+        if(d._dividerPan)d._divider.remove_action(d._dividerPan);
+        d._splitRatio=null;d._resizePreview();await drag('Legacy pointer tracking without stage events',true);
         d._divider.grab_key_focus();const before=d._scroll.height;
         await combo(Clutter.KEY_Up);assert(d._scroll.height<before,'Divider keyboard resizing');
         await combo(Clutter.KEY_Home);assert(d._splitRatio===null,'Divider keyboard reset');

@@ -232,6 +232,18 @@ class ResultDialog extends ModalDialog.ModalDialog {
                 this._divider.add_action_full('plyph-divider-keys', Clutter.EventPhase.CAPTURE, this._dividerKeys);
             } else {
                 this._dividerPressId = this._divider.connect('button-press-event', (_actor, event) => this._beginDividerDrag(event));
+                this._dividerReleaseId = this._divider.connect('button-release-event', () => {
+                    this._endDividerDrag();
+                    return Clutter.EVENT_STOP;
+                });
+                this._dividerTouchId = this._divider.connect('touch-event', (_actor, event) => {
+                    const type = event.type();
+                    if (type === Clutter.EventType.TOUCH_END || type === Clutter.EventType.TOUCH_CANCEL) {
+                        this._endDividerDrag();
+                        return Clutter.EVENT_STOP;
+                    }
+                    return Clutter.EVENT_PROPAGATE;
+                });
                 this._dividerKeyId = this._divider.connect('key-press-event', (_actor, event) =>
                     this._handleDividerKey(event.get_key_symbol()));
             }
@@ -610,7 +622,7 @@ class ResultDialog extends ModalDialog.ModalDialog {
     }
 
     _handleDividerKey(key) {
-        if (key === Clutter.KEY_Escape && this._dividerGrab) {
+        if (key === Clutter.KEY_Escape && (this._dividerGrab || this._dividerDragId)) {
             this._endDividerDrag();
         } else if (key === Clutter.KEY_Home) {
             this._splitRatio = null;
@@ -631,16 +643,35 @@ class ResultDialog extends ModalDialog.ModalDialog {
         const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
         const startY = event.get_coords()[1];
         const startHeight = this._scroll.height / scale;
-        this._dividerGrab = global.stage.grab(this._divider);
         this._divider.add_style_pseudo_class('active');
         this._divider.grab_key_focus();
+        let lastY = startY;
+        this._dividerPollId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 16, () => {
+            const [, y, state] = global.get_pointer();
+            if (!(state & Clutter.ModifierType.BUTTON1_MASK)) {
+                this._dividerPollId = null;
+                this._endDividerDrag();
+                return GLib.SOURCE_REMOVE;
+            }
+            if (y !== lastY) {
+                lastY = y;
+                this._adjustSplit(startHeight + (y - startY) / scale);
+            }
+            return GLib.SOURCE_CONTINUE;
+        });
         this._dividerDragId = global.stage.connect('captured-event', (_stage, captured) => {
             const type = captured.type();
             if (type === Clutter.EventType.MOTION) {
+                if (!(captured.get_state() & Clutter.ModifierType.BUTTON1_MASK)) {
+                    this._endDividerDrag();
+                    return Clutter.EVENT_PROPAGATE;
+                }
                 this._adjustSplit(startHeight + (captured.get_coords()[1] - startY) / scale);
                 return Clutter.EVENT_STOP;
             }
-            if ((type === Clutter.EventType.BUTTON_RELEASE && captured.get_button() === 1) ||
+            if (type === Clutter.EventType.BUTTON_RELEASE ||
+                type === Clutter.EventType.TOUCH_END ||
+                type === Clutter.EventType.TOUCH_CANCEL ||
                 (type === Clutter.EventType.KEY_PRESS && captured.get_key_symbol() === Clutter.KEY_Escape)) {
                 this._endDividerDrag();
                 return Clutter.EVENT_STOP;
@@ -654,6 +685,10 @@ class ResultDialog extends ModalDialog.ModalDialog {
         const grab = this._dividerGrab;
         this._dividerGrab = null;
         grab?.dismiss();
+        if (this._dividerPollId) {
+            GLib.Source.remove(this._dividerPollId);
+            this._dividerPollId = null;
+        }
         if (this._dividerDragId) {
             global.stage.disconnect(this._dividerDragId);
             this._dividerDragId = null;
@@ -738,6 +773,10 @@ class ResultDialog extends ModalDialog.ModalDialog {
             this._dividerKeys.disconnect(this._dividerKeyControllerId);
         if (this._dividerPressId)
             this._divider.disconnect(this._dividerPressId);
+        if (this._dividerReleaseId)
+            this._divider.disconnect(this._dividerReleaseId);
+        if (this._dividerTouchId)
+            this._divider.disconnect(this._dividerTouchId);
         if (this._dividerKeyId)
             this._divider.disconnect(this._dividerKeyId);
         this._divider?.destroy();
