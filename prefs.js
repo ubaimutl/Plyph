@@ -7,7 +7,7 @@ import Gtk from 'gi://Gtk';
 import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 import {readActions, writeActions} from './actions.js';
 import {abortModelRequests, fetchModels} from './models.js';
-import {listProviders, providerLabels, readProviders, validateProvider, resolveProvider, providerModel, setProviderModel, saveProvider, providerReferences, PROVIDER_PRESETS} from './providers.js';
+import {listProviders, providerLabels, readProviders, migrateProviders, validateProvider, resolveProvider, providerModel, setProviderModel, saveProvider, providerReferences, PROVIDER_PRESETS} from './providers.js';
 import {migrateProviderSettings, deleteProvider, getApiKey, setApiKey} from './secrets.js';
 import {ChatGPTClient} from './chatgpt.js';
 
@@ -119,20 +119,26 @@ function bindTokenLimit(settings, key, control, values) {
 }
 
 export default class PlyphPreferences extends ExtensionPreferences {
-    async fillPreferencesWindow(window) {
+    fillPreferencesWindow(window) {
         const settings = this.getSettings();
+        const generalPage = new Adw.PreferencesPage({
+            title: 'General',
+            icon_name: 'preferences-system-symbolic',
+        });
+        window.add(generalPage);
         this._keyCancellable = new Gio.Cancellable();
         const cancellable = this._keyCancellable;
         window.connect('close-request', () => cancellable.cancel());
         window.connect('unrealize', () => cancellable.cancel());
-        let migrationError = '';
         try {
-            await migrateProviderSettings(settings, cancellable);
+            migrateProviders(settings);
         } catch (error) {
-            migrationError = error.message ?? String(error);
-        }
-        if (cancellable.is_cancelled())
+            const group = new Adw.PreferencesGroup({title: 'Saved providers unavailable'});
+            group.add(new Adw.ActionRow({title: 'Your saved settings were kept.',
+                subtitle: error.message, use_markup: false}));
+            generalPage.add(group);
             return;
+        }
         this._providerChoices = listProviders(settings);
         this._providerSelectors = [];
         window.default_width = 760;
@@ -169,10 +175,6 @@ export default class PlyphPreferences extends ExtensionPreferences {
         `, -1);
         Gtk.StyleContext.add_provider_for_display(window.get_display(), appearance,
             Gtk.STYLE_PROVIDER_PRIORITY_USER + 1);
-        const generalPage = new Adw.PreferencesPage({
-            title: 'General',
-            icon_name: 'preferences-system-symbolic',
-        });
         const actionsPage = new Adw.PreferencesPage({
             title: 'Actions',
             icon_name: 'emblem-system-symbolic',
@@ -200,12 +202,9 @@ export default class PlyphPreferences extends ExtensionPreferences {
         this._customProviderRows = [];
         this._renderCustomProviders(settings);
         generalPage.add(this._customProvidersGroup);
-        if (migrationError) {
-            const warning = new Adw.ActionRow({title: 'Provider migration could not finish',
-                subtitle: 'Existing settings were kept. Unlock Passwords and Keys, then reopen Settings.',
-                tooltip_text: migrationError});
-            this._customProvidersGroup.add(warning);
-        }
+        const migrationStatus = new Adw.ActionRow({title: 'Saved connections could not be checked',
+            visible: false, use_markup: false});
+        this._customProvidersGroup.add(migrationStatus);
 
         const runPrompt = new Adw.PreferencesGroup({
             title: 'Run selected prompt',
@@ -476,10 +475,15 @@ export default class PlyphPreferences extends ExtensionPreferences {
             this._actionRows = null;
             return false;
         });
-        window.add(generalPage);
         window.add(actionsPage);
         window.add(promptsPage);
         window.add(advancedPage);
+        migrateProviderSettings(settings, cancellable).catch(error => {
+            if (!cancellable.is_cancelled()) {
+                migrationStatus.subtitle = error.message ?? String(error);
+                migrationStatus.visible = true;
+            }
+        });
     }
 
     _bindProviderSelector(row, settings, key, optional, changed) {
