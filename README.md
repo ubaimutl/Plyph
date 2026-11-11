@@ -13,7 +13,7 @@ Select text, choose an action, and preview, copy, or replace the result. Plyph c
 - **Use different AI services:** connect a local server, sign in with ChatGPT, or save multiple OpenAI-compatible providers with separate URLs, keys, and models.
 - **Check before replacing:** preview, edit, compare, copy, or replace the result, with an option to undo the last automatic replacement.
 - **Keep working with a result:** refine it through revisions or discuss it without changing the text.
-- **Choose how to launch actions:** use the selection toolbar, panel menu, shortcuts, or action palette.
+- **Choose how to launch actions:** use the selection toolbar, panel menu, shortcuts, or action palette. The selection toolbar is enabled by default; an existing saved opt-out is preserved.
 
 Supports **GNOME Shell 46–51**.
 
@@ -35,11 +35,15 @@ Go to **General → Saved providers → Add provider**. Start with a preset or e
 
 After saving, use **Refresh models** to choose a model, or enter a model ID manually if the service doesn't provide a model list. A model must be selected before running an action.
 
+**Advanced** is collapsed by default. It offers optional temperature, reasoning effort, custom HTTP headers, and extra JSON request parameters. Leave these blank to keep provider defaults. Header values are stored in the system keyring; extra request parameters are ordinary settings and should contain no credentials. Explicit temperature and reasoning selections take precedence over the same fields in the extra JSON. Plyph retains control of the conversation, selected model, streaming mode, and action token limits.
+
 You can save multiple connections to the same or different services. Each has its own endpoint, credentials, and model, and can be selected as the active provider or used by an individual action.
 
 Presets are available for **Groq, B.AI, OpenRouter, Cerebras, OpenAI, Vercel AI Gateway**, and other compatible servers. You can also enter any compatible endpoint, such as LM Studio (`http://127.0.0.1:1234/v1`). A preset fills in connection details; it doesn't require a separate built-in integration.
 
 Preset-specific compatibility options apply only to the preset's original base URL. Changing it to a different endpoint uses standard OpenAI-compatible requests.
+
+The generic preset is **OpenAI-compatible**. An old connection still using that default name appears as **OpenAI-compatible (legacy)**; custom names, URLs, models, IDs, and credentials are preserved.
 
 **Upgrading from an older version:** Plyph imports existing configured providers automatically, keeping their provider IDs, model selections, action overrides, and keyring credentials. Services you haven't configured remain available as presets. If a provider is in use as the active provider or by an action, reassign it before deleting it.
 
@@ -95,7 +99,7 @@ The **Open actions** shortcut can show actions in the center of the active monit
 
 Selected or clipboard text is sent to the chosen AI provider only when you run an action or submit a refine/discuss request. If enabled, personal context is included with those requests. Discussion requests also include the source text, action details, relevant results and revisions, and conversation history.
 
-API keys and tokens are stored with the system Secret Service (viewable in GNOME Passwords and Keys). Older credentials are migrated out of GSettings after successful keyring storage. Local services such as Ollama and LM Studio process text locally; cloud services have their own privacy, retention, and pricing policies.
+API keys and tokens are stored with the system Secret Service (viewable in GNOME Passwords and Keys). If a saved key is locked, running an action requests the system unlock prompt; canceling it stops the request. In provider settings, use **Unlock** to load a locked key. You don't need to enter the API key again. Older credentials are migrated out of GSettings after successful keyring storage. Local services such as Ollama and LM Studio process text locally; cloud services have their own privacy, retention, and pricing policies.
 
 Plyph normally reads GNOME's PRIMARY selection. On Wayland, Firefox may need explicit copying, which Plyph enables for Firefox by default. This sends `Ctrl+C` and temporarily changes the regular clipboard. You can configure additional application IDs in settings. Using previously copied clipboard text as a fallback is optional and disabled by default.
 
@@ -138,7 +142,7 @@ For the optional native interaction test in a headless GNOME Shell session:
 PLYPH_NATIVE_SHELL_TEST=1 node --test tests/*.test.cjs
 ```
 
-The compatibility suite covers GNOME Shell 46–51 API branches with mocks. Native interaction checks require GNOME Shell with headless Wayland support. Real-session testing is still important across supported GNOME versions, especially for selection handling, shortcuts, preferences, theming, and display scaling.
+The compatibility suite covers GNOME Shell 46–51 API branches with mocks. Native interaction checks require GNOME Shell with headless Wayland support; the native keyring check also requires `gnome-keyring-daemon` and uses a private Secret Service with temporary credentials. Real-session testing is still important across supported GNOME versions, especially for selection handling, shortcuts, preferences, theming, and display scaling.
 
 After packaging, you can inspect the ZIP with Shexli:
 
