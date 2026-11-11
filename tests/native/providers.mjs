@@ -29,9 +29,16 @@ async function run() {
     const window = new Adw.PreferencesWindow({application: app});
     const prefs = new Preferences({uuid: 'ai-autocorrect@ubai.dev', name: 'Plyph', path: directory, dir: Gio.File.new_for_path(directory)});
     prefs.getSettings = () => settings;
-    await prefs.fillPreferencesWindow(window);
+    assert(settings.get_boolean('show-floating-button'), 'selection toolbar defaults to enabled');
+    settings.set_boolean('show-floating-button', false);
+    const filling = prefs.fillPreferencesWindow(window);
+    assert(Boolean(window.get_visible_page()), 'preferences expose a visible page before asynchronous migration');
+    assert(widgets(window).some(w => w instanceof Adw.ComboRow && w.title === 'Active provider'),
+        'General settings are populated before asynchronous migration');
+    await filling;
     window.present();
     await wait(180);
+    assert(!settings.get_boolean('show-floating-button'), 'explicit toolbar opt-out survives startup');
     assert(settings.get_int('provider-migration-version') === 1, 'real GSettings migration completes');
     assert(providers.readProviders(settings).length === 3, 'configured and keyring-only providers imported');
     assert(await secrets.getApiKey(settings, 'openai') === 'test-only-key', 'existing credential ID remains accessible through the test store');
@@ -43,12 +50,29 @@ async function run() {
     assert(Boolean(field('Name')), 'native provider editor opens');
     field('Name').text = 'Local test provider';
     field('Base URL').text = 'http://localhost:4321/custom/v1';
+    const advanced = all.find(w => w instanceof Adw.ExpanderRow && w.title === 'Advanced');
+    assert(Boolean(advanced) && !advanced.expanded, 'Advanced controls are collapsed by default');
+    advanced.expanded = true;
+    field('Temperature (optional)').text = '0.4';
+    all.find(w => w instanceof Adw.ComboRow && w.title === 'Reasoning effort').selected = 3;
+    const headers = all.find(w => w instanceof Adw.PreferencesRow && w.title === 'Custom headers (JSON)');
+    const parameters = all.find(w => w instanceof Adw.PreferencesRow && w.title === 'Extra request parameters (JSON)');
+    headers._buffer.set_text('{"X-Test-Key":"native-secret"}', -1);
+    parameters._buffer.set_text('{"stream":true}', -1);
+    all.find(w => w instanceof Gtk.Button && w.label === 'Save').emit('clicked');
+    await wait(80);
+    assert(!providers.readProviders(settings).some(p => p.name === 'Local test provider'), 'reserved request fields fail validation before saving');
+    parameters._buffer.set_text('{"top_p":0.8}', -1);
     all.find(w => w instanceof Gtk.Button && w.label === 'Save').emit('clicked');
     await wait(180);
     const custom = providers.readProviders(settings).find(p => p.name === 'Local test provider');
     assert(Boolean(custom), 'native Save creates a custom profile');
     assert(prefs._providerChoices.some(p => p.id === custom.id), 'open provider selectors refresh');
     assert(custom.model === '', 'native Save accepts a connection without a model');
+    assert(custom.advanced.temperature === 0.4 && custom.advanced.reasoningEffort === 'low' &&
+        custom.advanced.parameters.top_p === 0.8, 'native Save persists advanced request controls');
+    assert(!settings.get_string('custom-providers').includes('native-secret'), 'custom header values stay out of GSettings');
+    assert((await secrets.getProviderHeaders(custom))['X-Test-Key'] === 'native-secret', 'custom headers use the credential store');
     const active = widgets(window).find(w => w instanceof Adw.ComboRow && w.title === 'Active provider');
     active.selected = prefs._providerChoices.findIndex(p => p.id === custom.id);
     await wait(100);
@@ -71,6 +95,10 @@ async function run() {
     await wait(180);
     const edit = Array.from({length: Gtk.Window.get_toplevels().get_n_items()}, (_, i) => Gtk.Window.get_toplevels().get_item(i)).find(w => w !== window);
     const editWidgets = widgets(edit);
+    assert(!editWidgets.find(w => w instanceof Adw.ExpanderRow && w.title === 'Advanced').expanded,
+        'existing advanced settings reopen collapsed');
+    assert(editWidgets.find(w => w instanceof Adw.EntryRow && w.title === 'Temperature (optional)').text === '0.4',
+        'advanced values survive editing and model changes');
     editWidgets.find(w => w instanceof Adw.EntryRow && w.title === 'Name').text = 'Renamed test';
     editWidgets.find(w => w instanceof Gtk.Button && w.label === 'Save').emit('clicked');
     await wait(150);
@@ -91,6 +119,17 @@ async function run() {
     widgets(confirmation()).find(w => w instanceof Gtk.Button && w.label === 'Delete').emit('clicked');
     await wait(180);
     assert(!providers.readProviders(settings).some(p => p.id === custom.id), 'native Delete removes unreferenced profile');
+    await secrets.setApiKey(settings, 'gemini', 'locked-test-key');
+    secrets.setTestLocked(true);
+    active.selected = prefs._providerChoices.findIndex(p => p.id === 'gemini');
+    await wait(100);
+    const password = widgets(window).find(w => w instanceof Adw.PasswordEntryRow && w.title === 'API key');
+    assert(Boolean(password) && !password.editable, 'locked credentials cannot be overwritten by an unloaded empty field');
+    const unlock = widgets(password).find(w => w instanceof Gtk.Button && w.label === 'Unlock');
+    assert(Boolean(unlock) && unlock.visible, 'locked credential row offers an explicit Unlock action');
+    unlock.emit('clicked');
+    await wait(100);
+    assert(password.editable && password.text === 'locked-test-key', 'Unlock restores the saved key for editing');
     window.close();
     await wait(60);
     print('ALL PROVIDER UI CHECKS PASSED');

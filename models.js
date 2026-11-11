@@ -2,8 +2,8 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Soup from 'gi://Soup';
 
-import {resolveProvider, validateProvider} from './providers.js';
-import {getApiKey} from './secrets.js';
+import {resolveProvider, validateProvider, mergeProviderHeaders} from './providers.js';
+import {getApiKey, getProviderHeaders} from './secrets.js';
 import {ChatGPTClient} from './chatgpt.js';
 
 const activeSessions = new Set();
@@ -85,18 +85,30 @@ function getJson(url, headers = {}, provider = 'Provider') {
     });
 }
 
-async function modelKey(settings, provider) {
+async function modelKey(settings, provider, interactive = false) {
     const cancellable = new Gio.Cancellable();
     activeKeyRequests.add(cancellable);
     try {
-        return await getApiKey(settings, provider, cancellable);
+        return await getApiKey(settings, provider, cancellable, interactive);
     } finally {
         activeKeyRequests.delete(cancellable);
     }
 }
 
-async function requiredKey(settings, provider) {
-    const value = await modelKey(settings, provider);
+async function modelCredentials(settings, profile, interactive) {
+    const cancellable = new Gio.Cancellable();
+    activeKeyRequests.add(cancellable);
+    try {
+        const key = await getApiKey(settings, profile.id, cancellable, interactive);
+        const headers = profile.hasCustomHeaders ? await getProviderHeaders(profile, cancellable, interactive) : {};
+        return {key, headers};
+    } finally {
+        activeKeyRequests.delete(cancellable);
+    }
+}
+
+async function requiredKey(settings, provider, interactive = false) {
+    const value = await modelKey(settings, provider, interactive);
     if (!value)
         throw new Error(provider === 'cloudflare'
             ? 'Add a Cloudflare Workers AI API token first.'
@@ -112,7 +124,7 @@ function uniqueModels(models) {
         .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export async function fetchModels(settings, provider) {
+export async function fetchModels(settings, provider, interactive = false) {
     const info = resolveProvider(settings, provider);
     const generation = requestGeneration;
     const ensureCurrent = () => {
@@ -138,7 +150,7 @@ export async function fetchModels(settings, provider) {
         data = await getJson(`${baseUrl}/api/tags`, {}, 'Ollama');
         models = (data.models ?? []).map(model => ({id: model.model ?? model.name, name: model.name}));
     } else if (provider === 'cloudflare') {
-        const key = await requiredKey(settings, 'cloudflare');
+        const key = await requiredKey(settings, 'cloudflare', interactive);
         const accountId = settings.get_string('cloudflare-account-id').trim();
         if (!accountId)
             throw new Error('Add your Cloudflare Account ID first.');
@@ -151,7 +163,7 @@ export async function fetchModels(settings, provider) {
             name: model.name ?? model.id,
         }));
     } else if (provider === 'gemini') {
-        const key = await requiredKey(settings, 'gemini');
+        const key = await requiredKey(settings, 'gemini', interactive);
         ensureCurrent();
         data = await getJson(
             `https://generativelanguage.googleapis.com/v1beta/models?pageSize=1000&key=${encodeURIComponent(key)}`,
@@ -161,10 +173,10 @@ export async function fetchModels(settings, provider) {
             .map(model => ({id: model.name.replace(/^models\//, ''), name: model.displayName}));
     } else {
         const profile = validateProvider(info, false);
-        const key = await modelKey(settings, provider);
+        const credentials = await modelCredentials(settings, info, interactive);
         ensureCurrent();
         const suffix = info.adapter === 'openrouter' ? '/models?output_modalities=text' : '/models';
-        const headers = key ? {Authorization: `Bearer ${key}`} : {};
+        const headers = mergeProviderHeaders(credentials.key ? {Authorization: `Bearer ${credentials.key}`} : {}, credentials.headers);
         data = await getJson(`${profile.url}${suffix}`, headers, info.name);
         models = (data.data ?? [])
             .filter(model => info.adapter !== 'bai' ||

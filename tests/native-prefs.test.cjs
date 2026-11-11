@@ -16,12 +16,30 @@ test('native preferences migrate memory settings and add, rename and delete prov
         for (const file of readdirSync(root).filter(name => name.endsWith('.js')))
             cpSync(join(root, file), join(temporary, 'source', file));
         writeFileSync(join(temporary, 'source/secrets.js'), `
-import {migrateProviders, removeProvider} from './providers.js';
+import GLib from 'gi://GLib';
+import {migrateProviders, removeProvider, saveProvider} from './providers.js';
 const keys = new Map();
-export async function getApiKey(_settings, id) { return keys.get(id) ?? ''; }
+const headers = new Map();
+let locked = false;
+export function setTestLocked(value) { locked = value; }
+export async function getApiKey(_settings, id, _cancellable, interactive = false) {
+    if (locked && keys.has(id)) {
+        if (!interactive) throw new Error('Your saved API key is locked.');
+        locked = false;
+    }
+    return keys.get(id) ?? '';
+}
 export async function setApiKey(_settings, id, value) { keys.set(id, value); }
-export async function deleteProvider(settings, id) { removeProvider(settings, id); keys.delete(id); }
-export async function migrateProviderSettings(settings) { migrateProviders(settings, [...keys.keys()], true); }
+export async function getProviderHeaders(profile) { return headers.get(profile.id) ?? {}; }
+export async function saveProviderConnection(settings, profile, credentials) {
+    keys.set(profile.id, credentials.apiKey); headers.set(profile.id, credentials.headers);
+    saveProvider(settings, {...profile, hasCustomHeaders: Object.keys(credentials.headers).length ? true : undefined});
+}
+export async function deleteProvider(settings, id) { removeProvider(settings, id); keys.delete(id); headers.delete(id); }
+export async function migrateProviderSettings(settings) {
+    await new Promise(resolve => GLib.timeout_add(GLib.PRIORITY_DEFAULT, 75, () => {resolve(); return GLib.SOURCE_REMOVE;}));
+    migrateProviders(settings, [...keys.keys()], true);
+}
 `);
         cpSync(join(root, 'schemas/org.gnome.shell.extensions.ai-autocorrect.gschema.xml'), join(temporary, 'schemas/org.gnome.shell.extensions.ai-autocorrect.gschema.xml'));
         execFileSync('glib-compile-schemas', ['--strict', join(temporary, 'schemas')]);

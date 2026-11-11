@@ -2,8 +2,8 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Soup from 'gi://Soup';
 
-import {resolveProvider, providerModel, validateProvider} from './providers.js';
-import {getApiKey} from './secrets.js';
+import {resolveProvider, providerModel, validateProvider, mergeProviderHeaders, applyProviderOptions} from './providers.js';
+import {getApiKey, getProviderHeaders} from './secrets.js';
 import {ChatGPTClient} from './chatgpt.js';
 
 const PROVIDER_NAMES = {
@@ -274,7 +274,7 @@ export class AiClient {
     }
 
     async _required(provider) {
-        const value = await getApiKey(this._settings, provider, this._cancellable);
+        const value = await getApiKey(this._settings, provider, this._cancellable, true);
         if (!value)
             throw new Error(provider === 'cloudflare'
                 ? 'Add a Cloudflare Workers AI API token in Settings.'
@@ -317,17 +317,25 @@ export class AiClient {
         const profile = validateProvider({...info, model});
         const cancellable = this._cancellable;
         const session = this._session;
-        const key = await getApiKey(this._settings, info.id, cancellable);
+        const key = await getApiKey(this._settings, info.id, cancellable, true);
         if (this._cancellable !== cancellable || cancellable.is_cancelled())
             throw new GLib.Error(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED, 'Request cancelled');
-        const headers = key ? {Authorization: `Bearer ${key}`} : {};
+        const defaults = key ? {Authorization: `Bearer ${key}`} : {};
+        const customHeaders = info.hasCustomHeaders ? await getProviderHeaders(info, cancellable, true) : {};
+        if (this._cancellable !== cancellable || cancellable.is_cancelled())
+            throw new GLib.Error(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED, 'Request cancelled');
+        if (!key && !Object.keys(customHeaders).length &&
+            ['groq', 'bai', 'openrouter', 'cerebras', 'openai', 'vercel'].includes(info.adapter))
+            throw new Error(`Add a ${info.name} API key in Settings.`);
         if (info.adapter === 'openrouter')
-            headers['X-Title'] = 'Plyph';
+            defaults['X-Title'] = 'Plyph';
         const body = openAiBody(model, prompt, text, inputMode, outputLimit, info.adapter === 'cerebras');
         if (info.adapter === 'groq' && model.startsWith('openai/gpt-oss-')) {
             body.reasoning_effort = 'low';
             body.include_reasoning = false;
         }
+        applyProviderOptions(profile, body);
+        const headers = mergeProviderHeaders(defaults, customHeaders);
         const result = await requestJson(session, `${profile.url}/chat/completions`,
             headers, body, cancellable, this._settings);
         return outputOrError(result, info.id, model, inputMode, info.name);

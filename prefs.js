@@ -7,8 +7,8 @@ import Gtk from 'gi://Gtk';
 import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 import {readActions, writeActions} from './actions.js';
 import {abortModelRequests, fetchModels} from './models.js';
-import {listProviders, providerLabels, readProviders, migrateProviders, validateProvider, resolveProvider, providerModel, setProviderModel, saveProvider, providerReferences, PROVIDER_PRESETS} from './providers.js';
-import {migrateProviderSettings, deleteProvider, getApiKey, setApiKey} from './secrets.js';
+import {listProviders, providerLabels, readProviders, migrateProviders, validateProvider, validateHeaders, REASONING_EFFORTS, resolveProvider, providerModel, setProviderModel, providerReferences, PROVIDER_PRESETS} from './providers.js';
+import {migrateProviderSettings, deleteProvider, getApiKey, setApiKey, getProviderHeaders, saveProviderConnection} from './secrets.js';
 import {ChatGPTClient} from './chatgpt.js';
 
 const INPUT_LIMIT_VALUES = [0, 2000, 4000, 8000, 16000, 32000];
@@ -53,11 +53,20 @@ function textEditor(title, text, onChanged) {
     box.append(label);
     box.append(scroll);
     const row = new Adw.PreferencesRow({title, child: box});
+    row._buffer = buffer;
     buffer.connect('changed', () => {
         const [start, end] = buffer.get_bounds();
         onChanged(buffer.get_text(start, end, false));
     });
     return row;
+}
+
+function providerJson(text, title) {
+    try {
+        return JSON.parse(text.trim() || '{}');
+    } catch {
+        throw new Error(`${title} must contain valid JSON.`);
+    }
 }
 
 function tokenLimitControl(title, subtitle, values, labels, currentValue) {
@@ -543,7 +552,7 @@ export default class PlyphPreferences extends ExtensionPreferences {
         const box = new Gtk.Box({orientation: Gtk.Orientation.VERTICAL});
         const header = new Adw.HeaderBar();
         box.append(header);
-        const page = new Adw.PreferencesPage();
+        const page = new Adw.PreferencesPage({vexpand: true});
         const group = new Adw.PreferencesGroup();
         page.add(group);
         box.append(page);
@@ -566,6 +575,25 @@ export default class PlyphPreferences extends ExtensionPreferences {
         }
         for (const row of [name, url, key, model])
             group.add(row);
+        const advanced = new Adw.ExpanderRow({title: 'Advanced', expanded: false,
+            subtitle: 'Optional request controls', use_markup: false});
+        const temperature = new Adw.EntryRow({title: 'Temperature (optional)',
+            text: profile.advanced?.temperature !== undefined ? String(profile.advanced.temperature) : '',
+            tooltip_text: 'Leave blank for the provider default, or enter a value from 0 to 2.'});
+        const reasoning = new Adw.ComboRow({title: 'Reasoning effort',
+            tooltip_text: 'Supported values depend on the provider and model.',
+            model: Gtk.StringList.new(['Provider default', 'None', 'Minimal', 'Low', 'Medium', 'High', 'Extra high']),
+            selected: Math.max(0, REASONING_EFFORTS.indexOf(profile.advanced?.reasoningEffort ?? ''))});
+        let headerText = '{}';
+        let parameterText = JSON.stringify(profile.advanced?.parameters ?? {}, null, 2);
+        const headerEditor = textEditor('Custom headers (JSON)', headerText, value => { headerText = value; });
+        headerEditor.tooltip_text = 'Optional HTTP headers. Values are stored securely in Passwords and Keys.';
+        headerEditor.sensitive = !existing;
+        const parameterEditor = textEditor('Extra request parameters (JSON)', parameterText, value => { parameterText = value; });
+        parameterEditor.tooltip_text = 'Use non-secret parameters. For example: {"top_p": 0.9}. Conversation, model, and action limits remain controlled by Plyph.';
+        for (const row of [temperature, reasoning, headerEditor, parameterEditor])
+            advanced.add_row(row);
+        group.add(advanced);
         const status = new Adw.ActionRow({title: '', visible: false, use_markup: false});
         group.add(status);
         const showError = error => {
@@ -579,12 +607,21 @@ export default class PlyphPreferences extends ExtensionPreferences {
         window.connect('close-request', () => cancellable.cancel());
         window.connect('unrealize', () => cancellable.cancel());
         let originalKey = '';
+        let originalHeaders = {};
         let removeButton = null;
         if (existing) {
-            getApiKey(settings, profile.id, cancellable).then(value => {
+            const loadCredentials = async () => {
+                const value = await getApiKey(settings, profile.id, cancellable, true);
+                const headers = await getProviderHeaders(profile, cancellable, true);
+                return [value, headers];
+            };
+            loadCredentials().then(([value, headers]) => {
                 if (cancellable.is_cancelled())
                     return;
                 originalKey = value;
+                originalHeaders = headers;
+                headerEditor._buffer.set_text(JSON.stringify(headers, null, 2), -1);
+                headerEditor.sensitive = true;
                 key.text = value;
                 key.sensitive = true;
                 save.sensitive = true;
@@ -599,15 +636,20 @@ export default class PlyphPreferences extends ExtensionPreferences {
             save.sensitive = false;
             group.sensitive = false;
             try {
-                const candidate = {...profile, name: name.text, url: url.text, model: model.text};
+                const headers = validateHeaders(providerJson(headerText, 'Custom headers'));
+                const parameters = providerJson(parameterText, 'Extra request parameters');
+                const candidate = {...profile, name: name.text, url: url.text, model: model.text,
+                    hasCustomHeaders: Object.keys(headers).length ? true : undefined,
+                    advanced: {temperature: temperature.text.trim() ? Number(temperature.text) : undefined,
+                        reasoningEffort: REASONING_EFFORTS[reasoning.selected] ?? '', parameters}};
                 const validated = validateProvider(candidate, false);
-                if (key.text !== originalKey)
-                    await setApiKey(settings, profile.id, key.text, cancellable);
+                await saveProviderConnection(settings, validated, {apiKey: key.text, headers}, cancellable);
                 if (cancellable.is_cancelled())
                     return;
                 const connectionChanged = !existing || existing.url !== validated.url ||
                     existing.adapter !== validated.adapter;
-                if (connectionChanged || key.text !== originalKey) {
+                if (connectionChanged || key.text !== originalKey ||
+                    JSON.stringify(headers) !== JSON.stringify(originalHeaders)) {
                     this._cacheModels(settings, profile.id, []);
                     if (settings.get_string('provider') === profile.id) {
                         abortModelRequests();
@@ -620,7 +662,6 @@ export default class PlyphPreferences extends ExtensionPreferences {
                         }
                     }
                 }
-                saveProvider(settings, validated);
                 window.close();
             } catch (error) {
                 if (!cancellable.is_cancelled())
@@ -922,24 +963,39 @@ export default class PlyphPreferences extends ExtensionPreferences {
         row.sensitive = false;
         this._providerSettings.add(row);
 
-        getApiKey(settings, provider, this._keyCancellable).then(key => {
-            if (row.get_parent()) {
-                row.text = key;
-                row.sensitive = true;
-                status.icon_name = key ? 'emblem-ok-symbolic' : 'dialog-password-symbolic';
-                status.tooltip_text = key
-                    ? 'Stored securely in Passwords and Keys'
-                    : `No ${credential} saved`;
+        const unlock = new Gtk.Button({label: 'Unlock', valign: Gtk.Align.CENTER, visible: false});
+        row.add_suffix(unlock);
+        const load = async interactive => {
+            unlock.sensitive = false;
+            try {
+                const key = await getApiKey(settings, provider, this._keyCancellable, interactive);
+                if (this._keyCancellable && row.get_parent()) {
+                    row.text = key;
+                    row.editable = true;
+                    row.sensitive = true;
+                    unlock.visible = false;
+                    status.icon_name = key ? 'emblem-ok-symbolic' : 'dialog-password-symbolic';
+                    status.tooltip_text = key ? 'Stored securely in Passwords and Keys' : `No ${credential} saved`;
+                }
+            } catch (error) {
+                if (this._keyCancellable && row.get_parent()) {
+                    status.icon_name = 'dialog-error-symbolic';
+                    status.tooltip_text = error.message ?? String(error);
+                    row.sensitive = true;
+                    row.editable = false;
+                    unlock.visible = true;
+                }
+            } finally {
+                if (this._keyCancellable && row.get_parent())
+                    unlock.sensitive = true;
             }
-        }).catch(error => {
-            if (row.get_parent()) {
-                row.sensitive = true;
-                status.icon_name = 'dialog-error-symbolic';
-                status.tooltip_text = error.message ?? String(error);
-            }
-        });
+        };
+        unlock.connect('clicked', () => load(true));
+        load(false);
 
         const save = async () => {
+            if (!row.editable)
+                return;
             row.sensitive = false;
             status.icon_name = 'content-loading-symbolic';
             status.tooltip_text = 'Saving…';
@@ -1012,7 +1068,7 @@ export default class PlyphPreferences extends ExtensionPreferences {
         const request = Symbol();
         row._request = request;
         try {
-            const models = await fetchModels(settings, provider);
+            const models = await fetchModels(settings, provider, true);
             if (this._modelRow !== row || row._request !== request)
                 return;
             this._cacheModels(settings, provider, models);
