@@ -175,6 +175,16 @@ export default class NativeTest extends Extension {
         const findLabel=root=>{if(root instanceof St.Label&&root.clutter_text.get_text()==='Readable error')return root;for(const child of root.get_children()){const found=findLabel(child);if(found)return found;}return null;};
         const errorLabel=findLabel(error.contentLayout);
         await copy(errorLabel,'Error dialog','Readable error');error.close();this._dialog=null;await delay(120);
+        const plain=new ResultDialog('Selectable result',()=>{},()=>{},()=>{},null,null,'Original result');
+        this._dialog=plain;plain.open();await delay(150);
+        for(const [field,name] of [[plain._label,'Result editor'],[plain._diffLabel,'Comparison']]){
+            field.show();field.ensure_style();await delay(50);
+            const text=field.clutter_text;
+            assert(text.selection_color_set&&text.selected_text_color_set,`${name}: themed selection colors without refinement`);
+            assert(text.get_selection_color().to_string()!==text.get_selected_text_color().to_string(),`${name}: readable selection contrast`);
+        }
+        plain.destroy();this._dialog=null;await delay(100);
+
         let submitted='';let closed=false;
         const ask=new AskDialog(text=>{submitted=text;},null,()=>{closed=true;});this._dialog=ask;ask.open();await delay(150);
         ask._entry.clutter_text.grab_key_focus();await combo(Clutter.KEY_Return);

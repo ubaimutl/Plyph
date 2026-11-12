@@ -776,6 +776,18 @@ for (const version of versions) {
             assert.equal(field.get_text(), original);
             assert.equal(shell.clipboard.get(1), 'Do not insert');
         }
+        for (const field of [dialog._label, dialog._diffLabel]) {
+            field.emit('style-changed');
+            assert.equal(field.clutter_text.selection_color, dialog._selectionStyle.clutter_text.get_selection_color());
+            assert.equal(field.clutter_text.selected_text_color, dialog._selectionStyle.clutter_text.get_selected_text_color());
+        }
+        dialog._selectionStyle.clutter_text.set_selection_color('updated result highlight');
+        dialog._selectionStyle.clutter_text.set_selected_text_color('updated selected text');
+        for (const field of [dialog._label, dialog._diffLabel]) {
+            field.emit('style-changed');
+            assert.equal(field.clutter_text.selection_color, 'updated result highlight');
+            assert.equal(field.clutter_text.selected_text_color, 'updated selected text');
+        }
         assert.equal(reply.get_text(), 'Readable reply');
         assert.equal(reply.clutter_text.reactive, true);
         assert.equal(reply.clutter_text.selectable, true);

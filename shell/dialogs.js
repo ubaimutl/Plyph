@@ -185,6 +185,16 @@ class ResultDialog extends ModalDialog.ModalDialog {
         this._diffLabel.clutter_text.set_line_wrap(true);
         this._diffLabel.clutter_text.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR);
         this._diffLabel.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
+        this._selectionStyle = new St.Entry({visible: false, can_focus: false, reactive: false});
+        this.contentLayout.add_child(this._selectionStyle);
+        for (const field of [this._label, this._diffLabel]) {
+            field.connect('style-changed', () => {
+                this._selectionStyle.ensure_style();
+                const source = this._selectionStyle.clutter_text;
+                field.clutter_text.set_selection_color(source.get_selection_color());
+                field.clutter_text.set_selected_text_color(source.get_selected_text_color());
+            });
+        }
         wrapButton.connect('notify::checked', () => {
             this._label.clutter_text.set_line_wrap(wrapButton.checked);
             this._diffLabel.clutter_text.set_line_wrap(wrapButton.checked);
@@ -848,6 +858,8 @@ class ResultDialog extends ModalDialog.ModalDialog {
         this._label = null;
         this._scroll?.destroy();
         this._scroll = null;
+        this._selectionStyle?.destroy();
+        this._selectionStyle = null;
         this._onReplace = null;
         this._onCopySelection = null;
         this._resultClipboard = null;
