@@ -499,11 +499,14 @@ test('legacy compatible connections get descriptive names without changing their
     const {context: c, settings: s, values} = setup({'provider': 'openai-compatible'});
     c.migrateProviders(s, [], true);
     assert.equal(c.resolveProvider(s, 'openai-compatible').name, 'OpenAI-compatible (legacy)');
-    assert.equal(c.PROVIDER_PRESETS.find(item => item.id === 'openai-compatible').name, 'OpenAI-compatible');
+    const preset = c.PROVIDER_PRESETS.find(item => item.id === 'openai-compatible');
+    assert.equal(preset.name, 'LM Studio (local)');
+    assert.equal(preset.url, 'http://127.0.0.1:1234/v1');
     values['custom-providers'] = JSON.stringify([{id: 'openai-compatible', name: 'OpenAI-compatible',
         url: 'https://my-server.example/v1', model: 'saved-model', adapter: ''}]);
     assert.equal(c.resolveProvider(s, 'openai-compatible').name, 'OpenAI-compatible (legacy)');
     assert.equal(c.providerModel(s, 'openai-compatible'), 'saved-model');
+    assert.equal(c.resolveProvider(s, 'openai-compatible').url, 'https://my-server.example/v1');
     assert.equal(JSON.parse(values['custom-providers'])[0].name, 'OpenAI-compatible');
     values['custom-providers'] = JSON.stringify([{id: 'openai-compatible', name: 'My account',
         url: 'https://my-server.example/v1', model: 'saved-model', adapter: ''}]);

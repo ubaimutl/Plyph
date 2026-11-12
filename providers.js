@@ -13,7 +13,7 @@ export const PROVIDER_PRESETS = [
     {id: 'openrouter', name: 'OpenRouter', url: 'https://openrouter.ai/api/v1', adapter: 'openrouter'},
     {id: 'cerebras', name: 'Cerebras', url: 'https://api.cerebras.ai/v1', adapter: 'cerebras'},
     {id: 'openai', name: 'OpenAI', url: 'https://api.openai.com/v1', adapter: 'openai'},
-    {id: 'openai-compatible', name: 'OpenAI-compatible', url: '', adapter: ''},
+    {id: 'openai-compatible', name: 'LM Studio (local)', url: 'http://127.0.0.1:1234/v1', adapter: ''},
     {id: 'vercel', name: 'Vercel AI Gateway', url: 'https://ai-gateway.vercel.sh/v1', adapter: 'vercel'},
 ];
 

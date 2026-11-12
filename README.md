@@ -39,11 +39,11 @@ After saving, use **Refresh models** to choose a model, or enter a model ID manu
 
 You can save multiple connections to the same or different services. Each has its own endpoint, credentials, and model, and can be selected as the active provider or used by an individual action.
 
-Presets are available for **Groq, B.AI, OpenRouter, Cerebras, OpenAI, Vercel AI Gateway**, and other compatible servers. You can also enter any compatible endpoint, such as LM Studio (`http://127.0.0.1:1234/v1`). A preset fills in connection details; it doesn't require a separate built-in integration.
+Presets are available for **Groq, B.AI, OpenRouter, Cerebras, OpenAI, LM Studio (local), Vercel AI Gateway**, and other compatible servers. You can also enter any compatible endpoint, such as LM Studio (`http://127.0.0.1:1234/v1`). A preset fills in connection details; it doesn't require a separate built-in integration.
 
 Preset-specific compatibility options apply only to the preset's original base URL. Changing it to a different endpoint uses standard OpenAI-compatible requests.
 
-The generic preset is **OpenAI-compatible**. An old connection still using that default name appears as **OpenAI-compatible (legacy)**; custom names, URLs, models, IDs, and credentials are preserved.
+The **LM Studio (local)** preset fills in `http://127.0.0.1:1234/v1`. Use **Custom connection** for other compatible services. Existing connections using the old default name still appear as **OpenAI-compatible (legacy)**; custom names, URLs, models, IDs, and credentials are preserved.
 
 **Upgrading from an older version:** Plyph imports existing configured providers automatically, keeping their provider IDs, model selections, action overrides, and keyring credentials. Services you haven't configured remain available as presets. If a provider is in use as the active provider or by an action, reassign it before deleting it.
 

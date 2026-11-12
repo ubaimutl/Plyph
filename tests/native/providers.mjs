@@ -48,6 +48,14 @@ async function run() {
     const all = widgets(editor);
     const field = title => all.find(w => w instanceof Adw.EntryRow && w.title === title);
     assert(Boolean(field('Name')), 'native provider editor opens');
+    const presets = all.find(w => w instanceof Adw.ComboRow && w.title === 'Start with');
+    const localIndex = providers.PROVIDER_PRESETS.findIndex(p => p.name === 'LM Studio (local)');
+    assert(localIndex >= 0, 'LM Studio preset appears in Add provider');
+    presets.selected = localIndex + 1;
+    assert(field('Name').text === 'LM Studio (local)' && field('Base URL').text === 'http://127.0.0.1:1234/v1',
+        'LM Studio preset fills its name and local base URL');
+    presets.selected = 0;
+    assert(field('Name').text === '' && field('Base URL').text === '', 'Custom connection remains blank');
     field('Name').text = 'Local test provider';
     field('Base URL').text = 'http://localhost:4321/custom/v1';
     const advanced = all.find(w => w instanceof Adw.ExpanderRow && w.title === 'Advanced');
