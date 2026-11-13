@@ -157,7 +157,12 @@ function networkError(error) {
     return error;
 }
 
-function outputLimitError() {
+function outputLimitError(thinkingTokens = 0) {
+    if (tokenLimit(thinkingTokens)) {
+        return new Error(
+            `Response reached this action’s output limit, and the model used ${thinkingTokens} tokens of it ` +
+            'for thinking. Raise the limit or set it to Auto.');
+    }
     return new Error(
         'Response reached the output limit. Try a custom action with a higher output limit, or select less text.');
 }
@@ -360,7 +365,7 @@ export class AiClient {
             `https://generativelanguage.googleapis.com/v1beta/models/${encodedModel}:generateContent?key=${encodeURIComponent(key)}`,
             {}, body, this._cancellable, this._settings);
         if (result.data?.candidates?.[0]?.finishReason === 'MAX_TOKENS')
-            throw outputLimitError();
+            throw outputLimitError(explicitOutputLimit ? result.data?.usageMetadata?.thoughtsTokenCount : 0);
         const output = result.data?.candidates?.[0]?.content?.parts?.map(part => part.text ?? '').join('').trim();
         if (output)
             return cleanOutput(output, inputMode);

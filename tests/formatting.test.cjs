@@ -320,3 +320,28 @@ test('diagnostics report the output limit that is actually sent', async () => {
     assert.match(requestLine(groq.logs), /output-limit=1000$/);
     groq.client.destroy();
 });
+
+test('gemini: an explicit limit spent on thinking says so', async () => {
+    const {client, response} = setup('gemini');
+    response.finishReason = 'MAX_TOKENS';
+    response.usageMetadata = {thoughtsTokenCount: 959, candidatesTokenCount: 37};
+    await assert.rejects(client.transform('a'.repeat(300), 'custom', null, {outputLimit: 1000}),
+        /^Error: Response reached this action’s output limit, and the model used 959 tokens of it for thinking\. Raise the limit or set it to Auto\.$/);
+    client.destroy();
+});
+
+test('gemini: every other output limit failure keeps the existing message', async () => {
+    const existing = /Response reached the output limit\. Try a custom action with a higher output limit, or select less text\.$/;
+    for (const [usageMetadata, options] of [
+        [undefined, {outputLimit: 1000}],
+        [{candidatesTokenCount: 1000}, {outputLimit: 1000}],
+        [{thoughtsTokenCount: 0, candidatesTokenCount: 1000}, {outputLimit: 1000}],
+        [{thoughtsTokenCount: 4585, candidatesTokenCount: 60951}, {}],
+    ]) {
+        const {client, response} = setup('gemini');
+        response.finishReason = 'MAX_TOKENS';
+        response.usageMetadata = usageMetadata;
+        await assert.rejects(client.transform('a'.repeat(300), 'custom', null, options), existing);
+        client.destroy();
+    }
+});
