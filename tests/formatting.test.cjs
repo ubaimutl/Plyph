@@ -13,7 +13,8 @@ const providers = ['ollama', 'cloudflare', 'bai', 'groq', 'gemini', 'openrouter'
 
 function setup(provider = 'groq') {
     const requests = [];
-    const preferences = {plainText: true};
+    const logs = [];
+    const preferences = {plainText: true, debugLogging: false};
     const strings = {
         'custom-providers': '[]',
         provider, [`${provider}-model`]: 'test-model',
@@ -30,13 +31,14 @@ function setup(provider = 'groq') {
         get_int: () => 0,
         get_boolean(key) {
             if (key === 'prefer-plain-text') return preferences.plainText;
-            if (key === 'debug-logging') return false;
+            if (key === 'debug-logging') return preferences.debugLogging;
             if (key.endsWith('-use-personal-preferences')) return strings[key] ?? true;
             throw new Error(`Unexpected setting: ${key}`);
         },
     };
     const context = vm.createContext({
-        console, TextDecoder,
+        console: {...console, debug: message => logs.push(message)},
+        TextDecoder,
         ChatGPTClient: class {
             async transform(text, instructions, model) {
                 requests.push({model, messages: [{role: 'system', content: instructions}, {role: 'user', content: text}]});
@@ -63,7 +65,8 @@ function setup(provider = 'groq') {
                     const data = {
                         choices: [{message: {content: text}, finish_reason: 'stop'}],
                         message: {content: text},
-                        candidates: [{content: {parts: [{text}]}, finishReason: 'STOP'}],
+                        candidates: [{content: {parts: [{text}]}, finishReason: response.finishReason ?? 'STOP'}],
+                        usageMetadata: response.usageMetadata,
                     };
                     return {get_data: () => new TextEncoder().encode(JSON.stringify(data))};
                 }
@@ -73,7 +76,7 @@ function setup(provider = 'groq') {
     });
     loadProviders(context, resolve(__dirname, '..'));
     vm.runInContext(source, context);
-    return {client: new context.AiClient(settings), preferences, strings, response, requests};
+    return {client: new context.AiClient(settings), preferences, strings, response, requests, logs};
 }
 
 function guidance(body) {
@@ -229,4 +232,91 @@ test('legacy custom actions keep working and personalization opt-outs survive sa
     assert.deepEqual(Array.from(actions, item => item.usePersonalPreferences), [true, false, true]);
     context.writeActions(settings, actions);
     assert.deepEqual(Array.from(context.readActions(settings), item => item.usePersonalPreferences), [true, false, true]);
+});
+
+const geminiAutoCases = [
+    ['correct', {}],
+    ['rewrite', {}],
+    ['custom', {inputMode: 'transform'}],
+    ['custom', {inputMode: 'prompt'}],
+    ['custom', {inputMode: 'transform', outputLimit: 'auto'}],
+    ['custom', {inputMode: 'transform', outputLimit: -1}],
+    ['prompt', {outputLimit: 0}],
+    ['ask', {inputMode: 'prompt'}],
+];
+
+for (const [mode, options] of geminiAutoCases) {
+    test(`gemini ${mode} ${JSON.stringify(options)}: Auto leaves the output limit to the model`, async () => {
+        const {client, requests} = setup('gemini');
+        for (const selection of ['a'.repeat(300), 'a'.repeat(1758), 'ა'.repeat(4000)]) {
+            await client.transform(selection, mode, null, options);
+            assert.equal(requests.at(-1).generationConfig, undefined);
+        }
+        client.destroy();
+    });
+}
+
+test('gemini: an explicit output limit is sent unchanged, including 2000 in prompt mode', async () => {
+    const {client, requests} = setup('gemini');
+    for (const [mode, options, expected] of [
+        ['custom', {inputMode: 'transform', outputLimit: 4000}, 4000],
+        ['custom', {inputMode: 'prompt', outputLimit: 2000}, 2000],
+        ['prompt', {outputLimit: 4000}, 4000],
+        ['prompt', {outputLimit: 2000}, 2000],
+    ]) {
+        await client.transform('a'.repeat(300), mode, null, options);
+        assert.equal(requests.at(-1).generationConfig.maxOutputTokens, expected);
+        assert.equal(Object.keys(requests.at(-1).generationConfig).length, 1);
+    }
+    client.destroy();
+});
+
+test('other providers keep their automatic output limit', async () => {
+    for (const provider of ['groq', 'cloudflare']) {
+        const {client, requests} = setup(provider);
+        await client.transform('a'.repeat(300), 'rewrite');
+        assert.equal(requests.at(-1).max_tokens, 1000);
+        await client.transform('a'.repeat(8000), 'rewrite');
+        assert.equal(requests.at(-1).max_tokens, 2000);
+        await client.transform('a'.repeat(300), 'ask', null, {inputMode: 'prompt'});
+        assert.equal(requests.at(-1).max_tokens, 2000);
+        client.destroy();
+    }
+    const {client, requests} = setup('ollama');
+    await client.transform('a'.repeat(300), 'rewrite');
+    assert.equal(requests.at(-1).options, undefined);
+    await client.transform('a'.repeat(300), 'ask', null, {inputMode: 'prompt'});
+    assert.equal(requests.at(-1).options.num_predict, 2000);
+    client.destroy();
+});
+
+test('the automatic limit follows the provider an action resolves to', async () => {
+    const groqActive = setup('groq');
+    await groqActive.client.transform('a'.repeat(300), 'custom', null,
+        {provider: 'gemini', model: 'override-model'});
+    assert.equal(groqActive.requests.at(-1).generationConfig, undefined);
+    groqActive.client.destroy();
+    const geminiActive = setup('gemini');
+    await geminiActive.client.transform('a'.repeat(300), 'custom', null,
+        {provider: 'groq', model: 'override-model'});
+    assert.equal(geminiActive.requests.at(-1).max_tokens, 1000);
+    geminiActive.client.destroy();
+});
+
+test('diagnostics report the output limit that is actually sent', async () => {
+    const requestLine = logs => logs.filter(line => line.includes('AI request:')).at(-1);
+    const gemini = setup('gemini');
+    gemini.preferences.debugLogging = true;
+    await gemini.client.transform('a'.repeat(300), 'rewrite');
+    assert.match(requestLine(gemini.logs), /output-limit=model default$/);
+    await gemini.client.transform('a'.repeat(300), 'ask', null, {inputMode: 'prompt'});
+    assert.match(requestLine(gemini.logs), /output-limit=model default$/);
+    await gemini.client.transform('a'.repeat(300), 'custom', null, {outputLimit: 4000});
+    assert.match(requestLine(gemini.logs), /output-limit=4000$/);
+    gemini.client.destroy();
+    const groq = setup('groq');
+    groq.preferences.debugLogging = true;
+    await groq.client.transform('a'.repeat(300), 'rewrite');
+    assert.match(requestLine(groq.logs), /output-limit=1000$/);
+    groq.client.destroy();
 });

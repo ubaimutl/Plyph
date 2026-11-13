@@ -206,9 +206,8 @@ export class AiClient {
                 `Selected text is about ${estimatedTokens} tokens, above this action's ` +
                 `${inputLimit}-token input limit. Select less text or raise the limit.`);
         }
-        let outputLimit = hasActionLimits ? tokenLimit(options.outputLimit) : 0;
-        if (inputMode === 'prompt' && !outputLimit)
-            outputLimit = 2000;
+        const explicitOutputLimit = hasActionLimits ? tokenLimit(options.outputLimit) : 0;
+        const outputLimit = explicitOutputLimit || (inputMode === 'prompt' ? 2000 : 0);
         this._cancellable = new Gio.Cancellable();
         const selectedProvider = options.provider || this._settings.get_string('provider');
         const info = resolveProvider(this._settings, selectedProvider);
@@ -232,9 +231,12 @@ export class AiClient {
         }
         if (this._settings.get_boolean('prefer-plain-text'))
             prompt = [prompt, PLAIN_TEXT_GUIDANCE].filter(part => part.trim()).join('\n\n');
+        const loggedOutputLimit = provider === 'chatgpt'
+            ? 'managed by ChatGPT'
+            : provider === 'gemini' && !explicitOutputLimit ? 'model default' : maxTokens(text, outputLimit);
         debugLog(this._settings,
             `AI request: provider=${provider}, model=${model}, action=${mode}, ` +
-            `input-tokens≈${estimatedTokens}, output-limit=${provider === 'chatgpt' ? 'managed by ChatGPT' : maxTokens(text, outputLimit)}`);
+            `input-tokens≈${estimatedTokens}, output-limit=${loggedOutputLimit}`);
         try {
             if (info.url !== undefined)
                 return await this._compatible(info, text, prompt, model, inputMode, outputLimit);
@@ -251,7 +253,7 @@ export class AiClient {
             if (provider === 'cloudflare')
                 return await this._cloudflare(text, prompt, model, inputMode, outputLimit);
             if (provider === 'gemini')
-                return await this._gemini(text, prompt, model, inputMode, outputLimit);
+                return await this._gemini(text, prompt, model, inputMode, explicitOutputLimit);
             throw new Error('Unsupported provider connection.');
         } catch (error) {
             const normalizedError = networkError(error);
@@ -341,7 +343,7 @@ export class AiClient {
         return outputOrError(result, info.id, model, inputMode, info.name);
     }
 
-    async _gemini(text, prompt, model, inputMode, outputLimit) {
+    async _gemini(text, prompt, model, inputMode, explicitOutputLimit) {
         const key = await this._required('gemini');
         const encodedModel = encodeURIComponent(model);
         const body = {
@@ -349,8 +351,9 @@ export class AiClient {
                 role: 'user',
                 parts: [{text: inputMode === 'prompt' ? text : payload(text)}],
             }],
-            generationConfig: {maxOutputTokens: maxTokens(text, outputLimit)},
         };
+        if (explicitOutputLimit)
+            body.generationConfig = {maxOutputTokens: explicitOutputLimit};
         if (prompt.trim())
             body.systemInstruction = {parts: [{text: prompt}]};
         const result = await requestJson(this._session,
