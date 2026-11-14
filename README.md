@@ -79,7 +79,7 @@ Create actions for your own workflows, with custom instructions and optional pro
 
 Use `${language}`, `${tone}`, `${style}`, and `${selection}` variables. Actions can transform selected text or use it directly as a prompt.
 
-**Input limits** prevent oversized requests and help control API costs without truncating text. **Output limits** control response length; incomplete responses are rejected rather than returned.
+**Input limits** prevent oversized requests and help control API costs without truncating text. **Output limits** control response length; incomplete responses are rejected rather than returned. With Gemini, **Auto** leaves the limit to the model, and an explicit limit also covers the tokens the model spends thinking.
 
 Optional **personal context** can be added under **Instructions → Personal context** and disabled for individual actions.
 

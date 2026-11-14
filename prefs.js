@@ -238,7 +238,7 @@ export default class PlyphPreferences extends ExtensionPreferences {
         bindTokenLimit(settings, 'prompt-run-input-limit', runInputLimit, INPUT_LIMIT_VALUES);
         const runOutputLimit = tokenLimitControl(
             'Output limit',
-            'Auto starts at 1000 tokens and allows up to 2000.',
+            'Auto allows up to 2000 tokens; Gemini and ChatGPT use the model’s own maximum.',
             OUTPUT_LIMIT_VALUES,
             OUTPUT_LIMIT_LABELS,
             settings.get_int64('prompt-run-output-limit'));
