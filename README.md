@@ -19,7 +19,7 @@ Supports **GNOME Shell 46–51**.
 
 ## Installation
 
-Install Plyph from [GNOME Shell Extensions](https://extensions.gnome.org/extension/10540/ai-autocorrect/).
+Install Plyph from [GNOME Shell Extensions](https://extensions.gnome.org/extension/11799/plyph/).
 
 Then open its settings to choose a provider and model, set up credentials if needed, and configure your actions or shortcuts.
 
