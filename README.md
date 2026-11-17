@@ -136,6 +136,8 @@ Run the automated tests from the repository root:
 node --test tests/*.test.cjs
 ```
 
+The same command runs in GitHub Actions on every push to `main` and on every pull request, on Ubuntu 24.04 (GNOME 46) with Node 26. On Debian or Ubuntu the tests need the `gnome-shell`, `gjs`, `libglib2.0-bin`, `unzip`, `gir1.2-soup-3.0` and `gir1.2-secret-1` packages.
+
 For the optional native interaction test in a headless GNOME Shell session:
 
 ```bash
