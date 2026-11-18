@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Plyph 1\n"
 "Report-Msgid-Bugs-To: https://github.com/ubaimutl/Plyph/issues\n"
-"POT-Creation-Date: 2026-11-17 01:56+0100\n"
+"POT-Creation-Date: 2026-11-18 20:51+0100\n"
 "PO-Revision-Date: 2026-11-12 02:29+0100\n"
 "Last-Translator: Plyph contributors\n"
 "Language-Team: German\n"
@@ -17,7 +17,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: prefs.js:16 prefs.js:18 prefs.js:29 prefs.js:818
+#: prefs.js:16 prefs.js:18 prefs.js:29 prefs.js:856
 msgid "Auto"
 msgstr "Automatisch"
 
@@ -89,7 +89,7 @@ msgstr "Aktionen"
 msgid "Instructions"
 msgstr "Anweisungen"
 
-#: prefs.js:196 prefs.js:588
+#: prefs.js:196 prefs.js:626
 msgid "Advanced"
 msgstr "Erweitert"
 
@@ -113,8 +113,8 @@ msgstr "Gespeicherte Anbieter"
 msgid "Saved connections could not be checked"
 msgstr "Gespeicherte Verbindungen konnten nicht geprüft werden"
 
-#: prefs.js:220 prefs.js:454 prefs.js:1221 providers.js:240 extension.js:84
-#: extension.js:689
+#: prefs.js:220 prefs.js:492 prefs.js:1259 providers.js:240 extension.js:88
+#: extension.js:711
 msgid "Run selected prompt"
 msgstr "Ausgewählten Prompt ausführen"
 
@@ -122,15 +122,15 @@ msgstr "Ausgewählten Prompt ausführen"
 msgid "Selected text is sent directly as the user instruction."
 msgstr "Der ausgewählte Text wird direkt als Benutzeranweisung gesendet."
 
-#: prefs.js:223 prefs.js:1423
+#: prefs.js:223 prefs.js:1461
 msgid "Provider override"
 msgstr "Abweichender Anbieter"
 
-#: prefs.js:225 prefs.js:1429
+#: prefs.js:225 prefs.js:1467
 msgid "Model override (optional)"
 msgstr "Abweichendes Modell (optional)"
 
-#: prefs.js:234 prefs.js:1437
+#: prefs.js:234 prefs.js:1475
 msgid "Input limit"
 msgstr "Eingabelimit"
 
@@ -140,7 +140,7 @@ msgstr ""
 "Bricht vor dem Senden ab, wenn der ausgewählte Prompt diesen Schätzwert "
 "überschreitet."
 
-#: prefs.js:241 prefs.js:1443
+#: prefs.js:241 prefs.js:1481
 msgid "Output limit"
 msgstr "Ausgabelimit"
 
@@ -189,16 +189,16 @@ msgid "Click an action, then press the shortcut you want."
 msgstr ""
 "Klicken Sie auf eine Aktion und drücken Sie dann das gewünschte Tastenkürzel."
 
-#: prefs.js:295 prefs.js:454 prefs.js:1218 shell/dialogs.js:897
-#: shell/dialogs.js:930 shell/floatingToolbar.js:167
+#: prefs.js:295 prefs.js:492 prefs.js:1256 shell/dialogs.js:1116
+#: shell/dialogs.js:1161 shell/floatingToolbar.js:188
 msgid "Ask"
 msgstr "Fragen"
 
-#: prefs.js:296 prefs.js:453 shell/floatingToolbar.js:168
+#: prefs.js:296 prefs.js:491 shell/floatingToolbar.js:189
 msgid "Correct"
 msgstr "Korrigieren"
 
-#: prefs.js:297 prefs.js:453 shell/floatingToolbar.js:169
+#: prefs.js:297 prefs.js:491 shell/floatingToolbar.js:190
 msgid "Rewrite"
 msgstr "Umformulieren"
 
@@ -278,39 +278,107 @@ msgstr "Auswahlleiste anzeigen"
 msgid "An alternative to keyboard shortcuts."
 msgstr "Eine Alternative zu Tastenkürzeln."
 
-#: prefs.js:339
+#: prefs.js:347
+msgid "Toolbar layout"
+msgstr "Symbolleistenlayout"
+
+#: prefs.js:348
+msgid "Horizontal with labels"
+msgstr "Horizontal mit Beschriftung"
+
+#: prefs.js:348
+msgid "Horizontal icons"
+msgstr "Horizontale Symbole"
+
+#: prefs.js:348
+msgid "Vertical icons"
+msgstr "Vertikale Symbole"
+
+#: prefs.js:349
+msgid "Toolbar visibility"
+msgstr "Sichtbarkeit der Symbolleiste"
+
+#: prefs.js:350
+msgid "Stay visible longer"
+msgstr "Länger sichtbar bleiben"
+
+#: prefs.js:350
+msgid "Previous timing"
+msgstr "Bisherige Anzeigedauer"
+
+#: prefs.js:351
+msgid "Show toolbar actions immediately"
+msgstr "Aktionen der Symbolleiste sofort anzeigen"
+
+#: prefs.js:354
+msgid "Toolbar corner radius"
+msgstr "Eckenradius der Symbolleiste"
+
+#: prefs.js:361
+msgid "Toolbar and compact popup appearance"
+msgstr "Darstellung von Symbolleiste und kompaktem Fenster"
+
+#: prefs.js:362 prefs.js:1493
+msgid "Default"
+msgstr "Standard"
+
+#: prefs.js:362
+msgid "Light"
+msgstr "Hell"
+
+#: prefs.js:362
+msgid "Dark"
+msgstr "Dunkel"
+
+#: prefs.js:365
 msgid "Toolbar size"
 msgstr "Leistengröße"
 
-#: prefs.js:340
+#: prefs.js:366
 msgid "Enlarge the button, icons, and text together."
 msgstr "Schaltfläche, Symbole und Text gemeinsam vergrößern."
 
-#: prefs.js:341
+#: prefs.js:367
 msgid "1× (Default)"
 msgstr "1× (Standard)"
 
-#: prefs.js:352
+#: prefs.js:378
 msgid "Preview before replacing"
 msgstr "Vorschau vor dem Ersetzen"
 
-#: prefs.js:353
+#: prefs.js:379
 msgid "Confirm, copy, or cancel the generated result."
 msgstr "Erzeugtes Ergebnis bestätigen, kopieren oder verwerfen."
 
-#: prefs.js:358
+#: prefs.js:383
+msgid "Preview style"
+msgstr "Vorschaustil"
+
+#: prefs.js:384
+msgid "Dialog"
+msgstr "Dialog"
+
+#: prefs.js:384
+msgid "Compact popup"
+msgstr "Kompaktes Fenster"
+
+#: prefs.js:386
+msgid "Close compact popup when clicking outside"
+msgstr "Kompaktes Fenster bei Klick außerhalb schließen"
+
+#: prefs.js:396
 msgid "Show changes by default"
 msgstr "Änderungen standardmäßig anzeigen"
 
-#: prefs.js:359
+#: prefs.js:397
 msgid "Open transformed-text previews in the changes view."
 msgstr "Vorschau umgewandelter Texte in der Änderungsansicht öffnen."
 
-#: prefs.js:366
+#: prefs.js:404
 msgid "Prefer plain text responses"
 msgstr "Klartext-Antworten bevorzugen"
 
-#: prefs.js:367
+#: prefs.js:405
 msgid ""
 "Use Markdown only when requested or already present in the text being "
 "transformed."
@@ -318,104 +386,107 @@ msgstr ""
 "Markdown nur verwenden, wenn es angefordert wurde oder bereits im zu "
 "bearbeitenden Text vorhanden ist."
 
-#: prefs.js:372
+#: prefs.js:410
 msgid "Use clipboard when no text is selected"
 msgstr "Zwischenablage verwenden, wenn kein Text ausgewählt ist"
 
-#: prefs.js:373
+#: prefs.js:411
 msgid "Allow actions to use previously copied text."
 msgstr "Aktionen erlauben, zuvor kopierten Text zu verwenden."
 
-#: prefs.js:378
+#: prefs.js:416
 msgid "Preserve clipboard"
 msgstr "Zwischenablage erhalten"
 
-#: prefs.js:379
-msgid "Restore the clipboard after actions. Copied images are cached in memory."
-msgstr "Die Zwischenablage nach Aktionen wiederherstellen. Kopierte Bilder werden im Arbeitsspeicher zwischengespeichert."
+#: prefs.js:417
+msgid ""
+"Restore the clipboard after actions. Copied images are cached in memory."
+msgstr ""
+"Die Zwischenablage nach Aktionen wiederherstellen. Kopierte Bilder werden im "
+"Arbeitsspeicher zwischengespeichert."
 
-#: prefs.js:384
+#: prefs.js:422
 msgid "Require clipboard preservation"
 msgstr "Erhalt der Zwischenablage voraussetzen"
 
-#: prefs.js:385
+#: prefs.js:423
 msgid ""
 "Stop compatibility copying if the previous clipboard cannot be preserved."
 msgstr ""
 "Kompatibilitätskopieren stoppen, wenn der bisherige Inhalt der "
 "Zwischenablage nicht erhalten werden kann."
 
-#: prefs.js:391
+#: prefs.js:429
 msgid "Show action feedback"
 msgstr "Aktionsrückmeldung anzeigen"
 
-#: prefs.js:392
+#: prefs.js:430
 msgid "Display a lightweight on-screen status while actions run."
 msgstr ""
 "Einen dezenten Status auf dem Bildschirm anzeigen, während Aktionen laufen."
 
-#: prefs.js:397
+#: prefs.js:435
 msgid "Log request diagnostics"
 msgstr "Anfragediagnose protokollieren"
 
-#: prefs.js:398
+#: prefs.js:436
 msgid "Write request details and response status to the GNOME system log."
 msgstr ""
 "Anfragedetails und Antwortstatus in das GNOME-Systemprotokoll schreiben."
 
-#: prefs.js:401
+#: prefs.js:439
 msgid "Diagnostics"
 msgstr "Diagnose"
 
-#: prefs.js:409
+#: prefs.js:447
 msgid "Feedback location"
 msgstr "Position der Rückmeldung"
 
-#: prefs.js:410
+#: prefs.js:448
 msgid "Choose where the action status appears on the active monitor."
 msgstr "Wählen Sie, wo der Aktionsstatus auf dem aktiven Bildschirm erscheint."
 
-#: prefs.js:412
+#: prefs.js:450
 msgid "Top left"
 msgstr "Oben links"
 
-#: prefs.js:412
+#: prefs.js:450
 msgid "Top center"
 msgstr "Oben mittig"
 
-#: prefs.js:412
+#: prefs.js:450
 msgid "Top right"
 msgstr "Oben rechts"
 
-#: prefs.js:413
+#: prefs.js:451
 msgid "Center left"
 msgstr "Mitte links"
 
-#: prefs.js:413
+#: prefs.js:451
 msgid "Center"
 msgstr "Zentriert"
 
-#: prefs.js:413
+#: prefs.js:451
 msgid "Center right"
 msgstr "Mitte rechts"
 
-#: prefs.js:414
+#: prefs.js:452
 msgid "Bottom left"
 msgstr "Unten links"
 
-#: prefs.js:414
+#: prefs.js:452
 msgid "Bottom center"
 msgstr "Unten mittig"
 
-#: prefs.js:414
+#: prefs.js:452
 msgid "Bottom right"
 msgstr "Unten rechts"
 
-#: prefs.js:434
+#: prefs.js:472
 msgid "Toolbar exclusions"
 msgstr "Ausschlüsse für die Auswahlleiste"
 
-#: prefs.js:435
+#: prefs.js:473
 msgid ""
 "Comma-separated list of application IDs or WM_CLASS names where the floating "
 "button will be hidden."
@@ -423,165 +494,165 @@ msgstr ""
 "Kommagetrennte Liste von Anwendungs-IDs oder WM_CLASS-Namen, in denen die "
 "schwebende Schaltfläche ausgeblendet wird."
 
-#: prefs.js:437
+#: prefs.js:475
 msgid "Excluded apps"
 msgstr "Ausgeschlossene Apps"
 
-#: prefs.js:441 prefs.js:445
+#: prefs.js:479 prefs.js:483
 msgid "Personal context"
 msgstr "Persönlicher Kontext"
 
-#: prefs.js:442
+#: prefs.js:480
 msgid "Context to include with your actions."
 msgstr "Kontext, der Ihren Aktionen beigefügt wird."
 
-#: prefs.js:443
+#: prefs.js:481
 msgid "About you"
 msgstr "Über Sie"
 
-#: prefs.js:444 prefs.js:447
+#: prefs.js:482 prefs.js:485
 msgid "Optional"
 msgstr "Optional"
 
-#: prefs.js:452
+#: prefs.js:490
 msgid "Built-in instructions"
 msgstr "Integrierte Anweisungen"
 
-#: prefs.js:458
+#: prefs.js:496
 #, javascript-format
 msgid "%s instructions"
 msgstr "Anweisungen für »%s«"
 
-#: prefs.js:463 prefs.js:1452
+#: prefs.js:501 prefs.js:1490
 msgid "Use personal context"
 msgstr "Persönlichen Kontext verwenden"
 
-#: prefs.js:471
+#: prefs.js:509
 msgid "Prompt variables"
 msgstr "Prompt-Variablen"
 
-#: prefs.js:472
+#: prefs.js:510
 msgid "Available as ${language}, ${tone}, ${style}, and ${selection}."
 msgstr "Verfügbar als ${language}, ${tone}, ${style} und ${selection}."
 
-#: prefs.js:474
+#: prefs.js:512
 msgid "Language"
 msgstr "Sprache"
 
-#: prefs.js:475
+#: prefs.js:513
 msgid "Tone"
 msgstr "Tonfall"
 
-#: prefs.js:476
+#: prefs.js:514
 msgid "Style"
 msgstr "Stil"
 
-#: prefs.js:515 prefs.js:1421
+#: prefs.js:553 prefs.js:1459
 msgid "Use active provider"
 msgstr "Aktiven Anbieter verwenden"
 
-#: prefs.js:519 prefs.js:1420
+#: prefs.js:557 prefs.js:1458
 msgid "Unavailable provider"
 msgstr "Nicht verfügbarer Anbieter"
 
-#: prefs.js:549 prefs.js:559
+#: prefs.js:587 prefs.js:597
 msgid "Add provider"
 msgstr "Anbieter hinzufügen"
 
-#: prefs.js:559
+#: prefs.js:597
 msgid "Edit provider"
 msgstr "Anbieter bearbeiten"
 
-#: prefs.js:570 prefs.js:1360
+#: prefs.js:608 prefs.js:1398
 msgid "Name"
 msgstr "Name"
 
-#: prefs.js:571
+#: prefs.js:609
 msgid "Base URL"
 msgstr "Basis-URL"
 
-#: prefs.js:572
+#: prefs.js:610
 msgid "API key (optional)"
 msgstr "API-Schlüssel (optional)"
 
-#: prefs.js:573
+#: prefs.js:611
 msgid "Default model (optional)"
 msgstr "Standardmodell (optional)"
 
-#: prefs.js:575
+#: prefs.js:613
 msgid "Start with"
 msgstr "Beginnen mit"
 
-#: prefs.js:576
+#: prefs.js:614
 msgid "Custom connection"
 msgstr "Benutzerdefinierte Verbindung"
 
-#: prefs.js:589
+#: prefs.js:627
 msgid "Optional request controls"
 msgstr "Optionale Anfrageoptionen"
 
-#: prefs.js:590
+#: prefs.js:628
 msgid "Temperature (optional)"
 msgstr "Temperatur (optional)"
 
-#: prefs.js:592
+#: prefs.js:630
 msgid "Leave blank for the provider default, or enter a value from 0 to 2."
 msgstr ""
 "Leer lassen für den Standardwert des Anbieters, oder einen Wert zwischen 0 "
 "und 2 eingeben."
 
-#: prefs.js:593
+#: prefs.js:631
 msgid "Reasoning effort"
 msgstr "Denkaufwand"
 
-#: prefs.js:594
+#: prefs.js:632
 msgid "Supported values depend on the provider and model."
 msgstr "Unterstützte Werte hängen vom Anbieter und Modell ab."
 
-#: prefs.js:595
+#: prefs.js:633
 msgid "Provider default"
 msgstr "Anbieter-Standard"
 
-#: prefs.js:595
+#: prefs.js:633
 msgid "None"
 msgstr "Keiner"
 
-#: prefs.js:595
+#: prefs.js:633
 msgid "Minimal"
 msgstr "Minimal"
 
-#: prefs.js:595 prefs.js:818
+#: prefs.js:633 prefs.js:856
 msgid "Low"
 msgstr "Niedrig"
 
-#: prefs.js:595 prefs.js:818
+#: prefs.js:633 prefs.js:856
 msgid "Medium"
 msgstr "Mittel"
 
-#: prefs.js:595 prefs.js:818
+#: prefs.js:633 prefs.js:856
 msgid "High"
 msgstr "Hoch"
 
-#: prefs.js:595
+#: prefs.js:633
 msgid "Extra high"
 msgstr "Sehr hoch"
 
-#: prefs.js:599
+#: prefs.js:637
 msgid "Custom headers (JSON)"
 msgstr "Benutzerdefinierte Header (JSON)"
 
-#: prefs.js:600
+#: prefs.js:638
 msgid ""
 "Optional HTTP headers. Values are stored securely in Passwords and Keys."
 msgstr ""
 "Optionale HTTP-Header. Die Werte werden sicher in »Passwörter und Schlüssel« "
 "gespeichert."
 
-#: prefs.js:602
+#: prefs.js:640
 msgid "Extra request parameters (JSON)"
 msgstr "Zusätzliche Anfrageparameter (JSON)"
 
-#: prefs.js:603
+#: prefs.js:641
 msgid ""
 "Use non-secret parameters. For example: {\"top_p\": 0.9}. Conversation, "
 "model, and action limits remain controlled by Plyph."
@@ -590,187 +661,187 @@ msgstr ""
 "Konversations-, Modell- und Aktionslimits bleiben unter der Kontrolle von "
 "Plyph."
 
-#: prefs.js:613 prefs.js:1476
+#: prefs.js:651 prefs.js:1496 prefs.js:1561
 msgid "Save"
 msgstr "Speichern"
 
-#: prefs.js:649 providers.js:73
+#: prefs.js:687 providers.js:73
 msgid "Custom headers"
 msgstr "Benutzerdefinierte Header"
 
-#: prefs.js:650 providers.js:58
+#: prefs.js:688 providers.js:58
 msgid "Extra request parameters"
 msgstr "Zusätzliche Anfrageparameter"
 
-#: prefs.js:670 prefs.js:786 prefs.js:1093
+#: prefs.js:708 prefs.js:824 prefs.js:1131
 msgid "Model"
 msgstr "Modell"
 
-#: prefs.js:687
+#: prefs.js:725
 msgid "Delete provider"
 msgstr "Anbieter löschen"
 
-#: prefs.js:691
+#: prefs.js:729
 msgid "Remove this connection"
 msgstr "Diese Verbindung entfernen"
 
-#: prefs.js:700
+#: prefs.js:738
 msgid "Finish provider migration before deleting a provider."
 msgstr ""
 "Schließen Sie die Anbietermigration ab, bevor Sie einen Anbieter löschen."
 
-#: prefs.js:703 providers.js:251
+#: prefs.js:741 providers.js:251
 #, javascript-format
 msgid "Choose another provider first for: %s."
 msgstr "Wählen Sie zuerst einen anderen Anbieter für: %s."
 
-#: prefs.js:707
+#: prefs.js:745
 msgid "Delete provider?"
 msgstr "Anbieter löschen?"
 
-#: prefs.js:708
+#: prefs.js:746
 #, javascript-format
 msgid "Remove “%s” and its saved API key?"
 msgstr "»%s« und den gespeicherten API-Schlüssel entfernen?"
 
-#: prefs.js:710 prefs.js:855 prefs.js:1475 shell/dialogs.js:309
-#: shell/dialogs.js:925
+#: prefs.js:748 prefs.js:893 prefs.js:1560 shell/dialogs.js:476
+#: shell/dialogs.js:1156
 msgid "Cancel"
 msgstr "Abbrechen"
 
-#: prefs.js:711 prefs.js:1480
+#: prefs.js:749 prefs.js:1565
 msgid "Delete"
 msgstr "Löschen"
 
-#: prefs.js:751
+#: prefs.js:789
 msgid "Provider unavailable"
 msgstr "Anbieter nicht verfügbar"
 
-#: prefs.js:759
+#: prefs.js:797
 msgid ""
 "Use your ChatGPT plan. Credentials are stored securely in Passwords and Keys."
 msgstr ""
 "Nutzen Sie Ihren ChatGPT-Tarif. Zugangsdaten werden sicher in »Passwörter "
 "und Schlüssel« gespeichert."
 
-#: prefs.js:761
+#: prefs.js:799
 msgid "Runs on your configured local server."
 msgstr "Läuft auf Ihrem eingerichteten lokalen Server."
 
-#: prefs.js:763
+#: prefs.js:801
 msgid "Connects to LM Studio or another OpenAI-compatible server."
 msgstr ""
 "Verbindet sich mit LM Studio oder einem anderen OpenAI-kompatiblen Server."
 
-#: prefs.js:765
+#: prefs.js:803
 msgid "API tokens are stored securely in Passwords and Keys."
 msgstr "API-Tokens werden sicher in »Passwörter und Schlüssel« gespeichert."
 
-#: prefs.js:766
+#: prefs.js:804
 msgid "API keys are stored securely in Passwords and Keys."
 msgstr "API-Schlüssel werden sicher in »Passwörter und Schlüssel« gespeichert."
 
-#: prefs.js:770
+#: prefs.js:808
 msgid "Address"
 msgstr "Adresse"
 
-#: prefs.js:772
+#: prefs.js:810
 msgid "Connection"
 msgstr "Verbindung"
 
-#: prefs.js:780
+#: prefs.js:818
 msgid "Account ID"
 msgstr "Konto-ID"
 
-#: prefs.js:781 prefs.js:963
+#: prefs.js:819 prefs.js:1001
 msgid "API token"
 msgstr "API-Token"
 
-#: prefs.js:790
+#: prefs.js:828
 msgid "Refresh models"
 msgstr "Modelle aktualisieren"
 
-#: prefs.js:796
+#: prefs.js:834
 msgid "Enter a custom model"
 msgstr "Benutzerdefiniertes Modell eingeben"
 
-#: prefs.js:807
+#: prefs.js:845
 msgid "Model refresh failed"
 msgstr "Modellaktualisierung fehlgeschlagen"
 
-#: prefs.js:815
+#: prefs.js:853
 msgid "Thinking effort"
 msgstr "Denkaufwand"
 
-#: prefs.js:816
+#: prefs.js:854
 msgid "More effort can take longer."
 msgstr "Höherer Aufwand kann länger dauern."
 
-#: prefs.js:817
+#: prefs.js:855
 msgid "Applies to all actions using this provider. Support varies by model."
 msgstr ""
 "Gilt für alle Aktionen mit diesem Anbieter. Die Unterstützung hängt vom "
 "Modell ab."
 
-#: prefs.js:846 prefs.js:882
+#: prefs.js:884 prefs.js:920
 msgid "Account"
 msgstr "Konto"
 
-#: prefs.js:848 prefs.js:874
+#: prefs.js:886 prefs.js:912
 msgid "Connect your account"
 msgstr "Konto verbinden"
 
-#: prefs.js:851
+#: prefs.js:889
 msgid "Account controls"
 msgstr "Kontosteuerung"
 
-#: prefs.js:852
+#: prefs.js:890
 msgid "Continue with ChatGPT"
 msgstr "Mit ChatGPT fortfahren"
 
-#: prefs.js:853
+#: prefs.js:891
 msgid "Add account"
 msgstr "Konto hinzufügen"
 
-#: prefs.js:854
+#: prefs.js:892
 msgid "Sign out"
 msgstr "Abmelden"
 
-#: prefs.js:862
+#: prefs.js:900
 msgid "Manage usage"
 msgstr "Nutzung verwalten"
 
-#: prefs.js:874
+#: prefs.js:912
 msgid "Account options"
 msgstr "Kontooptionen"
 
-#: prefs.js:882
+#: prefs.js:920
 msgid "Connected account"
 msgstr "Verbundenes Konto"
 
-#: prefs.js:883 prefs.js:890
+#: prefs.js:921 prefs.js:928
 msgid "No saved accounts"
 msgstr "Keine gespeicherten Konten"
 
-#: prefs.js:923
+#: prefs.js:961
 msgid "Connecting…"
 msgstr "Verbindung wird hergestellt…"
 
-#: prefs.js:942
+#: prefs.js:980
 msgid "Connected to your ChatGPT plan."
 msgstr "Mit Ihrem ChatGPT-Tarif verbunden."
 
-#: prefs.js:942
+#: prefs.js:980
 msgid "Plan access was not granted. Reconnect and allow plan usage."
 msgstr ""
 "Der Tarifzugriff wurde nicht gewährt. Stellen Sie die Verbindung erneut her "
 "und erlauben Sie die Tarifnutzung."
 
-#: prefs.js:956
+#: prefs.js:994
 msgid "Signed out."
 msgstr "Abgemeldet."
 
-#: prefs.js:956
+#: prefs.js:994
 msgid ""
 "Signed out locally. Remove this connection in Manage usage to confirm remote "
 "revocation."
@@ -778,120 +849,120 @@ msgstr ""
 "Lokal abgemeldet. Entfernen Sie diese Verbindung unter »Nutzung verwalten«, "
 "um den Widerruf beim Anbieter abzuschließen."
 
-#: prefs.js:962 prefs.js:963
+#: prefs.js:1000 prefs.js:1001
 msgid "API key"
 msgstr "API-Schlüssel"
 
-#: prefs.js:970
+#: prefs.js:1008
 msgid "Loading from Passwords and Keys…"
 msgstr "Wird aus »Passwörter und Schlüssel« geladen…"
 
-#: prefs.js:976
+#: prefs.js:1014
 msgid "Unlock"
 msgstr "Entsperren"
 
-#: prefs.js:988 prefs.js:1017
+#: prefs.js:1026 prefs.js:1055
 msgid "Stored securely in Passwords and Keys"
 msgstr "Sicher in »Passwörter und Schlüssel« gespeichert"
 
-#: prefs.js:988
+#: prefs.js:1026
 #, javascript-format
 msgid "No %s saved"
 msgstr "Kein %s gespeichert"
 
-#: prefs.js:1011
+#: prefs.js:1049
 msgid "Saving…"
 msgstr "Wird gespeichert…"
 
-#: prefs.js:1018
+#: prefs.js:1056
 #, javascript-format
 msgid "%s removed"
 msgstr "%s entfernt"
 
-#: prefs.js:1060
+#: prefs.js:1098
 msgid "Choose a model"
 msgstr "Modell auswählen"
 
-#: prefs.js:1067
+#: prefs.js:1105
 #, javascript-format
 msgid "%s — %s"
 msgstr "%s — %s"
 
-#: prefs.js:1076
+#: prefs.js:1114
 msgid "Loading models…"
 msgstr "Modelle werden geladen…"
 
-#: prefs.js:1101
+#: prefs.js:1139
 msgid "Model ID"
 msgstr "Modell-ID"
 
-#: prefs.js:1110
+#: prefs.js:1148
 msgid "Custom model"
 msgstr "Benutzerdefiniertes Modell"
 
-#: prefs.js:1140
+#: prefs.js:1178
 #, javascript-format
 msgid "%s%s"
 msgstr "%s%s"
 
-#: prefs.js:1141
+#: prefs.js:1179
 msgid "Provider unavailable — choose another provider"
 msgstr "Anbieter nicht verfügbar — wählen Sie einen anderen Anbieter"
 
-#: prefs.js:1141
+#: prefs.js:1179
 msgid "Uses active provider and model"
 msgstr "Verwendet den aktiven Anbieter und das aktive Modell"
 
-#: prefs.js:1143
+#: prefs.js:1181
 #, javascript-format
 msgid "Limits: input %s, output %s"
 msgstr "Limits: Eingabe %s, Ausgabe %s"
 
-#: prefs.js:1146
+#: prefs.js:1184
 msgid "Uses selected text as the prompt"
 msgstr "Verwendet den ausgewählten Text als Prompt"
 
-#: prefs.js:1157 prefs.js:1449
+#: prefs.js:1195 prefs.js:1487
 msgid "Show in panel menu"
 msgstr "Im Leistenmenü anzeigen"
 
-#: prefs.js:1170 prefs.js:1260
+#: prefs.js:1208 prefs.js:1298
 msgid "Move up"
 msgstr "Nach oben verschieben"
 
-#: prefs.js:1178 prefs.js:1269
+#: prefs.js:1216 prefs.js:1307
 msgid "Move down"
 msgstr "Nach unten verschieben"
 
-#: prefs.js:1186 prefs.js:1359 prefs.js:1495
+#: prefs.js:1224 prefs.js:1397 prefs.js:1580
 msgid "Edit action"
 msgstr "Aktion bearbeiten"
 
-#: prefs.js:1199
+#: prefs.js:1237
 msgid "Add action"
 msgstr "Aktion hinzufügen"
 
-#: prefs.js:1219 extension.js:76 extension.js:687
+#: prefs.js:1257 extension.js:80 extension.js:709
 msgid "Correct selected text"
 msgstr "Ausgewählten Text korrigieren"
 
-#: prefs.js:1220 extension.js:80 extension.js:688
+#: prefs.js:1258 extension.js:84 extension.js:710
 msgid "Rewrite selected text"
 msgstr "Ausgewählten Text umformulieren"
 
-#: prefs.js:1278
+#: prefs.js:1316
 msgid "Remove from Quick Actions"
 msgstr "Aus Schnellaktionen entfernen"
 
-#: prefs.js:1294
+#: prefs.js:1332
 msgid "Add quick action"
 msgstr "Schnellaktion hinzufügen"
 
-#: prefs.js:1305
+#: prefs.js:1343
 msgid "Limit reached"
 msgstr "Limit erreicht"
 
-#: prefs.js:1306
+#: prefs.js:1344
 msgid ""
 "Up to four actions appear beside the selection button. More remain available "
 "in the palette."
@@ -899,78 +970,182 @@ msgstr ""
 "Bis zu vier Aktionen erscheinen neben der Auswahlschaltfläche. Weitere "
 "bleiben in der Aktionspalette verfügbar."
 
-#: prefs.js:1317
+#: prefs.js:1355
 msgid "Add Quick Action"
 msgstr "Schnellaktion hinzufügen"
 
-#: prefs.js:1326
+#: prefs.js:1364
 msgid "Available Actions"
 msgstr "Verfügbare Aktionen"
 
-#: prefs.js:1338
+#: prefs.js:1376
 msgid "No more actions available."
 msgstr "Keine weiteren Aktionen verfügbar."
 
-#: prefs.js:1359 prefs.js:1495
+#: prefs.js:1397 prefs.js:1580
 msgid "New action"
 msgstr "Neue Aktion"
 
-#: prefs.js:1362
+#: prefs.js:1400
 msgid "Input mode"
 msgstr "Eingabemodus"
 
-#: prefs.js:1363
+#: prefs.js:1401
 msgid "Transform the selection or use it directly as the user instruction."
 msgstr "Auswahl umwandeln oder direkt als Benutzeranweisung verwenden."
 
-#: prefs.js:1365
+#: prefs.js:1403
 msgid "Transform text"
 msgstr "Text umwandeln"
 
-#: prefs.js:1366
+#: prefs.js:1404
 msgid "Run as prompt"
 msgstr "Als Prompt ausführen"
 
-#: prefs.js:1391 prefs.js:1406
+#: prefs.js:1429 prefs.js:1444
 msgid "Prompt"
 msgstr "Prompt"
 
-#: prefs.js:1411
+#: prefs.js:1449
 msgid "System guidance (optional)"
 msgstr "Systemvorgabe (optional)"
 
-#: prefs.js:1412
+#: prefs.js:1450
 msgid "Transformation prompt"
 msgstr "Umwandlungs-Prompt"
 
-#: prefs.js:1438
+#: prefs.js:1476
 msgid "Stops before sending when the selected text is over this estimate."
 msgstr ""
 "Bricht vor dem Senden ab, wenn der ausgewählte Text diesen Schätzwert "
 "überschreitet."
 
-#: prefs.js:1444
+#: prefs.js:1482
 msgid "Sets the maximum response length for this action."
 msgstr "Legt die maximale Antwortlänge für diese Aktion fest."
 
-#: prefs.js:1460
+#: prefs.js:1493
+msgid "Search"
+msgstr "Suchen"
+
+#: prefs.js:1493
+msgid "Edit"
+msgstr "Bearbeiten"
+
+#: prefs.js:1493
+msgid "Spelling"
+msgstr "Rechtschreibung"
+
+#: prefs.js:1493
+msgid "Question"
+msgstr "Frage"
+
+#: prefs.js:1494
+msgid "Web"
+msgstr "Web"
+
+#: prefs.js:1494
+msgid "Text"
+msgstr "Text"
+
+#: prefs.js:1494
+msgid "Terminal"
+msgstr "Terminal"
+
+#: prefs.js:1494
+msgid "Star"
+msgstr "Stern"
+
+#: prefs.js:1494
+msgid "List"
+msgstr "Liste"
+
+#: prefs.js:1494
+msgid "Mail"
+msgstr "E-Mail"
+
+#: prefs.js:1494
+msgid "Find and replace"
+msgstr "Suchen und ersetzen"
+
+#: prefs.js:1495 shell/dialogs.js:481
+msgid "Copy"
+msgstr "Kopieren"
+
+#: prefs.js:1495
+msgid "New document"
+msgstr "Neues Dokument"
+
+#: prefs.js:1495
+msgid "Bold"
+msgstr "Fett"
+
+#: prefs.js:1495
+msgid "Italic"
+msgstr "Kursiv"
+
+#: prefs.js:1495
+msgid "Underline"
+msgstr "Unterstreichen"
+
+#: prefs.js:1495
+msgid "Align left"
+msgstr "Linksbündig"
+
+#: prefs.js:1496
+msgid "Bulleted list"
+msgstr "Aufzählung"
+
+#: prefs.js:1496
+msgid "Numbered list"
+msgstr "Nummerierte Liste"
+
+#: prefs.js:1496
+msgid "Subtitles"
+msgstr "Untertitel"
+
+#: prefs.js:1496
+msgid "Send document"
+msgstr "Dokument senden"
+
+#: prefs.js:1497
+msgid "Refresh"
+msgstr "Aktualisieren"
+
+#: prefs.js:1497
+msgid "Pin"
+msgstr "Anheften"
+
+#: prefs.js:1497
+msgid "Jump"
+msgstr "Springen"
+
+#: prefs.js:1499
+msgid "Action icon"
+msgstr "Aktionssymbol"
+
+#: prefs.js:1512
+msgid "Choose an action icon"
+msgstr "Aktionssymbol auswählen"
+
+#: prefs.js:1545
 msgid "Advanced options"
 msgstr "Erweiterte Optionen"
 
-#: prefs.js:1461
+#: prefs.js:1546
 msgid "Provider, model, and token limits"
 msgstr "Anbieter, Modell und Token-Limits"
 
-#: prefs.js:1546
+#: prefs.js:1632
 msgid "Not set"
 msgstr "Nicht festgelegt"
 
-#: prefs.js:1552
+#: prefs.js:1638
 #, javascript-format
 msgid "Set %s shortcut"
 msgstr "Tastenkürzel für »%s« festlegen"
 
-#: prefs.js:1553
+#: prefs.js:1639
 msgid "Press a key combination. Backspace clears it; Escape cancels."
 msgstr ""
 "Drücken Sie eine Tastenkombination. Die Rücktaste löscht sie; Esc bricht ab."
@@ -1350,56 +1525,62 @@ msgstr "Anfrage abgebrochen"
 msgid "Add your Cloudflare Account ID first."
 msgstr "Fügen Sie zuerst Ihre Cloudflare-Konto-ID hinzu."
 
-#: extension.js:72 extension.js:686
+#: extension.js:76 extension.js:708
 msgid "Ask..."
 msgstr "Fragen…"
 
-#: extension.js:95
+#: extension.js:99
 msgid "Undo last replacement"
 msgstr "Letzte Ersetzung rückgängig machen"
 
-#: extension.js:101
+#: extension.js:105
 msgid "Settings"
 msgstr "Einstellungen"
 
-#: extension.js:810 extension.js:897
+#: extension.js:834 extension.js:933
 msgid "Working…"
 msgstr "Wird bearbeitet…"
 
-#: extension.js:819
+#: extension.js:845 extension.js:854
 msgid "Select text first."
 msgstr "Wählen Sie zuerst Text aus."
 
-#: extension.js:849
+#: extension.js:884
 msgid "Rewritten"
 msgstr "Umformuliert"
 
-#: extension.js:850 extension.js:908
+#: extension.js:885 extension.js:944
 msgid "Generated"
 msgstr "Erstellt"
 
-#: extension.js:850
+#: extension.js:885
 msgid "Corrected"
 msgstr "Korrigiert"
 
-#: extension.js:951
+#: extension.js:993
 msgid "Replaced"
 msgstr "Ersetzt"
 
-#: extension.js:955
+#: extension.js:997
 msgid "Copied"
 msgstr "Kopiert"
 
-#: extension.js:987 extension.js:1021 extension.js:1216
+#: extension.js:1029
+msgid "Return to the original window before replacing."
+msgstr ""
+"Kehren Sie vor dem Ersetzen zum ursprünglichen Fenster zurück.Kehren Sie zum "
+"ursprünglichen Fenster zurück, bevor Sie rückgängig machen."
+
+#: extension.js:1078 extension.js:1114 extension.js:1318
 msgid "Release the shortcut keys and try again."
 msgstr "Lassen Sie die Tastenkombination los und versuchen Sie es erneut."
 
-#: extension.js:1014
+#: extension.js:1107
 msgid "Return to the original window before undoing."
 msgstr ""
 "Kehren Sie zum ursprünglichen Fenster zurück, bevor Sie rückgängig machen."
 
-#: extension.js:1029
+#: extension.js:1122
 msgid "Replacement undone"
 msgstr "Ersetzung rückgängig gemacht"
 
@@ -1655,170 +1836,170 @@ msgstr "Fehler kopieren"
 msgid "Close"
 msgstr "Schließen"
 
-#: shell/dialogs.js:87
+#: shell/dialogs.js:232
 msgid "Result"
 msgstr "Ergebnis"
 
-#: shell/dialogs.js:99
+#: shell/dialogs.js:249
 msgid "Previous result"
 msgstr "Vorheriges Ergebnis"
 
-#: shell/dialogs.js:102
+#: shell/dialogs.js:252
 msgid "Next result"
 msgstr "Nächstes Ergebnis"
 
-#: shell/dialogs.js:110
+#: shell/dialogs.js:265
 msgid "Wrap"
 msgstr "Umbruch"
 
-#: shell/dialogs.js:114
+#: shell/dialogs.js:269
 msgid "Wrap lines"
 msgstr "Zeilen umbrechen"
 
-#: shell/dialogs.js:124 shell/dialogs.js:621
+#: shell/dialogs.js:287 shell/dialogs.js:827
 msgid "Enlarge preview"
 msgstr "Vorschau vergrößern"
 
-#: shell/dialogs.js:133 shell/dialogs.js:722
+#: shell/dialogs.js:299 shell/dialogs.js:929
 msgid "Show changes"
 msgstr "Änderungen anzeigen"
 
-#: shell/dialogs.js:137 shell/dialogs.js:724
+#: shell/dialogs.js:303 shell/dialogs.js:935
 msgid "Show changes from the original text"
 msgstr "Änderungen gegenüber dem Originaltext anzeigen"
 
-#: shell/dialogs.js:217
+#: shell/dialogs.js:384
 msgid "Resize result and discussion. Use Up and Down to adjust, Home to reset."
 msgstr ""
 "Größe von Ergebnis und Diskussion anpassen. Mit Pfeil nach oben und unten "
 "anpassen, mit Pos1 zurücksetzen."
 
-#: shell/dialogs.js:278 shell/dialogs.js:361
+#: shell/dialogs.js:445 shell/dialogs.js:552
 msgid "Refine this result…"
 msgstr "Dieses Ergebnis verfeinern…"
 
-#: shell/dialogs.js:279 shell/dialogs.js:362
+#: shell/dialogs.js:446 shell/dialogs.js:553
 msgid "Refinement instruction"
 msgstr "Anweisung zur Verfeinerung"
 
-#: shell/dialogs.js:286 shell/dialogs.js:363
+#: shell/dialogs.js:453 shell/dialogs.js:554
 msgid "Submit refinement"
 msgstr "Verfeinerung absenden"
 
-#: shell/dialogs.js:314
-msgid "Copy"
-msgstr "Kopieren"
-
-#: shell/dialogs.js:318
+#: shell/dialogs.js:485
 msgid "Replace"
 msgstr "Ersetzen"
 
-#: shell/dialogs.js:334
+#: shell/dialogs.js:502
 msgid "Refine result"
 msgstr "Ergebnis verfeinern"
 
-#: shell/dialogs.js:338 shell/dialogs.js:388
+#: shell/dialogs.js:506 shell/dialogs.js:580
 msgid "Refine"
 msgstr "Verfeinern"
 
-#: shell/dialogs.js:346 shell/dialogs.js:390
+#: shell/dialogs.js:518 shell/dialogs.js:582
 msgid "Discuss"
 msgstr "Besprechen"
 
-#: shell/dialogs.js:348
+#: shell/dialogs.js:521
 msgid "Discuss result"
 msgstr "Ergebnis besprechen"
 
-#: shell/dialogs.js:361
+#: shell/dialogs.js:552
 msgid "Ask about this result…"
 msgstr "Frage zu diesem Ergebnis stellen…"
 
-#: shell/dialogs.js:362
+#: shell/dialogs.js:553
 msgid "Question about result"
 msgstr "Frage zum Ergebnis"
 
-#: shell/dialogs.js:363
+#: shell/dialogs.js:554
 msgid "Send question"
 msgstr "Frage senden"
 
-#: shell/dialogs.js:373
+#: shell/dialogs.js:565
 #, javascript-format
 msgid "%s/%s"
 msgstr "%s/%s"
 
-#: shell/dialogs.js:387
+#: shell/dialogs.js:579
 msgid "Refining…"
 msgstr "Wird verfeinert…"
 
-#: shell/dialogs.js:388
+#: shell/dialogs.js:580
 msgid "Hide refinement"
 msgstr "Verfeinerung ausblenden"
 
-#: shell/dialogs.js:389 shell/dialogs.js:515
+#: shell/dialogs.js:581 shell/dialogs.js:719
 msgid "Replying…"
 msgstr "Antwortet…"
 
-#: shell/dialogs.js:390
+#: shell/dialogs.js:582
 msgid "Hide discussion"
 msgstr "Diskussion ausblenden"
 
-#: shell/dialogs.js:424
+#: shell/dialogs.js:628
 msgid "No text was returned. Try another instruction."
 msgstr "Es wurde kein Text zurückgegeben. Versuchen Sie eine andere Anweisung."
 
-#: shell/dialogs.js:456
+#: shell/dialogs.js:660
 #, javascript-format
 msgid "%s: %s"
 msgstr "%s: %s"
 
-#: shell/dialogs.js:456
+#: shell/dialogs.js:660
 msgid "You"
 msgstr "Sie"
 
-#: shell/dialogs.js:475 shell/dialogs.js:487
+#: shell/dialogs.js:679 shell/dialogs.js:691
 msgid "Copy response"
 msgstr "Antwort kopieren"
 
-#: shell/dialogs.js:481
+#: shell/dialogs.js:685
 msgid "Response copied"
 msgstr "Antwort kopiert"
 
-#: shell/dialogs.js:520
+#: shell/dialogs.js:724
 #, javascript-format
 msgid "Replying%s"
 msgstr "Antwortet%s"
 
-#: shell/dialogs.js:554
+#: shell/dialogs.js:758
 msgid "No reply was returned. Try again."
 msgstr "Es wurde keine Antwort zurückgegeben. Versuchen Sie es erneut."
 
-#: shell/dialogs.js:621
+#: shell/dialogs.js:827
 msgid "Restore compact preview"
 msgstr "Kompakte Vorschau wiederherstellen"
 
-#: shell/dialogs.js:721
+#: shell/dialogs.js:928
 msgid "No changes"
 msgstr "Keine Änderungen"
 
-#: shell/dialogs.js:722
+#: shell/dialogs.js:929
 msgid "Show result"
 msgstr "Ergebnis anzeigen"
 
-#: shell/dialogs.js:723
+#: shell/dialogs.js:934
 msgid "No changes from the original text"
 msgstr "Keine Änderungen gegenüber dem Originaltext"
 
-#: shell/dialogs.js:724
+#: shell/dialogs.js:935
 msgid "Show editable result"
 msgstr "Bearbeitbares Ergebnis anzeigen"
 
-#: shell/dialogs.js:906
+#: shell/dialogs.js:1125
 msgid "Instruction..."
 msgstr "Anweisung…"
 
-#: shell/dialogs.js:913
+#: shell/dialogs.js:1132
 msgid "Enter an instruction to continue."
 msgstr "Geben Sie zum Fortfahren eine Anweisung ein."
+
+#: shell/dialogs.js:1137
+msgid "Include selected text"
+msgstr "Ausgewählten Text einbeziehen"
 
 #: shell/actionPalette.js:27
 msgid "Plyph"
@@ -1828,31 +2009,42 @@ msgstr "Plyph"
 msgid "Close action palette"
 msgstr "Aktionspalette schließen"
 
-#: shell/floatingToolbar.js:69
+#: shell/floatingToolbar.js:70
 msgid "Open Plyph actions"
 msgstr "Plyph-Aktionen öffnen"
 
-#: shell/floatingToolbar.js:143
+#: shell/floatingToolbar.js:164
 msgid "Close Plyph actions"
 msgstr "Plyph-Aktionen schließen"
 
-#: shell/floatingToolbar.js:170
+#: shell/floatingToolbar.js:191
 msgid "Run Prompt"
 msgstr "Prompt ausführen"
 
-#: shell/selectionCapture.js:26
+#: shell/floatingToolbar.js:231
+msgid "More actions"
+msgstr "Weitere Aktionen"
+
+#: shell/selectionCapture.js:90 shell/selectionCapture.js:170
 msgid "A selection capture is already in progress. Try again."
 msgstr "Eine Auswahl wird bereits erfasst. Versuchen Sie es erneut."
 
-#: shell/selectionCapture.js:43 shell/selectionCapture.js:53
-#: shell/selectionCapture.js:74 shell/selectionCapture.js:79
-#: shell/selectionCapture.js:83 shell/selectionCapture.js:144
+#: shell/selectionCapture.js:115 shell/selectionCapture.js:125
+#: shell/selectionCapture.js:147 shell/selectionCapture.js:153
+#: shell/selectionCapture.js:159 shell/selectionCapture.js:290
 msgid "Could not capture selected text. Select it and try again."
 msgstr ""
 "Der ausgewählte Text konnte nicht erfasst werden. Wählen Sie ihn aus und "
 "versuchen Sie es erneut."
 
-#: shell/selectionCapture.js:100
+#: shell/selectionCapture.js:190 shell/selectionCapture.js:249
+#: shell/selectionCapture.js:264
+msgid "The clipboard could not be read safely. Try again."
+msgstr ""
+"Die Zwischenablage konnte nicht sicher gelesen werden. Versuchen Sie es "
+"erneut."
+
+#: shell/selectionCapture.js:224
 msgid ""
 "The clipboard has too many formats to preserve safely. Copy your selection "
 "manually and try again."
@@ -1860,7 +2052,7 @@ msgstr ""
 "Die Zwischenablage enthält zu viele Formate, um sie sicher zu bewahren. "
 "Kopieren Sie Ihre Auswahl manuell und versuchen Sie es erneut."
 
-#: shell/selectionCapture.js:103
+#: shell/selectionCapture.js:227
 msgid ""
 "The clipboard contains multiple formats Plyph cannot preserve safely. Copy "
 "your selection manually and try again."
@@ -1868,7 +2060,7 @@ msgstr ""
 "Die Zwischenablage enthält mehrere Formate, die Plyph nicht sicher bewahren "
 "kann. Kopieren Sie Ihre Auswahl manuell und versuchen Sie es erneut."
 
-#: shell/selectionCapture.js:107
+#: shell/selectionCapture.js:253
 msgid ""
 "The clipboard format cannot be preserved safely. Copy your selection "
 "manually and try again."
@@ -1876,13 +2068,7 @@ msgstr ""
 "Das Format der Zwischenablage kann nicht sicher bewahrt werden. Kopieren Sie "
 "Ihre Auswahl manuell und versuchen Sie es erneut."
 
-#: shell/selectionCapture.js:118
-msgid "The clipboard could not be read safely. Try again."
-msgstr ""
-"Die Zwischenablage konnte nicht sicher gelesen werden. Versuchen Sie es "
-"erneut."
-
-#: shell/selectionCapture.js:122
+#: shell/selectionCapture.js:268
 msgid ""
 "The clipboard is too large to preserve safely. Copy your selection manually "
 "and try again."
@@ -1890,7 +2076,7 @@ msgstr ""
 "Die Zwischenablage ist zu groß, um sie sicher zu bewahren. Kopieren Sie Ihre "
 "Auswahl manuell und versuchen Sie es erneut."
 
-#: shell/selectionCapture.js:148
+#: shell/selectionCapture.js:294
 msgid "Selection capture cancelled."
 msgstr "Erfassen der Auswahl abgebrochen."
 

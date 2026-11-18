@@ -1,5 +1,6 @@
 import {_} from '../i18n.js';
 import Clutter from 'gi://Clutter';
+import * as Config from 'resource:///org/gnome/shell/misc/config.js';
 import Gio from 'gi://Gio';
 import GObject from 'gi://GObject';
 import St from 'gi://St';
@@ -128,6 +129,26 @@ class FloatingToolbar extends St.BoxLayout {
         });
     }
 
+    applyAppearance() {
+        this._layout = this._settings.get_string('toolbar-layout');
+        const vertical = this._layout === 'vertical';
+        for (const box of [this, this._actionsBox]) {
+            if (Number.parseInt(Config.PACKAGE_VERSION, 10) >= 48)
+                box.orientation = vertical ? Clutter.Orientation.VERTICAL : Clutter.Orientation.HORIZONTAL;
+            else
+                box.vertical = vertical;
+        }
+        this._actionsBox.set_style(vertical ? 'margin-left: 0; margin-right: 0; margin-top: 4px;' : null);
+        for (const theme of ['dark', 'light'])
+            this.remove_style_class_name(`plyph-surface-${theme}`);
+        const theme = this._settings.get_string('popup-theme');
+        if (theme === 'dark' || theme === 'light')
+            this.add_style_class_name(`plyph-surface-${theme}`);
+        const radius = Math.max(0, Math.min(32, this._settings.get_int('toolbar-radius')));
+        this.set_style(`border-radius: ${radius}px;`);
+        this._logoButton.set_style(`border-radius: ${Math.max(0, radius - 2)}px;`);
+    }
+
     toggleExpanded() {
         if (this._busy)
             return;
@@ -175,20 +196,25 @@ class FloatingToolbar extends St.BoxLayout {
         for (const action of quickActions) {
             const btn = new St.Button({
                 style_class: 'plyph-floating-action-btn flat',
+                accessible_name: action.name,
                 reactive: true,
                 can_focus: true,
                 track_hover: true,
             });
             const content = new St.BoxLayout({ style_class: 'plyph-floating-action-content' });
             content.add_child(new St.Icon({
-                gicon: this._toolbarIcons[action.mode] ?? this._toolbarIcons.custom,
+                ...(action.mode === 'custom' && action.icon
+                    ? {icon_name: action.icon}
+                    : {gicon: this._toolbarIcons[action.mode] ?? this._toolbarIcons.custom}),
                 style_class: 'plyph-floating-action-icon',
                 y_align: Clutter.ActorAlign.CENTER,
             }));
-            content.add_child(new St.Label({
-                text: action.compactName,
-                y_align: Clutter.ActorAlign.CENTER,
-            }));
+            if (this._layout !== 'icons' && this._layout !== 'vertical') {
+                content.add_child(new St.Label({
+                    text: action.compactName,
+                    y_align: Clutter.ActorAlign.CENTER,
+                }));
+            }
             btn.set_child(content);
             btn.connect('clicked', () => {
                 this.collapse();
@@ -202,6 +228,7 @@ class FloatingToolbar extends St.BoxLayout {
             reactive: true,
             can_focus: true,
             track_hover: true,
+            accessible_name: _('More actions'),
             child: new St.Icon({
                 gicon: this._toolbarIcons.more,
                 style_class: 'plyph-floating-action-icon',

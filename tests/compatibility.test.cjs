@@ -10,6 +10,36 @@ test('metadata declares exactly the tested GNOME versions', () => {
     assert.deepEqual(metadata['shell-version'], versions.map(String));
 });
 
+test('Ask sends selected text only when included and keeps standalone results copyable', async () => {
+    for (const [selected, include] of [['Example selection', true], ['Example selection', false], ['', false]]) {
+        const shell = createShell(51);
+        const e = shell.extension;
+        e.enable();
+        shell.display.focus_window = {get_monitor: () => 0};
+        shell.values['clipboard-fallback'] = true;
+        shell.values['preview-results'] = include;
+        shell.clipboard.set(0, selected);
+        shell.clipboard.set(1, 'Unrelated clipboard content');
+        let input;
+        e._client.transform = async text => { input = text; return 'Answer'; };
+        await e._run('ask');
+        const dialog = e._askDialog;
+        assert.equal(Boolean(dialog._includeSelection), Boolean(selected));
+        if (dialog._includeSelection) {
+            assert.equal(dialog._includeSelection.checked, true);
+            dialog._includeSelection.checked = include;
+        }
+        dialog._entry.set_text('What does this mean?');
+        dialog._submit();
+        await new Promise(resolve => setImmediate(resolve));
+        assert.equal(input, include ? 'Context:\nExample selection\n\nInstruction:\nWhat does this mean?' : 'What does this mean?');
+        assert.equal(e._previewDialog._replaceButton.visible, include);
+        assert.equal(e._previewDialog._actionButtons[1].visible, true);
+        e.disable();
+        shell.assertClean();
+    }
+});
+
 for (const version of versions) {
     const check = (name, run) => test(`GNOME ${version}: ${name}`, run);
 

@@ -6,7 +6,7 @@ import GLib from 'gi://GLib';
 import Gtk from 'gi://Gtk';
 
 import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
-import {readActions, writeActions} from './actions.js';
+import {ACTION_ICONS, readActions, writeActions} from './actions.js';
 import {abortModelRequests, fetchModels} from './models.js';
 import {listProviders, providerLabels, readProviders, migrateProviders, validateProvider, validateHeaders, REASONING_EFFORTS, resolveProvider, providerModel, setProviderModel, providerReferences, PROVIDER_PRESETS} from './providers.js';
 import {migrateProviderSettings, deleteProvider, getApiKey, setApiKey, getProviderHeaders, saveProviderConnection} from './secrets.js';
@@ -334,6 +334,32 @@ export default class PlyphPreferences extends ExtensionPreferences {
         settings.bind('show-floating-button', showFloating, 'active', Gio.SettingsBindFlags.DEFAULT);
         toolbar.add(showFloating);
 
+        const choice = (group, key, title, values, labels) => {
+            const row = new Adw.ComboRow({title, model: Gtk.StringList.new(labels)});
+            row.selected = Math.max(0, values.indexOf(settings.get_string(key)));
+            row.connect('notify::selected', () => {
+                if (values[row.selected] !== undefined)
+                    settings.set_string(key, values[row.selected]);
+            });
+            group.add(row);
+            return row;
+        };
+        const toolbarLayout = choice(toolbar, 'toolbar-layout', _('Toolbar layout'),
+            ['labels', 'icons', 'vertical'], [_('Horizontal with labels'), _('Horizontal icons'), _('Vertical icons')]);
+        const duration = choice(toolbar, 'toolbar-duration', _('Toolbar visibility'),
+            ['longer', 'classic'], [_('Stay visible longer'), _('Previous timing')]);
+        const expanded = new Adw.SwitchRow({title: _('Show toolbar actions immediately')});
+        settings.bind('toolbar-open-expanded', expanded, 'active', Gio.SettingsBindFlags.DEFAULT);
+        toolbar.add(expanded);
+        const radius = new Adw.SpinRow({title: _('Toolbar corner radius'),
+            adjustment: new Gtk.Adjustment({lower: 0, upper: 32, step_increment: 1, page_increment: 4})});
+        radius.value = settings.get_int('toolbar-radius');
+        radius.connect('notify::value', () => settings.set_int('toolbar-radius', Math.round(radius.value)));
+        toolbar.add(radius);
+        for (const row of [toolbarLayout, duration, expanded, radius])
+            settings.bind('show-floating-button', row, 'sensitive', Gio.SettingsBindFlags.GET);
+        choice(toolbar, 'popup-theme', _('Toolbar and compact popup appearance'),
+            ['default', 'light', 'dark'], [_('Default'), _('Light'), _('Dark')]);
         const toolbarScales = [1, 1.25, 1.5, 1.75, 2];
         const toolbarScale = new Adw.ComboRow({
             title: _('Toolbar size'),
@@ -354,6 +380,18 @@ export default class PlyphPreferences extends ExtensionPreferences {
         });
         settings.bind('preview-results', preview, 'active', Gio.SettingsBindFlags.DEFAULT);
         behavior.add(preview);
+        const previewStyle = choice(behavior, 'result-preview-style', _('Preview style'),
+            ['dialog', 'compact'], [_('Dialog'), _('Compact popup')]);
+        settings.bind('preview-results', previewStyle, 'sensitive', Gio.SettingsBindFlags.GET);
+        const dismissOutside = new Adw.SwitchRow({title: _('Close compact popup when clicking outside')});
+        settings.bind('compact-dismiss-outside', dismissOutside, 'active', Gio.SettingsBindFlags.DEFAULT);
+        const updateDismissOutside = () => {
+            dismissOutside.sensitive = preview.active && previewStyle.selected === 1;
+        };
+        preview.connect('notify::active', updateDismissOutside);
+        previewStyle.connect('notify::selected', updateDismissOutside);
+        updateDismissOutside();
+        behavior.add(dismissOutside);
         const previewChanges = new Adw.SwitchRow({
             title: _('Show changes by default'),
             subtitle: _('Open transformed-text previews in the changes view.'),
@@ -1452,6 +1490,53 @@ export default class PlyphPreferences extends ExtensionPreferences {
         const personal = new Adw.SwitchRow({title: _('Use personal context'),
             active: action?.usePersonalPreferences ?? true});
         fields.add(name);
+        const iconLabels = [_('Default'), _('Search'), _('Edit'), _('Spelling'), _('Question'),
+            _('Web'), _('Text'), _('Terminal'), _('Star'), _('List'), _('Mail'), _('Find and replace'),
+            _('Copy'), _('New document'), _('Bold'), _('Italic'), _('Underline'), _('Align left'),
+            _('Bulleted list'), _('Numbered list'), _('Subtitles'), _('Send document'), _('Save'),
+            _('Refresh'), _('Pin'), _('Jump')];
+        let selectedIcon = ACTION_ICONS.includes(action?.icon) ? action.icon : ACTION_ICONS[0];
+        const iconRow = new Adw.ActionRow({title: _('Action icon')});
+        const iconChoices = new Gtk.FlowBox({
+            selection_mode: Gtk.SelectionMode.NONE,
+            min_children_per_line: 5,
+            max_children_per_line: 5,
+            homogeneous: true,
+            column_spacing: 4,
+            row_spacing: 4,
+            margin_top: 8, margin_bottom: 8, margin_start: 8, margin_end: 8,
+        });
+        const iconPopover = new Gtk.Popover({child: iconChoices});
+        const actionIcon = new Gtk.MenuButton({
+            icon_name: selectedIcon, popover: iconPopover, valign: Gtk.Align.CENTER,
+            tooltip_text: _('Choose an action icon'),
+        });
+        let activeIconButton;
+        for (const [index, icon] of ACTION_ICONS.entries()) {
+            const button = new Gtk.Button({icon_name: icon,
+                width_request: 36, height_request: 36, tooltip_text: iconLabels[index]});
+            button.update_property([Gtk.AccessibleProperty.LABEL], [iconLabels[index]]);
+            if (icon === selectedIcon) {
+                button.add_css_class('suggested-action');
+                activeIconButton = button;
+            } else {
+                button.add_css_class('flat');
+            }
+            button.connect('clicked', () => {
+                activeIconButton.remove_css_class('suggested-action');
+                activeIconButton.add_css_class('flat');
+                button.remove_css_class('flat');
+                button.add_css_class('suggested-action');
+                activeIconButton = button;
+                selectedIcon = icon;
+                actionIcon.icon_name = icon;
+                iconPopover.popdown();
+            });
+            iconChoices.append(button);
+        }
+        iconRow.add_suffix(actionIcon);
+        iconRow.activatable_widget = actionIcon;
+        fields.add(iconRow);
         fields.add(inputMode);
         fields.add(prompt);
         fields.add(visible);
@@ -1519,6 +1604,7 @@ export default class PlyphPreferences extends ExtensionPreferences {
                 id: action?.id ?? GLib.uuid_string_random(),
                 name: actionName,
                 prompt: actionPrompt,
+                icon: selectedIcon,
                 enabled: visible.active,
                 provider: providerId,
                 model: providerId ? model.text.trim() : '',

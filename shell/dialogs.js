@@ -22,7 +22,7 @@ class ErrorDialog extends ModalDialog.ModalDialog {
             text: _('Plyph couldn’t complete the action'),
             style_class: 'modal-dialog-headline',
         }));
-        const monitor = Main.layoutManager.currentMonitor ?? Main.layoutManager.primaryMonitor;
+        const monitor = this._monitor ?? Main.layoutManager.currentMonitor ?? Main.layoutManager.primaryMonitor;
         const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
         const width = Math.max(1, Math.min(600, (monitor.width - 120) / scale));
         const height = Math.max(1, Math.min(320, (monitor.height - 200) / scale));
@@ -52,11 +52,173 @@ class ErrorDialog extends ModalDialog.ModalDialog {
     }
 });
 
-export const ResultDialog = GObject.registerClass(
-class ResultDialog extends ModalDialog.ModalDialog {
+const PopupSurface = GObject.registerClass(
+class PopupSurface extends St.BoxLayout {
+    _init() {
+        super._init({
+            ...(SHELL_MAJOR >= 48 ? {orientation: Clutter.Orientation.VERTICAL} : {vertical: true}),
+            style_class: 'plyph-compact-result',
+            reactive: true,
+        });
+        this.contentLayout = new St.BoxLayout(SHELL_MAJOR >= 48
+            ? {orientation: Clutter.Orientation.VERTICAL} : {vertical: true});
+        this.buttonLayout = new St.BoxLayout();
+        this.add_child(this.contentLayout);
+        this.add_child(this.buttonLayout);
+        this._compact = true;
+    }
+
+    _setCompactIcon(icon, asset, fallback) {
+        if (this._refinement?.iconsPath)
+            icon.gicon = Gio.icon_new_for_string(`${this._refinement.iconsPath}/plyph-${asset}-symbolic.svg`);
+        else
+            icon.icon_name = fallback;
+    }
+
+    _makeCompactIcon(asset, fallback) {
+        const icon = new St.Icon({icon_size: 18});
+        this._setCompactIcon(icon, asset, fallback);
+        return icon;
+    }
+
+    setButtons(buttons) {
+        const icons = [
+            this._makeCompactIcon('close', 'window-close-symbolic'),
+            this._makeCompactIcon('copy', 'edit-copy-symbolic'),
+        ];
+        for (const [index, button] of buttons.entries()) {
+            const actor = new St.Button({
+                ...(icons[index] ? {child: icons[index]} : {label: button.label}),
+                accessible_name: button.label,
+                style_class: index === 2 ? 'button default plyph-compact-replace'
+                    : index === 0 ? 'button flat plyph-compact-close' : 'button flat',
+                can_focus: true,
+                reactive: true,
+            });
+            actor.connect('clicked', button.action);
+            this.buttonLayout.add_child(actor);
+            if (button.key === Clutter.KEY_Escape)
+                this._escape = button.action;
+        }
+    }
+
+    setInitialKeyFocus(actor) {
+        this._initialFocus = actor;
+    }
+
+    open() {
+        this._monitor = Main.layoutManager.monitors[this.sourceMonitor]
+            ?? Main.layoutManager.currentMonitor ?? Main.layoutManager.primaryMonitor;
+        this._anchor = this.selectionAnchor ?? {
+            x: this._monitor.x + this._monitor.width * 0.55,
+            y: this._monitor.y + this._monitor.height * 0.22,
+        };
+        this._monitorsChangedId = Main.layoutManager.connect('monitors-changed', () => this._escape?.());
+        if (this.dismissOutside) {
+            this._dismissShield = new St.Widget({reactive: true});
+            this._dismissShield.add_constraint(new Clutter.BindConstraint({
+                source: global.stage, coordinate: Clutter.BindCoordinate.ALL,
+            }));
+            const dismiss = () => {
+                this._escape?.();
+                return Clutter.EVENT_STOP;
+            };
+            this._dismissShield.connect('button-press-event', dismiss);
+            this._dismissShield.connect('touch-event', (_actor, event) =>
+                event.type() === Clutter.EventType.TOUCH_BEGIN ? dismiss() : Clutter.EVENT_PROPAGATE);
+            Main.layoutManager.addTopChrome(this._dismissShield);
+        }
+        Main.uiGroup.add_child(this);
+        this._resizePreview();
+        this._initialFocus?.grab_key_focus();
+    }
+
+    close() {
+        this.destroy();
+    }
+
+    destroy() {
+        if (this._dragTimer)
+            GLib.Source.remove(this._dragTimer);
+        this._dragTimer = null;
+        if (this._monitorsChangedId)
+            Main.layoutManager.disconnect(this._monitorsChangedId);
+        this._monitorsChangedId = null;
+        this._dismissShield?.destroy();
+        this._dismissShield = null;
+        super.destroy();
+    }
+
+    vfunc_key_press_event(event) {
+        if (event.get_key_symbol() === Clutter.KEY_Escape) {
+            this._escape?.();
+            return Clutter.EVENT_STOP;
+        }
+        return super.vfunc_key_press_event(event);
+    }
+
+    _startHeaderDrag(event, header, buttons) {
+        const [x, y] = event.get_coords();
+        const [, headerY] = header.get_transformed_position();
+        const [, headerHeight] = header.get_transformed_size();
+        if (y >= headerY + headerHeight)
+            return Clutter.EVENT_PROPAGATE;
+        for (const button of buttons) {
+            if (!button?.mapped)
+                continue;
+            const [left, top] = button.get_transformed_position();
+            const [width, height] = button.get_transformed_size();
+            if (x >= left && x < left + width && y >= top && y < top + height)
+                return Clutter.EVENT_PROPAGATE;
+        }
+        return this._startPopupDrag(event);
+    }
+
+    _startPopupDrag(event) {
+        if (event.get_button() !== 1 || !this._anchor)
+            return Clutter.EVENT_PROPAGATE;
+        if (this._dragTimer)
+            GLib.Source.remove(this._dragTimer);
+        const [pressX, pressY] = event.get_coords();
+        const [startX, startY] = this.get_position();
+        this._dragTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 16, () => {
+            const [x, y, state] = global.get_pointer();
+            if (!(state & Clutter.ModifierType.BUTTON1_MASK)) {
+                this._dragTimer = null;
+                return GLib.SOURCE_REMOVE;
+            }
+            if (x !== pressX || y !== pressY || this._dragPosition) {
+                this._dragPosition = {x: startX + x - pressX, y: startY + y - pressY};
+                this._placePopup();
+            }
+            return GLib.SOURCE_CONTINUE;
+        });
+        return Clutter.EVENT_STOP;
+    }
+
+    _placePopup() {
+        if (!this._anchor)
+            return;
+        const {x, y, width, height} = this._monitor;
+        const [, naturalWidth] = this.get_preferred_width(-1);
+        const [, naturalHeight] = this.get_preferred_height(naturalWidth);
+        const left = this._expanded ? x + (width - naturalWidth) / 2 : this._anchor.x + 12;
+        const above = this._anchor.y - naturalHeight - 10;
+        const below = this._anchor.y + 14;
+        const top = this._expanded ? y + (height - naturalHeight) / 2
+            : below + naturalHeight <= y + height - 12 ? below : above;
+        const position = this._dragPosition ?? {x: left, y: top};
+        this.set_position(Math.round(Math.max(x + 12, Math.min(position.x, x + width - naturalWidth - 12))),
+            Math.round(Math.max(y + 12, Math.min(position.y, y + height - naturalHeight - 12))));
+    }
+});
+
+const resultView = (Base, name) => GObject.registerClass({GTypeName: name},
+class extends Base {
     _init(result, onReplace, onCopy, onCopySelection, onCancel, onClose, original = null, showChanges = false, refinement = null) {
         super._init({destroyOnClose: true, styleClass: 'plyph-preview-dialog'});
-        this.contentLayout.get_parent().set_style('padding: 16px; spacing: 12px; min-width: 0; min-height: 0;');
+        if (!this._compact)
+            this.contentLayout.get_parent().set_style('padding: 16px; spacing: 12px; min-width: 0; min-height: 0;');
         this.contentLayout.y_expand = false;
         this.buttonLayout.x_align = Clutter.ActorAlign.END;
         this.buttonLayout.x_expand = false;
@@ -84,8 +246,9 @@ class ResultDialog extends ModalDialog.ModalDialog {
             x_expand: true,
         });
         const title = new St.BoxLayout({x_expand: true, style_class: 'plyph-preview-title'});
-        title.add_child(new St.Label({text: _('Result'), style_class: 'modal-dialog-headline',
-            y_align: Clutter.ActorAlign.CENTER}));
+        const heading = new St.Label({text: _('Result'), style_class: 'modal-dialog-headline',
+            y_align: Clutter.ActorAlign.CENTER});
+        title.add_child(heading);
         header.add_child(title);
         if (refinement) {
             const icon = name => new St.Icon({
@@ -106,7 +269,7 @@ class ResultDialog extends ModalDialog.ModalDialog {
             title.add_child(this._previousButton);
             title.add_child(this._nextButton);
         }
-        const wrapButton = new St.Button({
+        const wrapButton = this._compact ? null : new St.Button({
             label: _('Wrap'),
             style_class: 'button flat plyph-preview-wrap',
             toggle_mode: true,
@@ -116,8 +279,16 @@ class ResultDialog extends ModalDialog.ModalDialog {
             reactive: true,
             track_hover: true,
         });
-        header.add_child(wrapButton);
-        this._expandIcon = new St.Icon({icon_name: 'view-fullscreen-symbolic'});
+        if (wrapButton)
+            header.add_child(wrapButton);
+        if (this._compact && refinement?.modelLabel) {
+            const model = new St.Label({text: refinement.modelLabel, style_class: 'plyph-compact-model',
+                y_align: Clutter.ActorAlign.CENTER});
+            model.clutter_text.ellipsize = Pango.EllipsizeMode.END;
+            header.add_child(model);
+        }
+        this._expandIcon = this._compact ? this._makeCompactIcon('expand', 'view-fullscreen-symbolic')
+            : new St.Icon({icon_name: 'view-fullscreen-symbolic'});
         const expandButton = new St.Button({
             style_class: 'icon-button flat plyph-preview-icon',
             child: this._expandIcon,
@@ -127,17 +298,21 @@ class ResultDialog extends ModalDialog.ModalDialog {
             track_hover: true,
         });
         expandButton.connect('clicked', () => this._toggleExpanded(expandButton));
-        header.add_child(expandButton);
+        if (!this._compact)
+            header.add_child(expandButton);
         if (original !== null) {
             this._changesButton = new St.Button({
-                label: _('Show changes'),
-                style_class: 'button flat plyph-preview-wrap',
+                ...(this._compact
+                    ? {child: this._makeCompactIcon('compare', 'document-edit-symbolic')}
+                    : {label: _('Show changes')}),
+                style_class: this._compact ? 'button flat plyph-compact-tool' : 'button flat plyph-preview-wrap',
                 toggle_mode: true, checked: false, can_focus: true,
                 reactive: true, track_hover: true,
                 accessible_name: _('Show changes from the original text'),
             });
             this._changesChangedId = this._changesButton.connect('notify::checked', () => this._toggleChanges());
-            header.add_child(this._changesButton);
+            if (!this._compact)
+                header.add_child(this._changesButton);
         }
         this.contentLayout.add_child(header);
 
@@ -196,7 +371,7 @@ class ResultDialog extends ModalDialog.ModalDialog {
                 field.clutter_text.set_selected_text_color(source.get_selected_text_color());
             });
         }
-        wrapButton.connect('notify::checked', () => {
+        wrapButton?.connect('notify::checked', () => {
             this._label.clutter_text.set_line_wrap(wrapButton.checked);
             this._diffLabel.clutter_text.set_line_wrap(wrapButton.checked);
             this._scroll.hscrollbar_policy = wrapButton.checked ? St.PolicyType.NEVER : St.PolicyType.AUTOMATIC;
@@ -322,7 +497,8 @@ class ResultDialog extends ModalDialog.ModalDialog {
         ]);
         this._actionButtons = this.buttonLayout.get_children();
         this._replaceButton = this._actionButtons.at(-1);
-        this.setInitialKeyFocus(this._replaceButton);
+        this._replaceButton.visible = Boolean(onReplace);
+        this.setInitialKeyFocus(onReplace ? this._replaceButton : this._actionButtons[1]);
         for (const button of this._actionButtons) {
             button.x_expand = false;
             button.y_expand = false;
@@ -337,17 +513,45 @@ class ResultDialog extends ModalDialog.ModalDialog {
                 gicon: Gio.icon_new_for_string(`${refinement.iconsPath}/plyph-refine-symbolic.svg`), icon_size: 16}));
             this._refineToggleLabel = new St.Label({text: _('Refine'), y_align: Clutter.ActorAlign.CENTER});
             toggleContent.add_child(this._refineToggleLabel);
+            this._refineToggleLabel.visible = !this._compact;
             this._refineToggle.set_child(toggleContent);
             this._refineToggleId = this._refineToggle.connect('clicked', () => this._toggleRefinement());
             this.buttonLayout.x_align = Clutter.ActorAlign.FILL;
             this.buttonLayout.x_expand = true;
             this.buttonLayout.insert_child_at_index(this._refineToggle, 0);
-            this.buttonLayout.insert_child_at_index(new St.Widget({x_expand: true}), 1);
-            this._discussToggle = new St.Button({label: _('Discuss'), style_class: 'button flat',
+            if (!this._compact)
+                this.buttonLayout.insert_child_at_index(new St.Widget({x_expand: true}), 1);
+            this._discussToggle = new St.Button({
+                ...(this._compact ? {child: this._makeCompactIcon('discuss', 'dialog-question-symbolic')}
+                    : {label: _('Discuss')}),
+                style_class: 'button flat',
                 style: 'padding: 6px 10px; min-width: 0; min-height: 0; border-radius: 8px;',
                 accessible_name: _('Discuss result'), reactive: true, can_focus: true, track_hover: true});
             this._discussToggleId = this._discussToggle.connect('clicked', () => this._toggleRefinement(true));
             this.buttonLayout.insert_child_at_index(this._discussToggle, 1);
+        }
+        if (this._compact) {
+            const [close, copy, replace] = this._actionButtons;
+            for (const actor of this.buttonLayout.get_children())
+                this.buttonLayout.remove_child(actor);
+            header.add_child(close);
+            const headerButtons = [this._previousButton, this._nextButton, close];
+            this.connect('button-press-event', (_actor, event) =>
+                this._startHeaderDrag(event, header, headerButtons));
+            const tools = [copy, this._refineToggle, this._changesButton, this._discussToggle, expandButton];
+            for (const tool of tools.filter(Boolean)) {
+                tool.add_style_class_name('plyph-compact-tool');
+                tool.set_style(null);
+                this.buttonLayout.add_child(tool);
+            }
+            const footerDragArea = new St.Widget({x_expand: true, y_expand: true, reactive: true});
+            footerDragArea.connect('button-press-event', (_actor, event) => this._startPopupDrag(event));
+            this.buttonLayout.add_child(footerDragArea);
+            this.buttonLayout.add_child(replace);
+            this.buttonLayout.x_align = Clutter.ActorAlign.FILL;
+            this.buttonLayout.x_expand = true;
+            this.buttonLayout.set_style('border-top: 1px solid rgba(128, 128, 128, 0.22); padding-top: 8px;');
+            this.buttonLayout.layout_manager.spacing = 4 * St.ThemeContext.get_for_stage(global.stage).scale_factor;
         }
     }
 
@@ -359,13 +563,16 @@ class ResultDialog extends ModalDialog.ModalDialog {
         this._discussing = discuss;
         this._refineEntry.set_text(this._followUpDrafts[discuss ? 'discuss' : 'refine']);
         this._refineEntry.hint_text = discuss ? _('Ask about this result…') : _('Refine this result…');
+        if (this._compact && this.has_style_class_name('plyph-surface-light'))
+            this._refineEntry.hint_actor?.set_style('color: #606069;');
         this._refineEntry.accessible_name = discuss ? _('Question about result') : _('Refinement instruction');
         this._refineButton.accessible_name = discuss ? _('Send question') : _('Submit refinement');
         this._discussionScroll.visible = discuss && this._refineRow.visible && this._discussion.length > 0;
         this._statusScroll.visible = false;
         this._setRefining(false);
         this._resizePreview();
-        (this._refineRow.visible ? this._refineEntry : this._replaceButton).grab_key_focus();
+        const restFocus = this._replaceButton.visible ? this._replaceButton : this._actionButtons[1];
+        (this._refineRow.visible ? this._refineEntry : restFocus).grab_key_focus();
     }
 
     _updateResultNavigation() {
@@ -386,8 +593,20 @@ class ResultDialog extends ModalDialog.ModalDialog {
         this._refineEntry.clutter_text.set_editable(!busy);
         this._refineToggleLabel.text = busy && !this._discussing ? _('Refining…')
             : this._refineRow.visible && !this._discussing ? _('Hide refinement') : _('Refine');
-        this._discussToggle.label = busy && this._discussing ? _('Replying…')
+        const discussLabel = busy && this._discussing ? _('Replying…')
             : this._refineRow.visible && this._discussing ? _('Hide discussion') : _('Discuss');
+        if (this._compact) {
+            this._refineToggle.accessible_name = this._refineToggleLabel.text;
+            this._discussToggle.accessible_name = discussLabel;
+            for (const [button, selected] of [[this._refineToggle, !this._discussing], [this._discussToggle, this._discussing]]) {
+                if (this._refineRow.visible && selected)
+                    button.add_style_pseudo_class('active');
+                else
+                    button.remove_style_pseudo_class('active');
+            }
+        } else {
+            this._discussToggle.label = discussLabel;
+        }
         this._discussToggle.reactive = !busy;
         this._discussToggle.can_focus = !busy;
         this._refineToggle.reactive = !busy;
@@ -606,7 +825,7 @@ class ResultDialog extends ModalDialog.ModalDialog {
             return Clutter.EVENT_STOP;
         if (this._diffLabel.contains(focus) && this._diffClipboard(event) === Clutter.EVENT_STOP)
             return Clutter.EVENT_STOP;
-        if (control && (key === Clutter.KEY_Return || key === Clutter.KEY_KP_Enter)) {
+        if (control && this._onReplace && (key === Clutter.KEY_Return || key === Clutter.KEY_KP_Enter)) {
             this._finish(this._onReplace, this._label.clutter_text.get_text());
             return Clutter.EVENT_STOP;
         }
@@ -615,9 +834,11 @@ class ResultDialog extends ModalDialog.ModalDialog {
 
     _toggleExpanded(button) {
         this._expanded = !this._expanded;
-        this._expandIcon.icon_name = this._expanded
-            ? 'view-restore-symbolic'
-            : 'view-fullscreen-symbolic';
+        const fallback = this._expanded ? 'view-restore-symbolic' : 'view-fullscreen-symbolic';
+        if (this._compact)
+            this._setCompactIcon(this._expandIcon, this._expanded ? 'contract' : 'expand', fallback);
+        else
+            this._expandIcon.icon_name = fallback;
         button.accessible_name = this._expanded ? _('Restore compact preview') : _('Enlarge preview');
         this._resizePreview();
     }
@@ -718,8 +939,13 @@ class ResultDialog extends ModalDialog.ModalDialog {
         this._changesButton.reactive = hasChanges;
         this._changesButton.can_focus = hasChanges;
         this._showChanges = hasChanges && this._changesButton.checked;
-        this._changesButton.label = !hasChanges ? _('No changes')
-            : this._showChanges ? _('Show result') : _('Show changes');
+        if (!this._compact)
+            this._changesButton.label = !hasChanges ? _('No changes')
+                : this._showChanges ? _('Show result') : _('Show changes');
+        else if (hasChanges)
+            this._changesButton.remove_style_pseudo_class('disabled');
+        else
+            this._changesButton.add_style_pseudo_class('disabled');
         this._changesButton.accessible_name = !hasChanges ? _('No changes from the original text')
             : this._showChanges ? _('Show editable result') : _('Show changes from the original text');
         if (this._showChanges)
@@ -730,7 +956,9 @@ class ResultDialog extends ModalDialog.ModalDialog {
     }
 
     _resizePreview() {
-        const monitor = Main.layoutManager.currentMonitor ?? Main.layoutManager.primaryMonitor;
+        if (this._compact && !this._anchor)
+            return;
+        const monitor = this._monitor ?? Main.layoutManager.currentMonitor ?? Main.layoutManager.primaryMonitor;
         const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
         const availableWidth = Math.max(1, (monitor.width - 96) / scale);
         const monitorHeight = monitor.height / scale;
@@ -740,11 +968,13 @@ class ResultDialog extends ModalDialog.ModalDialog {
         const text = this._label.clutter_text.get_text();
         const longestLine = text.split('\n').reduce((longest, line) => Math.max(longest, line.length), 0);
         const width = Math.min(availableWidth, this._expanded
-            ? 1000 : Math.max(600, Math.min(680, longestLine * 8 + 24)));
+            ? 1000 : this._compact ? 480 : Math.max(600, Math.min(680, longestLine * 8 + 24)));
         const label = this._showChanges ? this._diffLabel : this._label;
         const [, naturalHeight] = label.get_preferred_height(Math.max(1, (width - 40) * scale));
         const naturalPreviewHeight = Math.ceil(naturalHeight / scale) + 24;
-        let height = Math.min(availableHeight, Math.max(260, naturalPreviewHeight));
+        const minimumHeight = this._compact && !this._expanded ? 40 : 260;
+        const maximumHeight = this._compact && !this._expanded ? Math.min(200, availableHeight) : availableHeight;
+        let height = Math.min(maximumHeight, Math.max(minimumHeight, naturalPreviewHeight));
         let discussionHeight = 0;
         if (discussing) {
             const paneHeight = this._expanded ? availableHeight : Math.min(availableHeight,
@@ -774,6 +1004,7 @@ class ResultDialog extends ModalDialog.ModalDialog {
             for (const row of this._discussionMessages.get_children())
                 row._bubble.set_style(`max-width: ${this._discussionBubbleWidth}px;`);
         }
+        this._placePopup?.();
     }
 
     destroy() {
@@ -881,9 +1112,12 @@ class ResultDialog extends ModalDialog.ModalDialog {
     }
 });
 
+export const ResultDialog = resultView(ModalDialog.ModalDialog, 'PlyphResultDialog');
+export const CompactResultPopup = resultView(PopupSurface, 'PlyphCompactResultPopup');
+
 export const AskDialog = GObject.registerClass(
 class AskDialog extends ModalDialog.ModalDialog {
-    _init(onAsk, onCancel, onClose) {
+    _init(onAsk, onCancel, onClose, hasSelection = false) {
         super._init({destroyOnClose: true});
         this._finished = false;
         this._onClose = onClose;
@@ -913,6 +1147,18 @@ class AskDialog extends ModalDialog.ModalDialog {
         this._inputError = new St.Label({text: _('Enter an instruction to continue.'), visible: false,
             style_class: 'plyph-input-error'});
         this.contentLayout.add_child(this._inputError);
+        if (hasSelection) {
+            this._includeSelection = new St.Button({
+                label: _('Include selected text'),
+                style_class: 'button plyph-ask-selection',
+                toggle_mode: true,
+                checked: true,
+                reactive: true,
+                can_focus: true,
+                x_align: Clutter.ActorAlign.START,
+            });
+            this.contentLayout.add_child(this._includeSelection);
+        }
         this._entryChangedId = this._entry.clutter_text.connect('text-changed', () => {
             if (this._entry.get_text().trim()) {
                 this._inputError.visible = false;
@@ -966,7 +1212,9 @@ class AskDialog extends ModalDialog.ModalDialog {
             this._entry.grab_key_focus();
             return;
         }
-        this._finish(this._onAsk, instruction);
+        const onAsk = this._onAsk;
+        const includeSelection = this._includeSelection?.checked === true;
+        this._finish(() => onAsk?.(instruction, includeSelection));
     }
 
     _finish(action = null, value = undefined) {

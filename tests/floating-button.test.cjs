@@ -37,8 +37,8 @@ function setup() {
     display.get_selection = () => selection;
     stage.get_key_focus = () => null;
     settings.enabled = true;
-    settings.get_boolean = () => settings.enabled;
-    settings.get_string = () => '';
+    settings.get_boolean = key => key === 'show-floating-button' && settings.enabled;
+    settings.get_string = key => key === 'toolbar-duration' ? settings.duration ?? '' : '';
     settings.get_double = () => 1;
     const pointer = [300, 300, 0];
     const Clutter = {
@@ -71,6 +71,7 @@ function setup() {
         }
         destroy() { this.hide(); this.handlers.clear(); }
         contains(actor) { return actor === this; }
+        applyAppearance() {}
         remove_transition() {}
         add_style_class_name() {}
         remove_style_class_name() {}
@@ -84,7 +85,7 @@ function setup() {
     const context = vm.createContext({
         console, Clutter, GLib,
         Config: {PACKAGE_VERSION: '50'},
-        GObject: {registerClass: cls => cls.name === 'FloatingToolbar' ? Actor : cls},
+        GObject: {registerClass: (meta, cls = meta) => cls.name === 'FloatingToolbar' ? Actor : cls},
         St: {BoxLayout: Actor, ClipboardType: {PRIMARY: 1}},
         Meta: {SelectionType: {SELECTION_PRIMARY: 1}},
         ModalDialog: {ModalDialog: class {}},
@@ -292,4 +293,20 @@ test('stale PRIMARY notifications do not keep renewing dismissal suppression', a
     activity();
     await e._handleSelectionChange();
     assert.equal(e._floatingButton.visible, true);
+});
+
+
+test('longer visibility waits eight seconds and retains the previous timing option', async () => {
+    for (const [option, duration] of [['longer', 8000], ['classic', 4000]]) {
+        const {extension, settings, pointer, advance} = setup();
+        settings.duration = option;
+        await extension._handleSelectionChange();
+        pointer[0] = 0;
+        pointer[1] = 0;
+        advance(duration - 100);
+        assert.equal(extension._floatingButton.visible, true);
+        advance(100);
+        assert.equal(extension._floatingButton.visible, false);
+        extension._destroyFloatingButton();
+    }
 });
