@@ -827,6 +827,7 @@ export default class PlyphExtension extends Extension {
         const client = this._client;
         let focusedWindow = global.display.focus_window ?? this._floatingSourceWindow;
         const selectionAnchor = this._floatingSourceWindow === focusedWindow ? this._selectionAnchor : null;
+        const toolbarText = selectionAnchor ? this._lastSelectionText : null;
         this._hideFloatingButton(true);
         this._busy = true;
         this._setIcon('content-loading-symbolic');
@@ -840,14 +841,16 @@ export default class PlyphExtension extends Extension {
                         return;
                     focusedWindow = global.display.focus_window;
                 }
-                if (!focusedWindow)
+                if (!focusedWindow && mode !== 'ask')
                     throw new Error(_('Select text first.'));
             }
-            const selection = await this._readSelection(focusedWindow);
+            const selection = mode === 'ask'
+                ? await this._readAskSelection(focusedWindow, toolbarText)
+                : await this._readSelection(focusedWindow);
             const text = selection.text;
             if (this._client !== client)
                 return;
-            if (!text.trim())
+            if (mode !== 'ask' && !text.trim())
                 throw new Error(_('Select text first.'));
 
             if (mode === 'ask') {
@@ -902,15 +905,16 @@ export default class PlyphExtension extends Extension {
             this._askDialog.destroy();
 
         const dialog = new AskDialog(
-            instruction => {
+            (instruction, includeSelection) => {
                 if (!instruction.trim()) {
                     this._busy = false;
                     return;
                 }
-                const systemPrompt = "Use the provided context and the user's instruction to produce the requested response. " +
+                const withSelection = includeSelection && Boolean(text.trim());
+                const systemPrompt = 'Follow the user’s instruction and use the supplied selection when present. ' +
                     'Return only the useful requested output unless the user explicitly asks for an explanation.';
-                const userPrompt = `Context:\n${text}\n\nInstruction:\n${instruction}`;
-                this._processAsk(focusedWindow, selection, userPrompt, client, systemPrompt, selectionAnchor);
+                const userPrompt = withSelection ? `Context:\n${text}\n\nInstruction:\n${instruction}` : instruction;
+                this._processAsk(focusedWindow, withSelection ? selection : null, userPrompt, client, systemPrompt, selectionAnchor);
             },
             () => {
                 this._busy = false;
@@ -918,7 +922,7 @@ export default class PlyphExtension extends Extension {
             () => {
                 if (this._askDialog === dialog)
                     this._askDialog = null;
-            }
+            }, Boolean(text.trim())
         );
         this._askDialog = dialog;
         dialog.open();
@@ -932,10 +936,10 @@ export default class PlyphExtension extends Extension {
                 usePersonalPreferences: this._settings.get_boolean('ask-use-personal-preferences')});
             if (this._client !== client)
                 return;
-            if (this._settings.get_boolean('preview-results'))
-                this._showPreview(output, focusedWindow, selection.primaryText, null,
+            if (!selection || this._settings.get_boolean('preview-results'))
+                this._showPreview(output, focusedWindow, selection?.primaryText, null,
                     {usePersonalPreferences: this._settings.get_boolean('ask-use-personal-preferences')}, text,
-                    {mode: 'ask', instructions: prompt}, selectionAnchor);
+                    {mode: 'ask', instructions: prompt}, selectionAnchor, Boolean(selection));
             else
                 await this._replace(output, false, _('Generated'), focusedWindow, selection.primaryText);
         } catch (error) {
@@ -1251,6 +1255,15 @@ export default class PlyphExtension extends Extension {
                 return GLib.SOURCE_REMOVE;
             });
         }
+    }
+
+    async _readAskSelection(focusedWindow, toolbarText) {
+        if (!focusedWindow)
+            return {text: '', primaryText: null};
+        const text = toolbarText || await this._getClipboardText(St.ClipboardType.PRIMARY);
+        if (global.display.focus_window !== focusedWindow)
+            return {text: '', primaryText: null};
+        return {text, primaryText: text || null};
     }
 
     async _readSelection(focusedWindow) {

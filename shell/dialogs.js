@@ -1117,7 +1117,7 @@ export const CompactResultPopup = resultView(PopupSurface, 'PlyphCompactResultPo
 
 export const AskDialog = GObject.registerClass(
 class AskDialog extends ModalDialog.ModalDialog {
-    _init(onAsk, onCancel, onClose) {
+    _init(onAsk, onCancel, onClose, hasSelection = false) {
         super._init({destroyOnClose: true});
         this._finished = false;
         this._onClose = onClose;
@@ -1147,6 +1147,18 @@ class AskDialog extends ModalDialog.ModalDialog {
         this._inputError = new St.Label({text: _('Enter an instruction to continue.'), visible: false,
             style_class: 'plyph-input-error'});
         this.contentLayout.add_child(this._inputError);
+        if (hasSelection) {
+            this._includeSelection = new St.Button({
+                label: _('Include selected text'),
+                style_class: 'button plyph-ask-selection',
+                toggle_mode: true,
+                checked: true,
+                reactive: true,
+                can_focus: true,
+                x_align: Clutter.ActorAlign.START,
+            });
+            this.contentLayout.add_child(this._includeSelection);
+        }
         this._entryChangedId = this._entry.clutter_text.connect('text-changed', () => {
             if (this._entry.get_text().trim()) {
                 this._inputError.visible = false;
@@ -1200,7 +1212,9 @@ class AskDialog extends ModalDialog.ModalDialog {
             this._entry.grab_key_focus();
             return;
         }
-        this._finish(this._onAsk, instruction);
+        const onAsk = this._onAsk;
+        const includeSelection = this._includeSelection?.checked === true;
+        this._finish(() => onAsk?.(instruction, includeSelection));
     }
 
     _finish(action = null, value = undefined) {
