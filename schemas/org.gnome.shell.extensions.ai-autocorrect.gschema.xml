@@ -68,6 +68,11 @@
     <key name="protect-clipboard" type="b"><default>false</default></key>
     <key name="clipboard-fallback" type="b"><default>false</default></key>
     <key name="explicit-copy-apps" type="s"><default>'firefox'</default></key>
+    <key name="toolbar-layout" type="s"><default>'labels'</default></key>
+    <key name="toolbar-duration" type="s"><default>'longer'</default></key>
+    <key name="toolbar-open-expanded" type="b"><default>false</default></key>
+    <key name="toolbar-radius" type="i"><range min="0" max="32"/><default>12</default></key>
+    <key name="popup-theme" type="s"><default>'default'</default></key>
     <key name="show-floating-button" type="b"><default>true</default></key>
     <key name="floating-toolbar-scale" type="d">
       <default>1.0</default>

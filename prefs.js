@@ -334,6 +334,32 @@ export default class PlyphPreferences extends ExtensionPreferences {
         settings.bind('show-floating-button', showFloating, 'active', Gio.SettingsBindFlags.DEFAULT);
         toolbar.add(showFloating);
 
+        const choice = (group, key, title, values, labels) => {
+            const row = new Adw.ComboRow({title, model: Gtk.StringList.new(labels)});
+            row.selected = Math.max(0, values.indexOf(settings.get_string(key)));
+            row.connect('notify::selected', () => {
+                if (values[row.selected] !== undefined)
+                    settings.set_string(key, values[row.selected]);
+            });
+            group.add(row);
+            return row;
+        };
+        const toolbarLayout = choice(toolbar, 'toolbar-layout', _('Toolbar layout'),
+            ['labels', 'icons', 'vertical'], [_('Horizontal with labels'), _('Horizontal icons'), _('Vertical icons')]);
+        const duration = choice(toolbar, 'toolbar-duration', _('Toolbar visibility'),
+            ['longer', 'classic'], [_('Stay visible longer'), _('Previous timing')]);
+        const expanded = new Adw.SwitchRow({title: _('Show toolbar actions immediately')});
+        settings.bind('toolbar-open-expanded', expanded, 'active', Gio.SettingsBindFlags.DEFAULT);
+        toolbar.add(expanded);
+        const radius = new Adw.SpinRow({title: _('Toolbar corner radius'),
+            adjustment: new Gtk.Adjustment({lower: 0, upper: 32, step_increment: 1, page_increment: 4})});
+        radius.value = settings.get_int('toolbar-radius');
+        radius.connect('notify::value', () => settings.set_int('toolbar-radius', Math.round(radius.value)));
+        toolbar.add(radius);
+        for (const row of [toolbarLayout, duration, expanded, radius])
+            settings.bind('show-floating-button', row, 'sensitive', Gio.SettingsBindFlags.GET);
+        choice(toolbar, 'popup-theme', _('Toolbar and compact popup appearance'),
+            ['default', 'light', 'dark'], [_('Default'), _('Light'), _('Dark')]);
         const toolbarScales = [1, 1.25, 1.5, 1.75, 2];
         const toolbarScale = new Adw.ComboRow({
             title: _('Toolbar size'),

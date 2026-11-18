@@ -8,6 +8,8 @@ import St from 'gi://St';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 import PlyphExtension from './subject.js';
 import {SelectionCapture} from './shell/selectionCapture.js';
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+import {FloatingToolbar} from './shell/floatingToolbar.js';
 import {ResultDialog, AskDialog, ErrorDialog} from './shell/dialogs.js';
 Gio._promisify(Shell.Screenshot.prototype, 'screenshot_area');
 const delay = ms => new Promise(resolve => GLib.timeout_add(GLib.PRIORITY_DEFAULT,ms,()=>{resolve();return GLib.SOURCE_REMOVE;}));
@@ -277,6 +279,20 @@ export default class NativeTest extends Extension {
             assert(text.get_selection_color().to_string()!==text.get_selected_text_color().to_string(),`${name}: readable selection contrast`);
         }
         plain.destroy();this._dialog=null;await delay(100);
+
+        const values={'toolbar-layout':'vertical','popup-theme':'dark','quick-actions':'["translate"]'};
+        const toolbar=new FloatingToolbar(null,()=>[{id:'translate',mode:'custom',name:'Translate',icon:'web-browser-symbolic'}],
+            ()=>{},()=>{},null,{get_string:key=>values[key]??'',get_int:()=>18},this.path+'/icons');
+        Main.uiGroup.add_child(toolbar);
+        try{
+            toolbar.applyAppearance();toolbar.toggleExpanded();
+            const first=toolbar._actionsBox.get_first_child();
+            assert(toolbar.orientation===Clutter.Orientation.VERTICAL,'Toolbar supports vertical layout');
+            assert(first.get_child().get_children().length===1,'Icon-only toolbar omits labels');
+            assert(toolbar.get_style().includes('18px'),'Toolbar applies the configured radius');
+            assert(first.get_preferred_height(-1)[1]<36,'Default toolbar buttons stay compact');
+        }finally{toolbar.destroy();}
+
 
         let submitted='';let closed=false;
         const ask=new AskDialog(text=>{submitted=text;},null,()=>{closed=true;});this._dialog=ask;ask.open();await delay(150);

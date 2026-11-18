@@ -488,8 +488,11 @@ export default class PlyphExtension extends Extension {
         let y = pointerY + 12;
 
         this._floatingButton.remove_transition('opacity');
+        this._floatingButton.applyAppearance();
         this._floatingButton.opacity = 0;
         this._floatingButton.show();
+        if (this._settings.get_boolean('toolbar-open-expanded') && !this._floatingButton.expanded)
+            this._floatingButton.toggleExpanded();
 
         const [, naturalWidth] = this._floatingButton.get_preferred_width(-1);
         const [, naturalHeight] = this._floatingButton.get_preferred_height(naturalWidth);
@@ -536,7 +539,9 @@ export default class PlyphExtension extends Extension {
             return;
 
         this._clearFloatingToolbarCollapse();
-        if (expanded) {
+        if (expanded && this._keepToolbarOpen()) {
+            this._resetFloatingButtonTimeout(FLOATING_HIDE_DELAY);
+        } else if (expanded) {
             this._resetFloatingButtonTimeout(0);
             this._scheduleFloatingToolbarCollapse();
         } else if (!this._floatingButton?.showingFeedback) {
@@ -550,7 +555,9 @@ export default class PlyphExtension extends Extension {
         if (this._floatingButton?.hover || this._isPointerInsideFloatingButton())
             return;
 
-        if (this._floatingButton?.expanded)
+        if (this._floatingButton?.expanded && this._keepToolbarOpen())
+            this._resetFloatingButtonTimeout(FLOATING_HIDE_DELAY);
+        else if (this._floatingButton?.expanded)
             this._scheduleFloatingToolbarCollapse();
         else if (this._floatingButton?.showingFeedback)
             this._resetFloatingButtonTimeout();
@@ -610,6 +617,11 @@ export default class PlyphExtension extends Extension {
             y >= buttonY && y <= buttonY + buttonHeight;
     }
 
+    _keepToolbarOpen() {
+        return this._settings.get_boolean('toolbar-open-expanded') ||
+            this._settings.get_string('toolbar-duration') === 'longer';
+    }
+
     _resetFloatingButtonTimeout(timeoutDuration = null) {
         if (Number.isFinite(timeoutDuration))
             this._floatingButtonDismissDelay = Math.max(0, timeoutDuration);
@@ -623,7 +635,9 @@ export default class PlyphExtension extends Extension {
             this._hidingFloatingButton)
             return;
 
-        const deadline = GLib.get_monotonic_time() + this._floatingButtonDismissDelay * 1000;
+        const delay = this._settings.get_string('toolbar-duration') === 'longer'
+            ? this._floatingButtonDismissDelay * 2 : this._floatingButtonDismissDelay;
+        const deadline = GLib.get_monotonic_time() + delay * 1000;
         this._floatingButtonTimeoutId = GLib.timeout_add(
             GLib.PRIORITY_DEFAULT, FLOATING_TIMEOUT_CHECK_INTERVAL, () => {
                 if (GLib.get_monotonic_time() < deadline || this._isPointerInsideFloatingButton())

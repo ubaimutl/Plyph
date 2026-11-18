@@ -211,7 +211,7 @@ function createShell(version) {
     settings.get_string = key => values[key] ?? '';
     settings.get_boolean = key => values[key] ?? false;
     settings.get_double = key => values[key];
-    settings.get_int = () => 0;
+    settings.get_int = key => values[key] ?? (key === 'toolbar-radius' ? 12 : 0);
     settings.get_int64 = key => values[key] ?? 0;
     const keyboard = {notify_keyval: (time, key, state) => keyEvents.push({time, key, state})};
     const backend = {get_default_seat: () => ({create_virtual_device(type) {

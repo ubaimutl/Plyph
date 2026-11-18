@@ -106,12 +106,14 @@
   border: 1px solid rgba(70, 76, 88, 0.28);
   border-radius: 99px;
   box-shadow: 0 3px 12px rgba(0, 0, 0, 0.2);
-  padding: 1px;
+  padding: 2px;
   font-size: 12px;
   font-weight: 500;
 }
 
 .plyph-floating-logo {
+  min-width: 18px;
+  min-height: 18px;
   padding: 4px;
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 99px;
@@ -127,13 +129,13 @@
 }
 
 .plyph-floating-logo-icon {
-  icon-size: 16px;
+  icon-size: 18px;
   color: white;
 }
 
 .plyph-floating-actions {
-  spacing: 1px;
-  margin-left: 1px;
+  spacing: 3px;
+  margin-left: 3px;
 }
 
 .plyph-floating-status {
@@ -161,7 +163,9 @@
 }
 
 .plyph-floating-action-btn {
-  padding: 4px 8px;
+  padding: 5px;
+  min-width: 18px;
+  min-height: 18px;
   border: none;
   border-radius: 6px;
   background-color: transparent;
@@ -170,11 +174,11 @@
 
 .plyph-floating-action-btn:hover,
 .plyph-floating-action-btn:focus {
-  background-color: rgba(45, 91, 160, 0.12);
+  background-color: rgba(128, 128, 128, 0.18);
 }
 
 .plyph-floating-action-btn:active {
-  background-color: rgba(45, 91, 160, 0.18);
+  background-color: rgba(128, 128, 128, 0.28);
 }
 
 .plyph-floating-action-content {
@@ -182,48 +186,48 @@
 }
 
 .plyph-floating-action-icon {
-  icon-size: 13px;
-  color: #35373c;
+  icon-size: 16px;
+  color: inherit;
 }
 
 
-.plyph-floating-toolbar.plyph-toolbar-scale-125 { font-size: 15px; padding: 1.25px; border-width: 1.25px; }
-.plyph-floating-toolbar.plyph-toolbar-scale-125 .plyph-floating-logo { padding: 5px; border-width: 1.25px; }
-.plyph-floating-toolbar.plyph-toolbar-scale-125 .plyph-floating-logo-icon { icon-size: 20px; }
-.plyph-floating-toolbar.plyph-toolbar-scale-125 .plyph-floating-actions { spacing: 1.25px; margin-left: 1.25px; }
-.plyph-floating-toolbar.plyph-toolbar-scale-125 .plyph-floating-action-btn { padding: 5px 10px; border-radius: 7.5px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-125 { border-width: 1.25px; font-size: 15px; padding: 2.5px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-125 .plyph-floating-logo { border-width: 1.25px; padding: 5px; min-width: 22.5px; min-height: 22.5px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-125 .plyph-floating-logo-icon { icon-size: 22.5px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-125 .plyph-floating-actions { spacing: 3.75px; margin-left: 3.75px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-125 .plyph-floating-action-btn { border-radius: 7.5px; padding: 6.25px; min-width: 22.5px; min-height: 22.5px; }
 .plyph-floating-toolbar.plyph-toolbar-scale-125 .plyph-floating-action-content { spacing: 5px; }
-.plyph-floating-toolbar.plyph-toolbar-scale-125 .plyph-floating-action-icon { icon-size: 16.25px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-125 .plyph-floating-action-icon { icon-size: 20px; }
 .plyph-floating-toolbar.plyph-toolbar-scale-125 .plyph-floating-status { padding: 5px 12.5px 5px 7.5px; }
 .plyph-floating-toolbar.plyph-toolbar-scale-125 .plyph-floating-status-label { max-width: 375px; }
 
-.plyph-floating-toolbar.plyph-toolbar-scale-150 { font-size: 18px; padding: 1.5px; border-width: 1.5px; }
-.plyph-floating-toolbar.plyph-toolbar-scale-150 .plyph-floating-logo { padding: 6px; border-width: 1.5px; }
-.plyph-floating-toolbar.plyph-toolbar-scale-150 .plyph-floating-logo-icon { icon-size: 24px; }
-.plyph-floating-toolbar.plyph-toolbar-scale-150 .plyph-floating-actions { spacing: 1.5px; margin-left: 1.5px; }
-.plyph-floating-toolbar.plyph-toolbar-scale-150 .plyph-floating-action-btn { padding: 6px 12px; border-radius: 9px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-150 { border-width: 1.5px; font-size: 18px; padding: 3px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-150 .plyph-floating-logo { border-width: 1.5px; padding: 6px; min-width: 27px; min-height: 27px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-150 .plyph-floating-logo-icon { icon-size: 27px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-150 .plyph-floating-actions { spacing: 4.5px; margin-left: 4.5px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-150 .plyph-floating-action-btn { border-radius: 9px; padding: 7.5px; min-width: 27px; min-height: 27px; }
 .plyph-floating-toolbar.plyph-toolbar-scale-150 .plyph-floating-action-content { spacing: 6px; }
-.plyph-floating-toolbar.plyph-toolbar-scale-150 .plyph-floating-action-icon { icon-size: 19.5px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-150 .plyph-floating-action-icon { icon-size: 24px; }
 .plyph-floating-toolbar.plyph-toolbar-scale-150 .plyph-floating-status { padding: 6px 15px 6px 9px; }
 .plyph-floating-toolbar.plyph-toolbar-scale-150 .plyph-floating-status-label { max-width: 450px; }
 
-.plyph-floating-toolbar.plyph-toolbar-scale-175 { font-size: 21px; padding: 1.75px; border-width: 1.75px; }
-.plyph-floating-toolbar.plyph-toolbar-scale-175 .plyph-floating-logo { padding: 7px; border-width: 1.75px; }
-.plyph-floating-toolbar.plyph-toolbar-scale-175 .plyph-floating-logo-icon { icon-size: 28px; }
-.plyph-floating-toolbar.plyph-toolbar-scale-175 .plyph-floating-actions { spacing: 1.75px; margin-left: 1.75px; }
-.plyph-floating-toolbar.plyph-toolbar-scale-175 .plyph-floating-action-btn { padding: 7px 14px; border-radius: 10.5px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-175 { border-width: 1.75px; font-size: 21px; padding: 3.5px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-175 .plyph-floating-logo { border-width: 1.75px; padding: 7px; min-width: 31.5px; min-height: 31.5px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-175 .plyph-floating-logo-icon { icon-size: 31.5px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-175 .plyph-floating-actions { spacing: 5.25px; margin-left: 5.25px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-175 .plyph-floating-action-btn { border-radius: 10.5px; padding: 8.75px; min-width: 31.5px; min-height: 31.5px; }
 .plyph-floating-toolbar.plyph-toolbar-scale-175 .plyph-floating-action-content { spacing: 7px; }
-.plyph-floating-toolbar.plyph-toolbar-scale-175 .plyph-floating-action-icon { icon-size: 22.75px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-175 .plyph-floating-action-icon { icon-size: 28px; }
 .plyph-floating-toolbar.plyph-toolbar-scale-175 .plyph-floating-status { padding: 7px 17.5px 7px 10.5px; }
 .plyph-floating-toolbar.plyph-toolbar-scale-175 .plyph-floating-status-label { max-width: 525px; }
 
-.plyph-floating-toolbar.plyph-toolbar-scale-200 { font-size: 24px; padding: 2px; border-width: 2px; }
-.plyph-floating-toolbar.plyph-toolbar-scale-200 .plyph-floating-logo { padding: 8px; border-width: 2px; }
-.plyph-floating-toolbar.plyph-toolbar-scale-200 .plyph-floating-logo-icon { icon-size: 32px; }
-.plyph-floating-toolbar.plyph-toolbar-scale-200 .plyph-floating-actions { spacing: 2px; margin-left: 2px; }
-.plyph-floating-toolbar.plyph-toolbar-scale-200 .plyph-floating-action-btn { padding: 8px 16px; border-radius: 12px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-200 { border-width: 2px; font-size: 24px; padding: 4px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-200 .plyph-floating-logo { border-width: 2px; padding: 8px; min-width: 36px; min-height: 36px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-200 .plyph-floating-logo-icon { icon-size: 36px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-200 .plyph-floating-actions { spacing: 6px; margin-left: 6px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-200 .plyph-floating-action-btn { border-radius: 12px; padding: 10px; min-width: 36px; min-height: 36px; }
 .plyph-floating-toolbar.plyph-toolbar-scale-200 .plyph-floating-action-content { spacing: 8px; }
-.plyph-floating-toolbar.plyph-toolbar-scale-200 .plyph-floating-action-icon { icon-size: 26px; }
+.plyph-floating-toolbar.plyph-toolbar-scale-200 .plyph-floating-action-icon { icon-size: 32px; }
 .plyph-floating-toolbar.plyph-toolbar-scale-200 .plyph-floating-status { padding: 8px 20px 8px 12px; }
 .plyph-floating-toolbar.plyph-toolbar-scale-200 .plyph-floating-status-label { max-width: 600px; }
 
@@ -345,4 +349,27 @@
 .plyph-discussion-message.loading {
   color: #aaaaaa;
   min-width: 85px;
+}
+
+.plyph-floating-toolbar.plyph-surface-dark {
+  background-color: #252529;
+  color: #f4f4f6;
+}
+
+.plyph-floating-toolbar.plyph-surface-light {
+  background-color: #fafafa;
+  color: #232326;
+}
+
+.plyph-floating-toolbar.plyph-surface-dark .plyph-floating-action-btn {
+  color: inherit;
+}
+
+.plyph-floating-toolbar.plyph-surface-dark .plyph-floating-action-icon {
+  color: #f4f4f6;
+}
+
+.plyph-floating-toolbar.plyph-surface-dark .plyph-floating-action-btn:hover,
+.plyph-floating-toolbar.plyph-surface-dark .plyph-floating-action-btn:focus {
+  background-color: rgba(128, 128, 128, 0.25);
 }
