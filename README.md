@@ -147,7 +147,7 @@ The compatibility suite covers GNOME Shell 46–51 API branches with mocks. Nati
 After packaging, you can inspect the ZIP with Shexli:
 
 ```bash
-shexli --format json ai-autocorrect@ubai.dev.shell-extension.zip
+shexli --format json plyph@ubai.dev.shell-extension.zip
 ```
 
 Shexli 0.2.1 has known limitations around clipboard-access review and GNOME 51 version detection; assess its warnings rather than treating every finding as a confirmed issue.
@@ -172,13 +172,13 @@ gnome-extensions pack --force \
   --extra-source=icons \
   --extra-source=LICENSE \
   --schema=schemas/org.gnome.shell.extensions.ai-autocorrect.gschema.xml
-gnome-extensions install --force ai-autocorrect@ubai.dev.shell-extension.zip
+gnome-extensions install --force plyph@ubai.dev.shell-extension.zip
 ```
 
 Log out and back in, then enable the extension:
 
 ```bash
-gnome-extensions enable ai-autocorrect@ubai.dev
+gnome-extensions enable plyph@ubai.dev
 ```
 
 ## License
