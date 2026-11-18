@@ -250,7 +250,7 @@ function createShell(version) {
     const context = vm.createContext({
         console, Clutter, Main,
         Config: {PACKAGE_VERSION: `${version}.0`},
-        GObject: {registerClass: cls => cls},
+        GObject: {registerClass: (meta, cls) => cls ?? meta},
         GLib: {
             Error: IOError,
             PRIORITY_DEFAULT: 0, SOURCE_REMOVE: false, SOURCE_CONTINUE: true,

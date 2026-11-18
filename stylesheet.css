@@ -351,18 +351,52 @@
   min-width: 85px;
 }
 
+.plyph-compact-result {
+  spacing: 10px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(128, 128, 128, 0.35);
+  background-color: #2e2e31;
+  color: #f5f5f6;
+  box-shadow: 0 5px 22px rgba(0, 0, 0, 0.32);
+}
+
+.plyph-compact-result .plyph-result-scroll {
+  background-color: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.plyph-compact-result .plyph-compact-replace {
+  color: #202024;
+  background-color: #f0f0f2;
+}
+
 .plyph-floating-toolbar.plyph-surface-dark {
   background-color: #252529;
   color: #f4f4f6;
 }
 
-.plyph-floating-toolbar.plyph-surface-light {
+.plyph-floating-toolbar.plyph-surface-light,
+.plyph-compact-result.plyph-surface-light {
   background-color: #fafafa;
   color: #232326;
 }
 
+.plyph-compact-result.plyph-surface-light .button,
 .plyph-floating-toolbar.plyph-surface-dark .plyph-floating-action-btn {
   color: inherit;
+}
+
+.plyph-compact-result.plyph-surface-light .plyph-compact-replace {
+  color: #fff;
+  background-color: #27272a;
+}
+
+.plyph-compact-result.plyph-surface-light .plyph-discussion-message,
+.plyph-compact-result.plyph-surface-light StEntry {
+  background-color: #ebebee;
+  color: #232326;
 }
 
 .plyph-floating-toolbar.plyph-surface-dark .plyph-floating-action-icon {
@@ -370,6 +404,111 @@
 }
 
 .plyph-floating-toolbar.plyph-surface-dark .plyph-floating-action-btn:hover,
-.plyph-floating-toolbar.plyph-surface-dark .plyph-floating-action-btn:focus {
+.plyph-floating-toolbar.plyph-surface-dark .plyph-floating-action-btn:focus,
+.plyph-compact-result .button:active,
+.plyph-compact-result .button:checked {
   background-color: rgba(128, 128, 128, 0.25);
+}
+
+.plyph-compact-result .button:focus {
+  box-shadow: inset 0 0 0 2px rgba(128, 128, 128, 0.6);
+}
+
+
+.plyph-compact-result .plyph-result-surface {
+  padding: 4px 0;
+}
+
+.plyph-compact-result .plyph-compact-model {
+  color: rgba(245, 245, 246, 0.74);
+  font-size: 0.9em;
+  max-width: 205px;
+}
+
+.plyph-compact-result.plyph-surface-light .plyph-compact-model {
+  color: #58585e;
+}
+
+.plyph-compact-result .plyph-compact-tool {
+  min-width: 20px;
+  min-height: 20px;
+  padding: 7px;
+  border-radius: 8px;
+  color: inherit;
+}
+
+.plyph-compact-result .plyph-compact-tool:disabled {
+  opacity: 0.38;
+}
+
+.plyph-compact-result .plyph-compact-tool StIcon,
+.plyph-compact-result .plyph-compact-close StIcon {
+  color: #f5f5f6;
+  icon-size: 18px;
+}
+
+.plyph-compact-result.plyph-surface-light .plyph-compact-tool StIcon,
+.plyph-compact-result.plyph-surface-light .plyph-compact-close StIcon {
+  color: #232326;
+}
+
+.plyph-compact-result .plyph-compact-tool,
+.plyph-compact-result .plyph-compact-close {
+  background-color: #2e2e31;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+}
+
+.plyph-compact-result.plyph-surface-light .plyph-compact-tool,
+.plyph-compact-result.plyph-surface-light .plyph-compact-close {
+  background-color: #fafafa;
+}
+
+.plyph-compact-result .plyph-compact-tool:hover,
+.plyph-compact-result .plyph-compact-tool:active,
+.plyph-compact-result .plyph-compact-tool:checked,
+.plyph-compact-result .plyph-compact-close:hover {
+  background-color: #414145;
+}
+
+.plyph-compact-result.plyph-surface-light .plyph-compact-tool:hover,
+.plyph-compact-result.plyph-surface-light .plyph-compact-tool:active,
+.plyph-compact-result.plyph-surface-light .plyph-compact-tool:checked,
+.plyph-compact-result.plyph-surface-light .plyph-compact-close:hover {
+  background-color: #e8e8eb;
+}
+
+.plyph-compact-result.plyph-surface-light StEntry {
+  selection-background-color: #b9cfe9;
+  selected-color: #172b42;
+}
+
+.plyph-compact-result.plyph-surface-light .plyph-refine-submit {
+  background-color: #353539;
+  background-image: none;
+  color: #ffffff;
+  border-color: #353539;
+}
+
+.plyph-compact-result.plyph-surface-light .plyph-refine-submit StIcon {
+  color: #ffffff;
+}
+
+.plyph-compact-result.plyph-surface-light .plyph-refine-submit:hover,
+.plyph-compact-result.plyph-surface-light .plyph-refine-submit:focus {
+  background-color: #494950;
+}
+
+.plyph-compact-result.plyph-surface-light .plyph-refine-submit:insensitive {
+  opacity: 0.55;
+}
+
+.plyph-compact-result.plyph-surface-light .plyph-result-nav,
+.plyph-compact-result.plyph-surface-light .plyph-result-count {
+  color: #45454b;
+}
+
+.plyph-compact-result.plyph-surface-light .plyph-result-nav:insensitive {
+  opacity: 0.42;
 }

@@ -10,7 +10,7 @@ import PlyphExtension from './subject.js';
 import {SelectionCapture} from './shell/selectionCapture.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {FloatingToolbar} from './shell/floatingToolbar.js';
-import {ResultDialog, AskDialog, ErrorDialog} from './shell/dialogs.js';
+import {ResultDialog, CompactResultPopup, AskDialog, ErrorDialog} from './shell/dialogs.js';
 Gio._promisify(Shell.Screenshot.prototype, 'screenshot_area');
 const delay = ms => new Promise(resolve => GLib.timeout_add(GLib.PRIORITY_DEFAULT,ms,()=>{resolve();return GLib.SOURCE_REMOVE;}));
 function assert(ok,description){if(!ok)throw new Error(description);print(`PLYPH-NATIVE: PASS ${description}`);}
@@ -117,6 +117,15 @@ export default class NativeTest extends Extension {
               assert(restoredImage===copiedImage,'Firefox Copy Image: capture restores exact PNG bytes');
               await replacement._replace('Corrected image-case text',false,'Replaced',win,null);
               assert(await readImage()===copiedImage,'Firefox Copy Image: Replace restores exact PNG bytes');
+              const dismissible=new CompactResultPopup('Dismiss over Firefox',null,()=>{},()=>{},null,()=>{this._dialog=null;});
+              dismissible.dismissOutside=true;
+              dismissible.selectionAnchor={x:rect.x+30,y:rect.y+80};
+              this._dialog=dismissible;dismissible.open();await delay(180);
+              await moveTo(rect.x+rect.width-35,rect.y+rect.height/2);
+              pointer.notify_button(time(),1,Clutter.ButtonState.PRESSED);await delay(70);
+              pointer.notify_button(time(),1,Clutter.ButtonState.RELEASED);await delay(100);
+              assert(this._dialog===null,'Clicking the Firefox window outside the compact popup dismisses it');
+
 
             }catch(error){throw new Error(`${error.message}; clipboard=${JSON.stringify(await read())}; Firefox clipboard events: ${JSON.stringify(events)}`);}
             finally{external.destroy();selection.disconnect(signal);}
@@ -172,9 +181,9 @@ export default class NativeTest extends Extension {
         assert(reply.clutter_text.selection_color_set&&reply.clutter_text.selected_text_color_set,'Discussion reply: explicit selection colors');
         assert(highlight.to_string()!==selectedInk.to_string(),'Discussion reply: selection has visible contrast');
         assert(!reply.clutter_text.editable,'Discussion reply: selection does not enable editing');
-        const captureReply=async name=>{
+        const captureActor=async(name, actor)=>{
             await delay(80);
-            const [x,y]=reply.get_transformed_position();const [width,height]=reply.get_transformed_size();
+            const [x,y]=actor.get_transformed_position();const [width,height]=actor.get_transformed_size();
             const stream=Gio.MemoryOutputStream.new_resizable();
             await new Shell.Screenshot().screenshot_area(Math.floor(x),Math.floor(y),Math.ceil(width),Math.ceil(height),stream);
             stream.close(null);
@@ -182,15 +191,15 @@ export default class NativeTest extends Extension {
             const directory=GLib.getenv('PLYPH_NATIVE_CAPTURE_DIR');
             if(directory){GLib.mkdir_with_parents(directory,0o700);GLib.file_set_contents(`${directory}/${name}.png`,bytes.get_data());}
             const input=Gio.MemoryInputStream.new_from_bytes(bytes);
-            const pixels=GdkPixbuf.Pixbuf.new_from_stream(input,null).get_pixels();
+            const pixbuf=GdkPixbuf.Pixbuf.new_from_stream(input,null);
             input.close(null);
-            return pixels;
+            return pixbuf;
         };
-        const selectedPixels=await captureReply('selected');
+        const selectedPixels=(await captureActor('selected',reply)).get_pixels();
         const selectionStart=reply.clutter_text.get_cursor_position();
         const selectionEnd=reply.clutter_text.get_selection_bound();
         reply.clutter_text.set_selection(0,0);
-        const unselectedPixels=await captureReply('unselected');
+        const unselectedPixels=(await captureActor('unselected',reply)).get_pixels();
         const changed=selectedPixels.reduce((count,value,index)=>count+(value!==unselectedPixels[index]?1:0),0);
         assert(changed>100,`Discussion reply: mouse selection visibly changes rendered pixels (${changed} channels)`);
         reply.clutter_text.set_selection(selectionStart,selectionEnd);
@@ -279,6 +288,90 @@ export default class NativeTest extends Extension {
             assert(text.get_selection_color().to_string()!==text.get_selected_text_color().to_string(),`${name}: readable selection contrast`);
         }
         plain.destroy();this._dialog=null;await delay(100);
+
+        let closedCompact=false;
+        const compact=new CompactResultPopup('Short result',()=>{},()=>{},()=>{},null,()=>{closedCompact=true;},
+            'Original text',false,{modelLabel:'Groq · test-model',iconsPath:this.path+'/icons',run:async()=>'Refined popup result',destroy(){}});
+        compact.dismissOutside=true;
+        compact.selectionAnchor={x:220,y:190};
+        await moveTo(890,620);
+        this._dialog=compact;compact.open();await delay(100);
+        assert(compact.x===232&&compact.y===204,'Compact popup opens at its selection anchor rather than the pointer');
+        assert(compact.get_parent()===Main.uiGroup,'Compact preview sits above app windows without a modal dialog');
+        assert(compact._dismissShield.get_parent()===Main.uiGroup,'Outside-click target covers app windows when enabled');
+        const header=compact.contentLayout.get_first_child();
+        const modelLabel=header.get_children().find(actor=>actor instanceof St.Label&&actor.get_text()==='Groq · test-model');
+        assert(modelLabel,'Compact preview shows the model in its header');
+        assert(compact._changesButton.get_parent()===compact.buttonLayout&&compact._refineToggle.get_parent()===compact.buttonLayout,
+            'Compact preview puts its tools in the footer');
+        for(const theme of ['dark','light']){
+            if(theme==='light')compact.add_style_class_name('plyph-surface-light');
+            for(const [name,icon] of [['changes',compact._changesButton.get_child()],['discussion',compact._discussToggle.get_child()],['enlarge',compact._expandIcon]]){
+                const pixbuf=await captureActor(`compact-${theme}-${name}`,icon);
+                const pixels=pixbuf.get_pixels();
+                const channels=pixbuf.get_n_channels();
+                const stride=pixbuf.get_rowstride();
+                let dark=0, light=0;
+                for(let y=0;y<pixbuf.height;y++){
+                    for(let x=0;x<pixbuf.width;x++){
+                        const offset=y*stride+x*channels;
+                        const intensity=(pixels[offset]+pixels[offset+1]+pixels[offset+2])/3;
+                        if(intensity<85)dark++;
+                        if(intensity>190)light++;
+                    }
+                }
+                assert(dark>15&&light>15,`Compact ${name} icon renders with contrast on the ${theme} surface`);
+            }
+        }
+        compact.remove_style_class_name('plyph-surface-light');
+        const footerGap=compact.buttonLayout.get_children().at(-2);
+        for(const [name,actor] of [['title',header.get_first_child()],['model label',modelLabel],['footer gap',footerGap]]){
+            const [x,y]=actor.get_transformed_position();
+            const [width,height]=actor.get_transformed_size();
+            await moveTo(x+width/2,y+height/2);
+            const [oldX,oldY]=compact.get_position();
+            pointer.notify_button(time(),1,Clutter.ButtonState.PRESSED);await delay(80);
+            pointer.notify_relative_motion(time(),35,25);await delay(180);
+            pointer.notify_button(time(),1,Clutter.ButtonState.RELEASED);await delay(120);
+            assert(compact.x>oldX+25&&compact.y>oldY+15&&!compact._dragTimer,
+                `Compact popup follows a drag from the ${name} and releases its timer`);
+        }
+        const compactWidth=compact._scroll.width;
+        compact._toggleExpanded({});
+        assert(compact._scroll.width>compactWidth,'Compact preview enlarges');
+        await edit(compact._label,'Compact result editor');
+        compact.add_style_class_name('plyph-surface-light');
+        await click(compact._refineToggle);
+        assert(compact._refineEntry.get_theme_node().get_color('color').red<100,
+            'Light compact input uses dark foreground text');
+        assert(compact._refineEntry.hint_actor.mapped&&compact._refineEntry.hint_actor.get_theme_node().get_color('color').red<120,
+            'Light compact refinement shows a readable placeholder');
+        const selectionColor=compact._refineEntry.clutter_text.get_selection_color();
+        assert(selectionColor.red<220,'Light compact selection uses a visible background');
+        compact._refineEntry.set_text('Refine this');
+        await click(compact._refineButton);await delay(120);
+        assert(compact._label.get_text()==='Refined popup result','Compact refine submit works with mouse input');
+        await click(compact._previousButton);
+        assert(compact._label.get_text()==='Hello 🌍\nSecond line','Previous revision works by mouse');
+        await click(compact._nextButton);
+        assert(compact._label.get_text()==='Refined popup result','Next revision works by mouse');
+        assert(!compact._dragTimer,'Revision clicks never start a drag');
+        await click(compact._discussToggle);
+        assert(compact._refineEntry.hint_actor.mapped&&compact._refineEntry.hint_actor.get_theme_node().get_color('color').red<120,
+            'Light compact discussion shows a readable placeholder');
+        await moveTo(12,160);
+        pointer.notify_button(time(),1,Clutter.ButtonState.PRESSED);await delay(50);
+        pointer.notify_button(time(),1,Clutter.ButtonState.RELEASED);await delay(100);
+        assert(closedCompact,'Outside click closes compact preview when enabled');
+        const persistent=new CompactResultPopup('Keep open',()=>{},()=>{},()=>{},null,()=>{this._dialog=null;});
+        this._dialog=persistent;persistent.open();await delay(100);
+        await moveTo(12,400);
+        pointer.notify_button(time(),1,Clutter.ButtonState.PRESSED);await delay(50);
+        pointer.notify_button(time(),1,Clutter.ButtonState.RELEASED);await delay(100);
+        assert(this._dialog===persistent&&!persistent._dismissShield,'Outside click keeps the compact preview open by default');
+        persistent._replaceButton.grab_key_focus();await combo(Clutter.KEY_Escape);
+        assert(this._dialog===null,'Escape closes compact preview');
+        this._dialog=null;
 
         const values={'toolbar-layout':'vertical','popup-theme':'dark','quick-actions':'["translate"]'};
         const toolbar=new FloatingToolbar(null,()=>[{id:'translate',mode:'custom',name:'Translate',icon:'web-browser-symbolic'}],

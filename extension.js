@@ -13,11 +13,11 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 
-import {providerModel} from './providers.js';
+import {providerModel, resolveProvider} from './providers.js';
 import {migrateProviderSettings} from './secrets.js';
 import {AiClient} from './ai.js';
 import {readActions} from './actions.js';
-import {ErrorDialog, ResultDialog, AskDialog} from './shell/dialogs.js';
+import {ErrorDialog, ResultDialog, CompactResultPopup, AskDialog} from './shell/dialogs.js';
 import {ActionPalette} from './shell/actionPalette.js';
 import {FloatingToolbar} from './shell/floatingToolbar.js';
 import {SelectionCapture} from './shell/selectionCapture.js';
@@ -484,6 +484,7 @@ export default class PlyphExtension extends Extension {
         if (!this._floatingButton) return;
 
         const [pointerX, pointerY] = global.get_pointer();
+        this._selectionAnchor = {x: pointerX, y: pointerY};
         let x = pointerX + 12;
         let y = pointerY + 12;
 
@@ -657,6 +658,7 @@ export default class PlyphExtension extends Extension {
         }
         this._selectionReadSerial = (this._selectionReadSerial ?? 0) + 1;
         this._lastSelectionText = null;
+        this._selectionAnchor = null;
         this._floatingButtonDismissDelay = 0;
         this._clearFloatingSourceWindow();
         this._clearFloatingToolbarCollapse();
@@ -824,6 +826,7 @@ export default class PlyphExtension extends Extension {
             return;
         const client = this._client;
         let focusedWindow = global.display.focus_window ?? this._floatingSourceWindow;
+        const selectionAnchor = this._floatingSourceWindow === focusedWindow ? this._selectionAnchor : null;
         this._hideFloatingButton(true);
         this._busy = true;
         this._setIcon('content-loading-symbolic');
@@ -852,7 +855,7 @@ export default class PlyphExtension extends Extension {
                 this._restoreDefaultIcon();
                 this._hideFloatingButton();
                 this._clearPointerFeedback();
-                this._showAskDialog(focusedWindow, selection, text, client);
+                this._showAskDialog(focusedWindow, selection, text, client, selectionAnchor);
                 return;
             }
 
@@ -870,7 +873,7 @@ export default class PlyphExtension extends Extension {
                 return;
             if (this._settings.get_boolean('preview-results'))
                 this._showPreview(output, focusedWindow, selection.primaryText,
-                    mode !== 'prompt' && options.inputMode !== 'prompt' ? text : null, requestOptions, text, actionContext);
+                    mode !== 'prompt' && options.inputMode !== 'prompt' ? text : null, requestOptions, text, actionContext, selectionAnchor);
             else
                 await this._replace(
                     output, false,
@@ -894,7 +897,7 @@ export default class PlyphExtension extends Extension {
         }
     }
 
-    _showAskDialog(focusedWindow, selection, text, client) {
+    _showAskDialog(focusedWindow, selection, text, client, selectionAnchor) {
         if (this._askDialog)
             this._askDialog.destroy();
 
@@ -907,7 +910,7 @@ export default class PlyphExtension extends Extension {
                 const systemPrompt = "Use the provided context and the user's instruction to produce the requested response. " +
                     'Return only the useful requested output unless the user explicitly asks for an explanation.';
                 const userPrompt = `Context:\n${text}\n\nInstruction:\n${instruction}`;
-                this._processAsk(focusedWindow, selection, userPrompt, client, systemPrompt);
+                this._processAsk(focusedWindow, selection, userPrompt, client, systemPrompt, selectionAnchor);
             },
             () => {
                 this._busy = false;
@@ -921,7 +924,7 @@ export default class PlyphExtension extends Extension {
         dialog.open();
     }
 
-    async _processAsk(focusedWindow, selection, text, client, prompt) {
+    async _processAsk(focusedWindow, selection, text, client, prompt, selectionAnchor) {
         this._setIcon('content-loading-symbolic');
         this._showFeedback(_('Working…'), 'working', 0);
         try {
@@ -932,7 +935,7 @@ export default class PlyphExtension extends Extension {
             if (this._settings.get_boolean('preview-results'))
                 this._showPreview(output, focusedWindow, selection.primaryText, null,
                     {usePersonalPreferences: this._settings.get_boolean('ask-use-personal-preferences')}, text,
-                    {mode: 'ask', instructions: prompt});
+                    {mode: 'ask', instructions: prompt}, selectionAnchor);
             else
                 await this._replace(output, false, _('Generated'), focusedWindow, selection.primaryText);
         } catch (error) {
@@ -951,7 +954,7 @@ export default class PlyphExtension extends Extension {
         }
     }
 
-    _showPreview(output, focusedWindow, primaryText, original = null, options = {}, context = original, action = null) {
+    _showPreview(output, focusedWindow, primaryText, original = null, options = {}, context = original, action = null, selectionAnchor = null, canReplace = true) {
         if (this._previewDialog)
             this._previewDialog.destroy();
         const refinementClient = new AiClient(this._settings);
@@ -976,8 +979,14 @@ export default class PlyphExtension extends Extension {
                 'the user can use Refine to update the result.', refinementOptions),
             destroy: () => refinementClient.destroy(),
         };
-        const dialog = new ResultDialog(output,
-            result => this._replace(result, true, _('Replaced'), focusedWindow, primaryText),
+        const compact = this._settings.get_string('result-preview-style') === 'compact';
+        if (compact) {
+            const providerName = resolveProvider(this._settings, provider).name;
+            refinement.modelLabel = [providerName, refinementOptions.model].filter(Boolean).join(' · ');
+        }
+        const Preview = compact ? CompactResultPopup : ResultDialog;
+        const dialog = new Preview(output,
+            canReplace ? result => this._replace(result, true, _('Replaced'), focusedWindow, primaryText, compact) : null,
             result => {
                 this._clipboard.set_text(St.ClipboardType.CLIPBOARD, result);
                 this._setIcon('emblem-ok-symbolic', 1200);
@@ -990,6 +999,16 @@ export default class PlyphExtension extends Extension {
                 if (this._previewDialog === dialog)
                     this._previewDialog = null;
             }, original, this._settings.get_boolean('preview-show-changes'), refinement);
+        if (compact) {
+            const frame = focusedWindow?.get_frame_rect?.();
+            dialog.selectionAnchor = selectionAnchor ?? (frame
+                ? {x: frame.x + Math.round(frame.width * 0.55), y: frame.y + 32} : null);
+            dialog.sourceMonitor = focusedWindow?.get_monitor?.();
+            dialog.dismissOutside = this._settings.get_boolean('compact-dismiss-outside');
+            const theme = this._settings.get_string('popup-theme');
+            if (theme === 'dark' || theme === 'light')
+                dialog.add_style_class_name(`plyph-surface-${theme}`);
+        }
         this._previewDialog = dialog;
         dialog.open();
         this._restoreDefaultIcon();
@@ -997,18 +1016,27 @@ export default class PlyphExtension extends Extension {
         this._clearPointerFeedback();
     }
 
-    async _replace(output, delayed, message, focusedWindow, primaryText) {
+    async _replace(output, delayed, message, focusedWindow, primaryText, requireSourceFocus = false) {
         const client = this._client;
         const wasBusy = this._busy;
         this._busy = true;
+        const checkSource = () => {
+            if (requireSourceFocus && global.display.focus_window !== focusedWindow)
+                throw new Error(_('Return to the original window before replacing.'));
+        };
         const run = async canPaste => {
             await this._pasteWhenReady(delayed ? 200 : 0, message, () => {
                 this._rememberUndo(focusedWindow);
                 this._discardConsumedPrimary(primaryText);
-            }, canPaste);
+            }, () => {
+                checkSource();
+                return canPaste();
+            });
             await this._delay(500);
         };
         try {
+            if (global.display.focus_window)
+                checkSource();
             if (this._settings.get_boolean('preserve-clipboard')) {
                 await this._selectionCapture.paste({
                     selection: global.display.get_selection(), clipboard: this._clipboard, text: output,

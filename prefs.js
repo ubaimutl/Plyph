@@ -380,6 +380,18 @@ export default class PlyphPreferences extends ExtensionPreferences {
         });
         settings.bind('preview-results', preview, 'active', Gio.SettingsBindFlags.DEFAULT);
         behavior.add(preview);
+        const previewStyle = choice(behavior, 'result-preview-style', _('Preview style'),
+            ['dialog', 'compact'], [_('Dialog'), _('Compact popup')]);
+        settings.bind('preview-results', previewStyle, 'sensitive', Gio.SettingsBindFlags.GET);
+        const dismissOutside = new Adw.SwitchRow({title: _('Close compact popup when clicking outside')});
+        settings.bind('compact-dismiss-outside', dismissOutside, 'active', Gio.SettingsBindFlags.DEFAULT);
+        const updateDismissOutside = () => {
+            dismissOutside.sensitive = preview.active && previewStyle.selected === 1;
+        };
+        preview.connect('notify::active', updateDismissOutside);
+        previewStyle.connect('notify::selected', updateDismissOutside);
+        updateDismissOutside();
+        behavior.add(dismissOutside);
         const previewChanges = new Adw.SwitchRow({
             title: _('Show changes by default'),
             subtitle: _('Open transformed-text previews in the changes view.'),
