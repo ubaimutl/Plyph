@@ -1,3 +1,4 @@
+import {_, format} from '../i18n.js';
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
@@ -18,7 +19,7 @@ class ErrorDialog extends ModalDialog.ModalDialog {
     _init(message, onCopy) {
         super._init({destroyOnClose: true});
         this.contentLayout.add_child(new St.Label({
-            text: 'Plyph couldn’t complete the action',
+            text: _('Plyph couldn’t complete the action'),
             style_class: 'modal-dialog-headline',
         }));
         const monitor = Main.layoutManager.currentMonitor ?? Main.layoutManager.primaryMonitor;
@@ -45,8 +46,8 @@ class ErrorDialog extends ModalDialog.ModalDialog {
         scroll.set_child(surface);
         this.contentLayout.add_child(scroll);
         this.setButtons([
-            {label: 'Copy error', action: () => onCopy(message)},
-            {label: 'Close', key: Clutter.KEY_Escape, default: true, action: () => this.close()},
+            {label: _('Copy error'), action: () => onCopy(message)},
+            {label: _('Close'), key: Clutter.KEY_Escape, default: true, action: () => this.close()},
         ]);
     }
 });
@@ -83,7 +84,7 @@ class ResultDialog extends ModalDialog.ModalDialog {
             x_expand: true,
         });
         const title = new St.BoxLayout({x_expand: true, style_class: 'plyph-preview-title'});
-        title.add_child(new St.Label({text: 'Result', style_class: 'modal-dialog-headline',
+        title.add_child(new St.Label({text: _('Result'), style_class: 'modal-dialog-headline',
             y_align: Clutter.ActorAlign.CENTER}));
         header.add_child(title);
         if (refinement) {
@@ -95,10 +96,10 @@ class ResultDialog extends ModalDialog.ModalDialog {
                 style_class: 'plyph-result-count'});
             title.add_child(this._resultCount);
             this._previousButton = new St.Button({visible: false, child: icon('previous'),
-                style_class: 'icon-button flat plyph-result-nav', accessible_name: 'Previous result',
+                style_class: 'icon-button flat plyph-result-nav', accessible_name: _('Previous result'),
                 reactive: false, can_focus: false, track_hover: true});
             this._nextButton = new St.Button({visible: false, child: icon('next'),
-                style_class: 'icon-button flat plyph-result-nav', accessible_name: 'Next result',
+                style_class: 'icon-button flat plyph-result-nav', accessible_name: _('Next result'),
                 reactive: false, can_focus: false, track_hover: true});
             this._previousId = this._previousButton.connect('clicked', () => this._switchResult(-1));
             this._nextId = this._nextButton.connect('clicked', () => this._switchResult(1));
@@ -106,11 +107,11 @@ class ResultDialog extends ModalDialog.ModalDialog {
             title.add_child(this._nextButton);
         }
         const wrapButton = new St.Button({
-            label: 'Wrap',
+            label: _('Wrap'),
             style_class: 'button flat plyph-preview-wrap',
             toggle_mode: true,
             checked: true,
-            accessible_name: 'Wrap lines',
+            accessible_name: _('Wrap lines'),
             can_focus: true,
             reactive: true,
             track_hover: true,
@@ -120,7 +121,7 @@ class ResultDialog extends ModalDialog.ModalDialog {
         const expandButton = new St.Button({
             style_class: 'icon-button flat plyph-preview-icon',
             child: this._expandIcon,
-            accessible_name: 'Enlarge preview',
+            accessible_name: _('Enlarge preview'),
             can_focus: true,
             reactive: true,
             track_hover: true,
@@ -129,11 +130,11 @@ class ResultDialog extends ModalDialog.ModalDialog {
         header.add_child(expandButton);
         if (original !== null) {
             this._changesButton = new St.Button({
-                label: 'Show changes',
+                label: _('Show changes'),
                 style_class: 'button flat plyph-preview-wrap',
                 toggle_mode: true, checked: false, can_focus: true,
                 reactive: true, track_hover: true,
-                accessible_name: 'Show changes from the original text',
+                accessible_name: _('Show changes from the original text'),
             });
             this._changesChangedId = this._changesButton.connect('notify::checked', () => this._toggleChanges());
             header.add_child(this._changesButton);
@@ -213,7 +214,7 @@ class ResultDialog extends ModalDialog.ModalDialog {
         if (refinement) {
             this._divider = new St.Bin({visible: false, x_expand: true, can_focus: true,
                 reactive: true, track_hover: true, style_class: 'plyph-preview-divider',
-                accessible_name: 'Resize result and discussion. Use Up and Down to adjust, Home to reset.',
+                accessible_name: _('Resize result and discussion. Use Up and Down to adjust, Home to reset.'),
                 child: new St.Widget({style_class: 'plyph-preview-divider-grip',
                     x_align: Clutter.ActorAlign.CENTER, y_align: Clutter.ActorAlign.CENTER})});
             if (SHELL_MAJOR >= 51) {
@@ -274,15 +275,15 @@ class ResultDialog extends ModalDialog.ModalDialog {
             });
             this.contentLayout.add_child(this._discussionScroll);
             this._refineRow = new St.BoxLayout({visible: false, style_class: 'plyph-refine-row', x_expand: true});
-            this._refineEntry = new St.Entry({hint_text: 'Refine this result…',
-                accessible_name: 'Refinement instruction', can_focus: true, x_expand: true});
+            this._refineEntry = new St.Entry({hint_text: _('Refine this result…'),
+                accessible_name: _('Refinement instruction'), can_focus: true, x_expand: true});
             installTextClipboard(this, this._refineEntry, {editable: true,
                 canEdit: () => !this._refining, onSubmit: () => this._refine()});
             this._refineActivateId = this._refineEntry.clutter_text.connect('activate', () => this._refine());
             this._refineButton = new St.Button({style_class: 'icon-button plyph-refine-submit',
                 child: new St.Icon({gicon: Gio.icon_new_for_string(`${refinement.iconsPath}/plyph-submit-symbolic.svg`), icon_size: 16}),
                 y_align: Clutter.ActorAlign.CENTER, x_expand: false, y_expand: false,
-                accessible_name: 'Submit refinement', reactive: true, can_focus: true, track_hover: true});
+                accessible_name: _('Submit refinement'), reactive: true, can_focus: true, track_hover: true});
             this._refineClickId = this._refineButton.connect('clicked', () => this._refine());
             this._refineRow.add_child(this._refineEntry);
             this._refineRow.add_child(this._refineButton);
@@ -305,16 +306,16 @@ class ResultDialog extends ModalDialog.ModalDialog {
 
         this.setButtons([
             {
-                label: 'Cancel',
+                label: _('Cancel'),
                 key: Clutter.KEY_Escape,
                 action: () => this._finish(onCancel),
             },
             {
-                label: 'Copy',
+                label: _('Copy'),
                 action: () => this._finish(onCopy, this._label.clutter_text.get_text()),
             },
             {
-                label: 'Replace',
+                label: _('Replace'),
                 default: true,
                 action: () => this._finish(onReplace, this._label.clutter_text.get_text()),
             },
@@ -330,11 +331,11 @@ class ResultDialog extends ModalDialog.ModalDialog {
         if (refinement) {
             this._refineToggle = new St.Button({style_class: 'button flat',
                 style: 'padding: 6px 10px; min-width: 0; min-height: 0; border-radius: 8px;',
-                accessible_name: 'Refine result', reactive: true, can_focus: true, track_hover: true});
+                accessible_name: _('Refine result'), reactive: true, can_focus: true, track_hover: true});
             const toggleContent = new St.BoxLayout({style_class: 'plyph-refine-toggle'});
             toggleContent.add_child(new St.Icon({
                 gicon: Gio.icon_new_for_string(`${refinement.iconsPath}/plyph-refine-symbolic.svg`), icon_size: 16}));
-            this._refineToggleLabel = new St.Label({text: 'Refine', y_align: Clutter.ActorAlign.CENTER});
+            this._refineToggleLabel = new St.Label({text: _('Refine'), y_align: Clutter.ActorAlign.CENTER});
             toggleContent.add_child(this._refineToggleLabel);
             this._refineToggle.set_child(toggleContent);
             this._refineToggleId = this._refineToggle.connect('clicked', () => this._toggleRefinement());
@@ -342,9 +343,9 @@ class ResultDialog extends ModalDialog.ModalDialog {
             this.buttonLayout.x_expand = true;
             this.buttonLayout.insert_child_at_index(this._refineToggle, 0);
             this.buttonLayout.insert_child_at_index(new St.Widget({x_expand: true}), 1);
-            this._discussToggle = new St.Button({label: 'Discuss', style_class: 'button flat',
+            this._discussToggle = new St.Button({label: _('Discuss'), style_class: 'button flat',
                 style: 'padding: 6px 10px; min-width: 0; min-height: 0; border-radius: 8px;',
-                accessible_name: 'Discuss result', reactive: true, can_focus: true, track_hover: true});
+                accessible_name: _('Discuss result'), reactive: true, can_focus: true, track_hover: true});
             this._discussToggleId = this._discussToggle.connect('clicked', () => this._toggleRefinement(true));
             this.buttonLayout.insert_child_at_index(this._discussToggle, 1);
         }
@@ -357,9 +358,9 @@ class ResultDialog extends ModalDialog.ModalDialog {
         this._refineRow.visible = !this._refineRow.visible || discuss !== this._discussing;
         this._discussing = discuss;
         this._refineEntry.set_text(this._followUpDrafts[discuss ? 'discuss' : 'refine']);
-        this._refineEntry.hint_text = discuss ? 'Ask about this result…' : 'Refine this result…';
-        this._refineEntry.accessible_name = discuss ? 'Question about result' : 'Refinement instruction';
-        this._refineButton.accessible_name = discuss ? 'Send question' : 'Submit refinement';
+        this._refineEntry.hint_text = discuss ? _('Ask about this result…') : _('Refine this result…');
+        this._refineEntry.accessible_name = discuss ? _('Question about result') : _('Refinement instruction');
+        this._refineButton.accessible_name = discuss ? _('Send question') : _('Submit refinement');
         this._discussionScroll.visible = discuss && this._refineRow.visible && this._discussion.length > 0;
         this._statusScroll.visible = false;
         this._setRefining(false);
@@ -369,7 +370,7 @@ class ResultDialog extends ModalDialog.ModalDialog {
 
     _updateResultNavigation() {
         const multiple = this._revisions.length > 1;
-        this._resultCount.text = `${this._revisionIndex + 1}/${this._revisions.length}`;
+        this._resultCount.text = format(_('%s/%s'), this._revisionIndex + 1, this._revisions.length);
         this._resultCount.visible = multiple;
         this._previousButton.visible = multiple;
         this._nextButton.visible = multiple;
@@ -383,10 +384,10 @@ class ResultDialog extends ModalDialog.ModalDialog {
         this._refining = busy;
         this._label.clutter_text.set_editable(!busy);
         this._refineEntry.clutter_text.set_editable(!busy);
-        this._refineToggleLabel.text = busy && !this._discussing ? 'Refining…'
-            : this._refineRow.visible && !this._discussing ? 'Hide refinement' : 'Refine';
-        this._discussToggle.label = busy && this._discussing ? 'Replying…'
-            : this._refineRow.visible && this._discussing ? 'Hide discussion' : 'Discuss';
+        this._refineToggleLabel.text = busy && !this._discussing ? _('Refining…')
+            : this._refineRow.visible && !this._discussing ? _('Hide refinement') : _('Refine');
+        this._discussToggle.label = busy && this._discussing ? _('Replying…')
+            : this._refineRow.visible && this._discussing ? _('Hide discussion') : _('Discuss');
         this._discussToggle.reactive = !busy;
         this._discussToggle.can_focus = !busy;
         this._refineToggle.reactive = !busy;
@@ -420,7 +421,7 @@ class ResultDialog extends ModalDialog.ModalDialog {
             if (this._refinement !== refinement || this._finished)
                 return;
             if (typeof result !== 'string' || !result.trim())
-                throw new Error('No text was returned. Try another instruction.');
+                throw new Error(_('No text was returned. Try another instruction.'));
             this._revisions[this._revisionIndex] = previous;
             this._revisions.push(result);
             this._revisionIndex = this._revisions.length - 1;
@@ -452,7 +453,7 @@ class ResultDialog extends ModalDialog.ModalDialog {
             : {vertical: true, style_class: `plyph-discussion-message ${role}`});
         message.set_style(`max-width: ${this._discussionBubbleWidth ?? 440}px;`);
         const body = new St.Label({text, x_expand: true,
-            accessible_name: `${role === 'user' ? 'You' : 'Plyph'}: ${text}`});
+            accessible_name: format(_('%s: %s'), role === 'user' ? _('You') : 'Plyph', text)});
         body.clutter_text.set_line_wrap(true);
         body.clutter_text.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR);
         body.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
@@ -471,19 +472,19 @@ class ResultDialog extends ModalDialog.ModalDialog {
         if (role === 'assistant' && !loading) {
             const icon = new St.Icon({icon_name: 'edit-copy-symbolic', icon_size: 16});
             const copy = new St.Button({style_class: 'icon-button flat plyph-discussion-copy',
-                accessible_name: 'Copy response', can_focus: true,
+                accessible_name: _('Copy response'), can_focus: true,
                 x_align: Clutter.ActorAlign.START, child: icon});
             let feedbackId = 0;
             copy.connect('clicked', () => {
                 St.Clipboard.get_default().set_text(St.ClipboardType.CLIPBOARD, text);
                 icon.icon_name = 'object-select-symbolic';
-                copy.accessible_name = 'Response copied';
+                copy.accessible_name = _('Response copied');
                 if (feedbackId)
                     GLib.Source.remove(feedbackId);
                 feedbackId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1500, () => {
                     feedbackId = 0;
                     icon.icon_name = 'edit-copy-symbolic';
-                    copy.accessible_name = 'Copy response';
+                    copy.accessible_name = _('Copy response');
                     return GLib.SOURCE_REMOVE;
                 });
             });
@@ -511,12 +512,12 @@ class ResultDialog extends ModalDialog.ModalDialog {
 
     _showDiscussionLoading() {
         this._clearDiscussionLoading();
-        this._discussionLoading = this._addDiscussionMessage('assistant', 'Replying…', {loading: true});
+        this._discussionLoading = this._addDiscussionMessage('assistant', _('Replying…'), {loading: true});
         this._discussionLoading._bubble.add_style_class_name('loading');
         let dots = 0;
         this._discussionLoadingId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 450, () => {
             dots = dots % 3 + 1;
-            this._discussionLoading._body.set_text(`Replying${'.'.repeat(dots)}`);
+            this._discussionLoading._body.set_text(format(_('Replying%s'), '.'.repeat(dots)));
             return GLib.SOURCE_CONTINUE;
         });
     }
@@ -550,7 +551,7 @@ class ResultDialog extends ModalDialog.ModalDialog {
             if (this._refinement !== refinement || this._finished)
                 return;
             if (typeof answer !== 'string' || !answer.trim())
-                throw new Error('No reply was returned. Try again.');
+                throw new Error(_('No reply was returned. Try again.'));
             this._clearDiscussionLoading();
             this._discussion.push(turn, {role: 'assistant', content: answer});
             this._addDiscussionMessage('assistant', answer);
@@ -617,7 +618,7 @@ class ResultDialog extends ModalDialog.ModalDialog {
         this._expandIcon.icon_name = this._expanded
             ? 'view-restore-symbolic'
             : 'view-fullscreen-symbolic';
-        button.accessible_name = this._expanded ? 'Restore compact preview' : 'Enlarge preview';
+        button.accessible_name = this._expanded ? _('Restore compact preview') : _('Enlarge preview');
         this._resizePreview();
     }
 
@@ -717,10 +718,10 @@ class ResultDialog extends ModalDialog.ModalDialog {
         this._changesButton.reactive = hasChanges;
         this._changesButton.can_focus = hasChanges;
         this._showChanges = hasChanges && this._changesButton.checked;
-        this._changesButton.label = !hasChanges ? 'No changes'
-            : this._showChanges ? 'Show result' : 'Show changes';
-        this._changesButton.accessible_name = !hasChanges ? 'No changes from the original text'
-            : this._showChanges ? 'Show editable result' : 'Show changes from the original text';
+        this._changesButton.label = !hasChanges ? _('No changes')
+            : this._showChanges ? _('Show result') : _('Show changes');
+        this._changesButton.accessible_name = !hasChanges ? _('No changes from the original text')
+            : this._showChanges ? _('Show editable result') : _('Show changes from the original text');
         if (this._showChanges)
             this._diffLabel.clutter_text.set_markup(diffMarkup(this._original, this._label.clutter_text.get_text()));
         this._label.visible = !this._showChanges;
@@ -893,7 +894,7 @@ class AskDialog extends ModalDialog.ModalDialog {
             x_expand: true,
         });
         header.add_child(new St.Label({
-            text: 'Ask',
+            text: _('Ask'),
             style_class: 'modal-dialog-headline',
             x_align: Clutter.ActorAlign.START,
             y_align: Clutter.ActorAlign.CENTER,
@@ -902,14 +903,14 @@ class AskDialog extends ModalDialog.ModalDialog {
         this.contentLayout.add_child(header);
 
         this._entry = new St.Entry({
-            hint_text: 'Instruction...',
+            hint_text: _('Instruction...'),
             style_class: 'plyph-ask-entry',
             can_focus: true,
             x_expand: true,
         });
         this.contentLayout.add_child(this._entry);
         installTextClipboard(this, this._entry, {editable: true, onSubmit: () => this._submit()});
-        this._inputError = new St.Label({text: 'Enter an instruction to continue.', visible: false,
+        this._inputError = new St.Label({text: _('Enter an instruction to continue.'), visible: false,
             style_class: 'plyph-input-error'});
         this.contentLayout.add_child(this._inputError);
         this._entryChangedId = this._entry.clutter_text.connect('text-changed', () => {
@@ -921,12 +922,12 @@ class AskDialog extends ModalDialog.ModalDialog {
 
         this.setButtons([
             {
-                label: 'Cancel',
+                label: _('Cancel'),
                 key: Clutter.KEY_Escape,
                 action: () => this._finish(onCancel),
             },
             {
-                label: 'Ask',
+                label: _('Ask'),
                 default: true,
                 action: () => this._submit(),
             },

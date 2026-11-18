@@ -1,3 +1,4 @@
+import {_} from '../i18n.js';
 import Clutter from 'gi://Clutter';
 import GObject from 'gi://GObject';
 import St from 'gi://St';
@@ -23,7 +24,7 @@ class ActionPalette extends ModalDialog.ModalDialog {
             x_expand: true,
         });
         header.add_child(new St.Label({
-            text: 'Plyph',
+            text: _('Plyph'),
             style_class: 'plyph-palette-title',
             x_align: Clutter.ActorAlign.CENTER,
             y_align: Clutter.ActorAlign.CENTER,
@@ -32,7 +33,7 @@ class ActionPalette extends ModalDialog.ModalDialog {
         const closeButton = new St.Button({
             style_class: 'icon-button flat plyph-palette-close',
             child: new St.Icon({icon_name: 'window-close-symbolic'}),
-            accessible_name: 'Close action palette',
+            accessible_name: _('Close action palette'),
             can_focus: true,
             reactive: true,
             track_hover: true,

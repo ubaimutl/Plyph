@@ -1,3 +1,4 @@
+import {_} from './i18n.js';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Secret from 'gi://Secret';
@@ -38,17 +39,17 @@ async function readCredentials(cancellable) {
             throw new Error();
         return record;
     } catch {
-        throw new Error('The saved ChatGPT connection is invalid. Remove the Plyph ChatGPT item in Passwords and Keys.');
+        throw new Error(_('The saved ChatGPT connection is invalid. Remove the Plyph ChatGPT item in Passwords and Keys.'));
     }
 }
 
 async function saveCredentials(record, cancellable) {
     await new Promise((resolve, reject) => {
         Secret.password_store(secretSchema(), {application: 'Plyph'}, Secret.COLLECTION_DEFAULT,
-            'Plyph ChatGPT accounts', JSON.stringify(record), cancellable, (_source, result) => {
+            _('Plyph ChatGPT accounts'), JSON.stringify(record), cancellable, (_source, result) => {
                 try {
                     if (!Secret.password_store_finish(result))
-                        throw new Error('Could not save the ChatGPT connection.');
+                        throw new Error(_('Could not save the ChatGPT connection.'));
                     resolve();
                 } catch (error) { reject(error); }
             });
@@ -60,7 +61,7 @@ function randomToken() {
     try {
         const bytes = stream.read_bytes(32, null).get_data();
         if (bytes.length !== 32)
-            throw new Error('Could not generate sign-in security values.');
+            throw new Error(_('Could not generate sign-in security values.'));
         return base64url(bytes);
     } finally {
         stream.close(null);
@@ -98,7 +99,7 @@ async function credentialsLocked(client, cancellable, action) {
             owned = code === 1 || code === 4;
             if (!owned) {
                 if (GLib.get_monotonic_time() > deadline)
-                    throw new Error('Another ChatGPT connection update is in progress. Try again.');
+                    throw new Error(_('Another ChatGPT connection update is in progress. Try again.'));
                 await client._wait(100, cancellable);
             }
         }
@@ -128,7 +129,7 @@ export class ChatGPTClient {
     }
 
     destroy() {
-        this._clearWait(new Error('The ChatGPT connection was closed.'));
+        this._clearWait(new Error(_('The ChatGPT connection was closed.')));
         for (const [cancellable, {external, signal}] of this.externalSignals) {
             external.disconnect(signal);
             this.externalSignals.delete(cancellable);
@@ -153,12 +154,12 @@ export class ChatGPTClient {
 
     async _wait(milliseconds, cancellable) {
         if (!this.session)
-            throw new Error('The ChatGPT connection was closed.');
+            throw new Error(_('The ChatGPT connection was closed.'));
         cancellable.set_error_if_cancelled();
         let signal = null;
         try {
             await new Promise((resolve, reject) => {
-                this._clearWait(new Error('The ChatGPT retry wait was replaced.'));
+                this._clearWait(new Error(_('The ChatGPT retry wait was replaced.')));
                 this._waitTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, milliseconds, () => {
                     this._waitTimer = null;
                     this._waitReject = null;
@@ -180,7 +181,7 @@ export class ChatGPTClient {
 
     async _operation(action, external = null) {
         if (!this.session)
-            throw new Error('The ChatGPT connection was closed.');
+            throw new Error(_('The ChatGPT connection was closed.'));
         const cancellable = new Gio.Cancellable();
         this.pending.add(cancellable);
         const signal = external?.connect(() => cancellable.cancel());
@@ -201,7 +202,7 @@ export class ChatGPTClient {
         const uri = GLib.Uri.parse(url, GLib.UriFlags.NONE);
         if (uri.get_scheme() !== 'https' || !['auth.openai.com', 'api.openai.com'].includes(uri.get_host()) ||
             uri.get_userinfo() || ![-1, 443].includes(uri.get_port()))
-            throw new Error('Invalid ChatGPT service address.');
+            throw new Error(_('Invalid ChatGPT service address.'));
         const message = Soup.Message.new(data === null ? 'GET' : 'POST', url);
         message.set_flags(message.get_flags() | Soup.MessageFlags.NO_REDIRECT);
         if (accessToken)
@@ -243,7 +244,7 @@ export class ChatGPTClient {
         if (tokens.token_type?.toLowerCase() !== 'bearer' || typeof tokens.access_token !== 'string' || !tokens.access_token ||
             !Number.isFinite(tokens.expires_in) || tokens.expires_in <= 0 ||
             (typeof (tokens.refresh_token ?? previous.refresh_token) !== 'string' || !(tokens.refresh_token ?? previous.refresh_token)))
-            throw new Error('ChatGPT returned an incomplete connection. Please sign in again.');
+            throw new Error(_('ChatGPT returned an incomplete connection. Please sign in again.'));
         return {
             ...previous,
             subject: identity?.sub ?? previous.subject,
@@ -260,7 +261,7 @@ export class ChatGPTClient {
         return this._operation(async cancellable => {
             const record = await readCredentials(cancellable);
             return Object.entries(record.profiles).map(([id, profile]) => ({
-                id, label: `${profile.email || 'ChatGPT account'} · ${id.slice(-6)}`,
+                id, label: `${profile.email || _('ChatGPT account')} · ${id.slice(-6)}`,
                 connected: Boolean(profile.refresh_token),
                 authorized: (profile.scopes ?? []).includes('chatgpt.tokens.use.direct'),
             }));
@@ -276,7 +277,7 @@ export class ChatGPTClient {
                     await saveCredentials(record, cancellable);
                 }
                 if (clientId && !record.profiles[clientId])
-                    throw new Error('Select a saved ChatGPT account or add a new account.');
+                    throw new Error(_('Select a saved ChatGPT account or add a new account.'));
                 return {host: record.host_id, previous: record.profiles[clientId]};
             });
             const state = randomToken();
@@ -307,13 +308,13 @@ export class ChatGPTClient {
                         message.get_response_headers().replace('Content-Security-Policy', "default-src 'none'");
                         message.set_status(valid ? 200 : 400, null);
                         message.set_response('text/plain; charset=utf-8', Soup.MemoryUse.COPY,
-                            new TextEncoder().encode(valid ? 'Return to Plyph to finish connecting your ChatGPT account.' : 'Invalid sign-in callback.'));
+                            new TextEncoder().encode(valid ? _('Return to Plyph to finish connecting your ChatGPT account.') : _('Invalid sign-in callback.')));
                         if (!valid || finished) return;
                         try { finish(callbackResult(query, state, clientId)); } catch (error) { finish(null, error); }
                     });
                     timer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 180, () => {
                         timer = null;
-                        finish(null, new Error('ChatGPT sign-in timed out. Try again.'));
+                        finish(null, new Error(_('ChatGPT sign-in timed out. Try again.')));
                         return GLib.SOURCE_REMOVE;
                     });
                     cancelSignal = cancellable.connect(() => {
@@ -322,10 +323,10 @@ export class ChatGPTClient {
                             timer = null;
                         }
                         server.disconnect();
-                        finish(null, new Error('ChatGPT sign-in cancelled.'));
+                        finish(null, new Error(_('ChatGPT sign-in cancelled.')));
                     });
                     if (cancellable.is_cancelled()) {
-                        finish(null, new Error('ChatGPT sign-in cancelled.'));
+                        finish(null, new Error(_('ChatGPT sign-in cancelled.')));
                         return;
                     }
                     const params = {
@@ -338,7 +339,7 @@ export class ChatGPTClient {
                     else if (prepared.previous.email) params.login_hint = prepared.previous.email;
                     Gio.AppInfo.launch_default_for_uri_async(`${ISSUER}/api/accounts/authorize?${form(params)}`,
                         null, cancellable, (_source, result) => {
-                            try { Gio.AppInfo.launch_default_for_uri_finish(result); } catch { finish(null, new Error('Could not open your browser.')); }
+                            try { Gio.AppInfo.launch_default_for_uri_finish(result); } catch { finish(null, new Error(_('Could not open your browser.'))); }
                         });
                 });
                 const tokens = await this._json(`${ISSUER}/api/accounts/oauth/token`, {
@@ -351,7 +352,7 @@ export class ChatGPTClient {
                     const record = await readCredentials(cancellable);
                     const existing = record.profiles[callback.clientId];
                     if (existing && existing.subject !== profile.subject)
-                        throw new Error('The ChatGPT account identity changed. Add it as a new account.');
+                        throw new Error(_('The ChatGPT account identity changed. Add it as a new account.'));
                     record.profiles[callback.clientId] = profile;
                     await saveCredentials(record, cancellable);
                 });
@@ -367,14 +368,14 @@ export class ChatGPTClient {
     async _access(cancellable) {
         const id = this.settings.get_string('chatgpt-account-id');
         if (!id)
-            throw new Error('Continue with ChatGPT in Plyph settings first.');
+            throw new Error(_('Continue with ChatGPT in Plyph settings first.'));
         return credentialsLocked(this, cancellable, async () => {
             const record = await readCredentials(cancellable);
             let profile = record.profiles[id];
             if (!profile?.refresh_token)
-                throw new Error('Continue with ChatGPT in Plyph settings to reconnect.');
+                throw new Error(_('Continue with ChatGPT in Plyph settings to reconnect.'));
             if (!profile.scopes?.includes('chatgpt.tokens.use.direct'))
-                throw new Error('ChatGPT plan access was not granted. Continue with ChatGPT and allow plan usage.');
+                throw new Error(_('ChatGPT plan access was not granted. Continue with ChatGPT and allow plan usage.'));
             if (!profile.access_token || profile.expires_at < Date.now() / 1000 + 60) {
                 try {
                     const tokens = await this._json(`${ISSUER}/api/accounts/oauth/token`, {
@@ -393,7 +394,7 @@ export class ChatGPTClient {
                 }
             }
             if (!profile.scopes.includes('chatgpt.tokens.use.direct'))
-                throw new Error('ChatGPT plan access is not enabled for this connection.');
+                throw new Error(_('ChatGPT plan access is not enabled for this connection.'));
             return {id, token: profile.access_token};
         });
     }
@@ -408,7 +409,7 @@ export class ChatGPTClient {
                 try {
                     const discovery = await this._json(`${ISSUER}/.well-known/openid-configuration`, null, cancellable);
                     if (!discovery.revocation_endpoint?.startsWith(`${ISSUER}/`))
-                        throw new Error('Invalid revocation endpoint.');
+                        throw new Error(_('Invalid revocation endpoint.'));
                     await this._json(discovery.revocation_endpoint, {
                         token: profile.refresh_token, token_type_hint: 'refresh_token', client_id: id,
                     }, cancellable, null, true);
@@ -428,7 +429,7 @@ export class ChatGPTClient {
             const access = await this._access(cancellable);
             const data = await this._json(`${RESOURCE}/models`, null, cancellable, access.token);
             if (this.settings.get_string('chatgpt-account-id') !== access.id)
-                throw new Error('The ChatGPT account changed. Refresh models again.');
+                throw new Error(_('The ChatGPT account changed. Refresh models again.'));
             return (data.models ?? []).filter(model => model.visibility === 'list' && typeof model.slug === 'string')
                 .map(model => ({id: model.slug, name: model.display_name ?? model.slug}));
         }, external);
@@ -436,7 +437,7 @@ export class ChatGPTClient {
 
     async transform(text, instructions, model, external = null) {
         if (!model)
-            throw new Error('Choose a ChatGPT model in Plyph settings first.');
+            throw new Error(_('Choose a ChatGPT model in Plyph settings first.'));
         return this._operation(async cancellable => {
             const access = await this._access(cancellable);
             const body = {
@@ -462,7 +463,7 @@ export class ChatGPTClient {
                     try { error = JSON.parse(body).error; } catch {}
                     if (message.status_code === 400 &&
                         (error?.param === 'reasoning' || error?.param === 'reasoning.effort'))
-                        throw new Error('This model could not use the selected thinking effort. Set Thinking effort to Auto in Plyph settings or choose another model.');
+                        throw new Error(_('This model could not use the selected thinking effort. Set Thinking effort to Auto in Plyph settings or choose another model.'));
                     throw chatgptError(error?.code, message.status_code);
                 }
                 const parser = new ResponsesStream();
@@ -476,7 +477,7 @@ export class ChatGPTClient {
                 parser.feed(decoder.finish());
                 cancellable.set_error_if_cancelled();
                 if (this.settings.get_string('chatgpt-account-id') !== access.id)
-                    throw new Error('The ChatGPT account changed. Run the action again.');
+                    throw new Error(_('The ChatGPT account changed. Run the action again.'));
                 return parser.finish();
             } finally {
                 await callAsync(stream, 'close_async', 'close_finish', [GLib.PRIORITY_DEFAULT, null]);

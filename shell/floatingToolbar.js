@@ -1,3 +1,4 @@
+import {_} from '../i18n.js';
 import Clutter from 'gi://Clutter';
 import Gio from 'gi://Gio';
 import GObject from 'gi://GObject';
@@ -65,7 +66,7 @@ class FloatingToolbar extends St.BoxLayout {
 
         this._logoButton.reactive = true;
         this._logoButton.can_focus = true;
-        this._logoButton.accessible_name = 'Open Plyph actions';
+        this._logoButton.accessible_name = _('Open Plyph actions');
         this._logoIcon.icon_name = null;
         this._logoIcon.gicon = this._gicon;
         this._setLogoState();
@@ -139,7 +140,7 @@ class FloatingToolbar extends St.BoxLayout {
         this._showingFeedback = false;
         this._logoButton.reactive = true;
         this._logoButton.can_focus = true;
-        this._logoButton.accessible_name = 'Close Plyph actions';
+        this._logoButton.accessible_name = _('Close Plyph actions');
         this._logoIcon.icon_name = null;
         this._logoIcon.gicon = this._gicon;
         this._setLogoState();
@@ -163,10 +164,10 @@ class FloatingToolbar extends St.BoxLayout {
             const action = allActions.find(a => a.id === id || a.mode === id);
             if (!action) return null;
             let compactName = action.name;
-            if (action.mode === 'ask') compactName = 'Ask';
-            if (action.mode === 'correct') compactName = 'Correct';
-            if (action.mode === 'rewrite') compactName = 'Rewrite';
-            if (action.mode === 'prompt') compactName = 'Run Prompt';
+            if (action.mode === 'ask') compactName = _('Ask');
+            if (action.mode === 'correct') compactName = _('Correct');
+            if (action.mode === 'rewrite') compactName = _('Rewrite');
+            if (action.mode === 'prompt') compactName = _('Run Prompt');
 
             return { ...action, compactName };
         }).filter(Boolean).slice(0, 4);

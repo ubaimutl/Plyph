@@ -1,4 +1,5 @@
 import Clutter from 'gi://Clutter';
+import Meta from 'gi://Meta';
 import GdkPixbuf from 'gi://GdkPixbuf';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
@@ -6,6 +7,7 @@ import Shell from 'gi://Shell';
 import St from 'gi://St';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 import PlyphExtension from './subject.js';
+import {SelectionCapture} from './shell/selectionCapture.js';
 import {ResultDialog, AskDialog, ErrorDialog} from './shell/dialogs.js';
 Gio._promisify(Shell.Screenshot.prototype, 'screenshot_area');
 const delay = ms => new Promise(resolve => GLib.timeout_add(GLib.PRIORITY_DEFAULT,ms,()=>{resolve();return GLib.SOURCE_REMOVE;}));
@@ -27,6 +29,97 @@ export default class NativeTest extends Extension {
         };
         const clipboard=St.Clipboard.get_default();
         const read=()=>new Promise(resolve=>clipboard.get_text(St.ClipboardType.CLIPBOARD,(_c,text)=>resolve(text)));
+        if (GLib.find_program_in_path('firefox')) {
+        const selection=global.display.get_selection();
+        const moveTo=async(x,y)=>{for(let attempt=0;attempt<6;attempt++){const [px,py]=global.get_pointer();pointer.notify_relative_motion(time(),x-px,y-py);await delay(60);}};
+        const profile=`${this.path}/firefox-profile`;GLib.mkdir_with_parents(profile,0o700);
+        GLib.file_set_contents(`${profile}/user.js`, 'user_pref("browser.aboutwelcome.enabled", false);user_pref("browser.shell.checkDefaultBrowser", false);user_pref("browser.startup.homepage_override.mstone", "ignore");');
+        const image=GdkPixbuf.Pixbuf.new(GdkPixbuf.Colorspace.RGB,true,8,16,16);image.fill(0xc45f35ff);image.savev(`${profile}/image.png`,'png',[],[]);
+        GLib.file_set_contents(`${profile}/capture.html`,'<title>Plyph capture test</title><textarea style="position:fixed;inset:0;width:100%;height:100%" id="input">Firefox native selection</textarea><img src="image.png" style="position:fixed;right:20px;bottom:20px;width:80px;height:80px"><script>window.onload=()=>{input.focus();input.select();}</script>');
+        const launcher=new Gio.SubprocessLauncher({flags:Gio.SubprocessFlags.STDOUT_SILENCE});
+        launcher.setenv('WAYLAND_DISPLAY','wayland-0',true);launcher.setenv('MOZ_ENABLE_WAYLAND','1',true);launcher.setenv('GDK_BACKEND','wayland',true);
+        const firefox=launcher.spawnv(['firefox','--no-remote','--profile',profile,GLib.filename_to_uri(`${profile}/capture.html`,null)]);
+        try{
+            let win;
+            for(let i=0;i<100;i++){
+                win=global.get_window_actors().map(a=>a.meta_window).find(w=>w.get_title()?.includes('Plyph capture test'));
+                if(win)break;
+                await delay(100);
+            }
+            assert(Boolean(win),'Firefox test page opens');
+            win.activate(global.get_current_time());await delay(300);
+            assert(global.display.focus_window===win,'Firefox test page has focus');
+            await delay(500);
+            const rect=win.get_frame_rect();
+            await moveTo(rect.x+rect.width/2,rect.y+rect.height/2);
+            pointer.notify_button(time(),1,Clutter.ButtonState.PRESSED);await delay(50);
+            pointer.notify_button(time(),1,Clutter.ButtonState.RELEASED);await delay(100);
+            await combo(Clutter.KEY_Control_L,Clutter.KEY_a);
+            clipboard.set_text(St.ClipboardType.CLIPBOARD,'Original before Firefox');await delay(100);
+            const events=[];
+            const signal=selection.connect('owner-changed',(_s,type,source)=>{events.push({type,active:source?.is_active(),formats:selection.get_mimetypes(type),focused:global.display.focus_window===win});});
+            const external=new SelectionCapture();
+            external.watchImages(selection,()=>true);
+            try{
+              for(const preserve of [true,true,false,false,true]){
+                const previous=await read();
+                const result=await external.capture({selection,clipboard,isCurrent:()=>!global.display.focus_window||global.display.focus_window===win,
+                    strict:false,preserve,copy:()=>PlyphExtension.prototype._copy.call({_keyboard:keyboard})});
+                assert(result==='Firefox native selection','Real Firefox compatibility capture returns selected text');
+                assert(await read()===(preserve?previous:'Firefox native selection'),'Real Firefox compatibility capture respects preservation');
+              }
+              await combo(Clutter.KEY_Control_L,Clutter.KEY_a);
+              clipboard.set_text(St.ClipboardType.CLIPBOARD,'ubaida   helldo howdw are u');
+              await combo(Clutter.KEY_Control_L,Clutter.KEY_v);
+              await combo(Clutter.KEY_Home);
+              for(let i=0;i<6;i++)await combo(Clutter.KEY_Shift_L,Clutter.KEY_Right);
+              await combo(Clutter.KEY_Control_L,Clutter.KEY_c);
+              assert(await read()==='ubaida','Firefox user sequence: copies ubaida');
+              await combo(Clutter.KEY_Home);
+              for(let i=0;i<9;i++)await combo(Clutter.KEY_Right);
+              await combo(Clutter.KEY_Control_L,Clutter.KEY_Shift_L,Clutter.KEY_End);
+              const captureSuffix=()=>external.capture({selection,clipboard,strict:false,isCurrent:()=>true,
+                  copy:()=>PlyphExtension.prototype._copy.call({_keyboard:keyboard})});
+              assert(await captureSuffix()==='helldo howdw are u','Firefox user sequence: captures only the correction target');
+              const replacement=Object.create(PlyphExtension.prototype);
+              replacement._client={};replacement._keyboard=keyboard;replacement._clipboard=clipboard;
+              replacement._selectionCapture=external;replacement._pendingDelays=new Map();
+              replacement._settings={get_boolean:key=>key==='preserve-clipboard'};
+              replacement._showFeedback=(message,state)=>{if(state==='error')throw new Error(message);};
+              replacement._setIcon=()=>{};replacement._rememberUndo=()=>{};replacement._discardConsumedPrimary=()=>{};
+              await replacement._replace('Hello, how are you?',false,'Replaced',win,null);
+              assert(await read()==='ubaida','Firefox user sequence: Replace preserves ubaida on the clipboard');
+              await combo(Clutter.KEY_Control_L,Clutter.KEY_a);
+              const corrected=await captureSuffix();
+              assert(corrected==='ubaida   Hello, how are you?','Firefox user sequence: corrected text actually replaced only the selected suffix: '+corrected);
+              await combo(Clutter.KEY_Control_L,Clutter.KEY_v);
+              await combo(Clutter.KEY_Control_L,Clutter.KEY_a);
+              assert(await captureSuffix()==='ubaida','Firefox user sequence: subsequent Ctrl+V pastes ubaida');
+              await moveTo(rect.x+rect.width-60,rect.y+rect.height-60);
+              pointer.notify_button(time(),3,Clutter.ButtonState.PRESSED);await delay(50);
+              pointer.notify_button(time(),3,Clutter.ButtonState.RELEASED);await delay(200);
+              await combo(Clutter.KEY_y);await delay(300);
+              const readImage=async()=>{
+                  const stream=Gio.MemoryOutputStream.new_resizable();
+                  await new Promise((resolve,reject)=>selection.transfer_async(Meta.SelectionType.SELECTION_CLIPBOARD,'image/png',8*1024*1024+1,stream,null,(_s,result)=>{try{selection.transfer_finish(result);resolve();}catch(e){reject(e);}}));
+                  stream.close(null);return Array.from(stream.steal_as_bytes().get_data()).join(',');
+              };
+              const copiedImage=await readImage();
+              assert(copiedImage.length>0,'Firefox Copy Image supplies PNG data');
+              await moveTo(rect.x+rect.width/2,rect.y+rect.height/2);
+              pointer.notify_button(time(),1,Clutter.ButtonState.PRESSED);await delay(50);
+              pointer.notify_button(time(),1,Clutter.ButtonState.RELEASED);await delay(100);
+              await combo(Clutter.KEY_Control_L,Clutter.KEY_a);
+              assert(await captureSuffix()==='ubaida','Firefox Copy Image: action captures selected text');
+              await delay(150);const restoredImage=await readImage();
+              assert(restoredImage===copiedImage,'Firefox Copy Image: capture restores exact PNG bytes');
+              await replacement._replace('Corrected image-case text',false,'Replaced',win,null);
+              assert(await readImage()===copiedImage,'Firefox Copy Image: Replace restores exact PNG bytes');
+
+            }catch(error){throw new Error(`${error.message}; clipboard=${JSON.stringify(await read())}; Firefox clipboard events: ${JSON.stringify(events)}`);}
+            finally{external.destroy();selection.disconnect(signal);}
+        }finally{firefox.force_exit();}
+        }
         const edit=async(field,name)=>{
             field.clutter_text.set_text('Original text');field.clutter_text.grab_key_focus();
             clipboard.set_text(St.ClipboardType.CLIPBOARD,'Hello 🌍\nSecond line');
@@ -192,6 +285,75 @@ export default class NativeTest extends Extension {
         await edit(ask._entry,'Ask input');
         ask._entry.set_text('  Explain this  ');ask._entry.clutter_text.grab_key_focus();await combo(Clutter.KEY_Return);
         assert(submitted==='Explain this'&&closed,'Valid Ask submits after empty attempt');this._dialog=null;
+        const captureDialog=new ResultDialog('Firefox selection 🌍',()=>{},()=>{},()=>{},null,null);
+        this._dialog=captureDialog;captureDialog.open();await delay(150);
+        const capture=new SelectionCapture();
+        const selection=global.display.get_selection();
+        const captureSelected=()=>{
+            captureDialog._label.clutter_text.grab_key_focus();
+            captureDialog._label.clutter_text.set_selection(0,-1);
+            return capture.capture({selection,clipboard,isCurrent:()=>true,
+                copy:()=>{void combo(Clutter.KEY_Control_L,Clutter.KEY_c);}});
+        };
+        for(const original of ['Original clipboard 🌍','']){
+            clipboard.set_text(St.ClipboardType.CLIPBOARD,original);await delay(70);
+            assert(await captureSelected()==='Firefox selection 🌍','Compatibility copy: captures a fresh native selection');
+            await delay(130);
+            assert(await read()===original,'Compatibility copy: restores original text including empty text');
+        }
+        const png=new Uint8Array([137,80,78,71,0,255]);
+        clipboard.set_content(St.ClipboardType.CLIPBOARD,'image/png',new GLib.Bytes(png));await delay(70);
+        assert(await captureSelected()==='Firefox selection 🌍','Compatibility copy: captures text over an image clipboard');
+        await delay(130);
+        const restored=await new Promise((resolve,reject)=>{
+            const stream=Gio.MemoryOutputStream.new_resizable();
+            selection.transfer_async(Meta.SelectionType.SELECTION_CLIPBOARD,'image/png',1024,stream,null,(_s,result)=>{
+                try{selection.transfer_finish(result);stream.close(null);resolve(new Uint8Array(stream.steal_as_bytes().get_data()));}
+                catch(error){reject(error);}
+            });
+        });
+        assert(restored&&Array.from(restored).join(',')===Array.from(png).join(','),'Compatibility copy: restores exact binary bytes and MIME type');
+        const reader=Object.create(PlyphExtension.prototype);
+        reader._pendingClipboardReads=new Set();
+        let completeRead;
+        reader._clipboard={get_text:(_type,callback)=>{completeRead=callback;}};
+        assert(await reader._getClipboardText(St.ClipboardType.PRIMARY)==='',
+            'PRIMARY clipboard: real GLib timeout settles a missing callback');
+        completeRead(null,'Late selection');
+        assert(reader._pendingClipboardReads.size===0,'PRIMARY clipboard: timeout removes pending reads and ignores late data');
+        reader._clipboard=clipboard;
+        clipboard.set_text(St.ClipboardType.CLIPBOARD,'Retry after timeout');
+        assert(await reader._getClipboardText(St.ClipboardType.CLIPBOARD)==='Retry after timeout',
+            'PRIMARY clipboard: normal reads work after a timeout');
+        let disconnected=false;
+        const stalled={connect:()=>1,disconnect:()=>{disconnected=true;},
+            get_mimetypes:()=>['text/plain'],transfer_async:()=>{}};
+        let timedOut=false;
+        try{
+            await capture.capture({selection:stalled,clipboard,isCurrent:()=>true,
+                copy:()=>{throw new Error('Must not copy before snapshot completion');}});
+        }catch(error){timedOut=error.message.includes('Could not capture');}
+        assert(timedOut&&disconnected&&capture._active===null,
+            'Compatibility copy: real GLib timeout settles an unresponsive transfer and disconnects signals');
+        assert(await captureSelected()==='Firefox selection 🌍','Compatibility copy: retry works after an unresponsive transfer');
+        assert(await read()==='Retry after timeout','Compatibility copy: retry preserves the original clipboard');
+        capture.destroy();captureDialog.destroy();this._dialog=null;
+        const action=Object.create(PlyphExtension.prototype);
+        Object.defineProperty(action,'path',{value:this.path});
+        action._pendingClipboardReads=new Set();action._clipboard=clipboard;
+        action._icon=new St.Icon();action._defaultIcon=null;
+        action._hideFloatingButton=()=>{};action._clearPointerFeedback=()=>{};
+        action._showFeedback=(message,state)=>{if(state==='error')throw new Error(message);};
+        action._setIcon=()=>{};
+        action._settings={get_boolean:key=>key==='preview-results',get_string:key=>key==='provider'?'ollama':key==='custom-providers'?'[]':''};
+        let transformed=false;
+        action._client={transform:async text=>{assert(text==='Native action input','Correct action receives captured selection');transformed=true;return 'Native corrected output';}};
+        clipboard.set_text(St.ClipboardType.PRIMARY,'Native action input');
+        await delay(100);
+        await action._run('correct');await delay(100);
+        assert(transformed&&action._previewDialog&&action._previewDialog._label.get_text()==='Native corrected output',
+            'Correct action: selection to AI result opens the real preview');
+        action._previewDialog.destroy();
         print('PLYPH-NATIVE: ALL CHECKS PASSED');await delay(150);global.context.terminate();
     }
 }

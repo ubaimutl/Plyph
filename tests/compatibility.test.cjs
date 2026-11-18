@@ -36,6 +36,20 @@ for (const version of versions) {
         }
     });
 
+    check('menu focus returning to Firefox resolves the source window before capture', async () => {
+        const shell = createShell(version);const e = shell.extension;e.enable();
+        shell.stage.focus = {};
+        const window = {get_monitor:()=>0};
+        e._delay = async () => {shell.display.focus_window = window;return true;};
+        e._readSelection = async source => {assert.equal(source,window);return {text:'Selected',primaryText:null};};
+        e._client.transform = async () => 'Corrected';
+        shell.values['preview-results'] = true;
+        await e._run('correct');
+        assert.equal(e._previewDialog.isOpen,true);
+        assert.equal(e._busy,false);
+        e.disable();shell.assertClean();
+    });
+
     check('copy, paste and undo produce balanced virtual key events', () => {
         const shell = createShell(version);
         const e = shell.extension;
@@ -46,6 +60,106 @@ for (const version of versions) {
             assert.deepEqual(shell.keyEvents.map(({key, state}) => [key, state]),
                 [['Control_L', 1], [key, 1], [key, 0], ['Control_L', 0]]);
         }
+        e.disable();
+        shell.assertClean();
+    });
+
+    check('stalled PRIMARY reads time out, ignore late callbacks and allow another action', async () => {
+        const shell = createShell(version);
+        const e = shell.extension;
+        e.enable();
+        shell.values['test-delay-clipboard'] = true;
+        const run = e._run('correct');
+        assert.equal(e._busy, true);
+        const [id, timer] = [...shell.timers].find(([, timer]) => timer.delay === 3000);
+        shell.timers.delete(id);
+        timer.callback();
+        await run;
+        assert.equal(e._busy, false);
+        assert.equal(e._feedback, null);
+        assert.equal(e._pendingClipboardReads.size, 0);
+        assert.equal(e._errorDialog.isOpen, true);
+        shell.clipboardReads.shift()();
+        shell.values['test-delay-clipboard'] = false;
+        shell.values['preview-results'] = true;
+        shell.clipboard.set(0, 'Fresh selection');
+        let input;
+        e._client.transform = async text => { input = text; return 'Corrected'; };
+        await e._run('correct');
+        assert.equal(input, 'Fresh selection');
+        assert.equal(e._previewDialog.isOpen, true);
+        e.disable();
+        shell.assertClean();
+    });
+
+    check('disabling settles all clipboard reads and a late callback cannot affect re-enable', async () => {
+        const shell = createShell(version);
+        const e = shell.extension;
+        e.enable();
+        shell.values['test-delay-clipboard'] = true;
+        const read = e._getClipboardText(0);
+        const run = e._run('correct');
+        e.disable();
+        e.enable();
+        e._busy = true;
+        assert.equal(await read, '');
+        await run;
+        for (const complete of shell.clipboardReads) complete();
+        assert.equal(e._busy, true);
+        assert.equal(e._pendingClipboardReads.size, 0);
+        e.disable();
+        shell.assertClean();
+    });
+
+    check('clipboard read exceptions settle without leaving timers or a busy action', async () => {
+        const shell = createShell(version);
+        const e = shell.extension;
+        e.enable();
+        e._clipboard.get_text = () => { throw new Error('Clipboard unavailable'); };
+        await e._run('correct');
+        assert.equal(e._busy, false);
+        assert.equal(e._pendingClipboardReads.size, 0);
+        e.disable();
+        shell.assertClean();
+    });
+
+    for (const mode of ['correct', 'ask']) {
+        check(`${mode} cancellation clears Working feedback and releases the busy state`, async () => {
+            const shell = createShell(version);
+            const e = shell.extension;
+            e.enable();
+            const cancelled = new shell.GLib.Error(shell.Gio.IOErrorEnum, shell.Gio.IOErrorEnum.CANCELLED, 'Cancelled');
+            if (mode === 'correct') {
+                e._readSelection = async () => { throw cancelled; };
+                await e._run('correct');
+            } else {
+                e._busy = true;
+                e._client.transform = async () => { throw cancelled; };
+                await e._processAsk(null, {primaryText: null}, 'Question', e._client, 'Instructions');
+            }
+            assert.equal(e._busy, false);
+            assert.equal(e._feedback, null);
+            assert.equal(e._icon.gicon, e._defaultIcon);
+            assert.equal(e._errorDialog, null);
+            e.disable();
+            shell.assertClean();
+        });
+    }
+
+    check('a transient focus change does not silently discard the action preview', async () => {
+        const shell = createShell(version);
+        const e = shell.extension;
+        e.enable();
+        e._readSelection = async () => {
+            shell.display.focus_window = {};
+            return {text: 'Selection from the old window', primaryText: null};
+        };
+        shell.values['preview-results'] = true;
+        e._client.transform = async () => 'Corrected result';
+        await e._run('correct');
+        assert.equal(e._busy, false);
+        assert.equal(e._previewDialog.isOpen, true);
+        assert.equal(e._feedback, null);
         e.disable();
         shell.assertClean();
     });

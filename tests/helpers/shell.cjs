@@ -19,6 +19,10 @@ function createShell(version) {
     const clipboardReads = [];
     const clients = [];
     let nextTimer = 1;
+    class IOError extends Error {
+        constructor(_domain, code, message) { super(message); this.code = code; }
+        matches(_domain, code) { return this.code === code; }
+    }
     class Signals {
         handlers = new Map();
         nextId = 1;
@@ -248,13 +252,14 @@ function createShell(version) {
         Config: {PACKAGE_VERSION: `${version}.0`},
         GObject: {registerClass: cls => cls},
         GLib: {
+            Error: IOError,
             PRIORITY_DEFAULT: 0, SOURCE_REMOVE: false, SOURCE_CONTINUE: true,
             get_monotonic_time: () => 1000000,
             timeout_add(_priority, delay, callback) { const id = nextTimer++; timers.set(id, {delay, callback}); return id; },
             Source: {remove: id => assert.ok(timers.delete(id), `Unknown timer ${id}`)},
         },
         migrateProviderSettings: async () => {},
-        Gio: {Cancellable: class { cancel() {} }, icon_new_for_string: path => path},
+        Gio: {Cancellable: class { cancel() {} }, IOErrorEnum: {CANCELLED: 1}, icon_new_for_string: path => path},
         St: {
             PolicyType: {NEVER: 2, AUTOMATIC: 1},
             ThemeContext: {get_for_stage: () => ({scale_factor: values['test-scale'] ?? 1})},
@@ -303,6 +308,7 @@ function createShell(version) {
         values, settings, actors, timers, bindings, keyEvents, clipboard, clients, keyboard, Clutter,
         stage, grabs, layoutManager: Main.layoutManager,
         clipboardReads,
+        display, GLib: context.GLib, Gio: context.Gio,
         sendTextKey(actor, symbol, state = 0) {
             actor.clutter_text.grab_key_focus();
             let owner = actor;

@@ -101,7 +101,11 @@ Selected or clipboard text is sent to the chosen AI provider only when you run a
 
 API keys and tokens are stored with the system Secret Service (viewable in GNOME Passwords and Keys). If a saved key is locked, running an action requests the system unlock prompt; canceling it stops the request. In provider settings, use **Unlock** to load a locked key. You don't need to enter the API key again. Older credentials are migrated out of GSettings after successful keyring storage. Local services such as Ollama and LM Studio process text locally; cloud services have their own privacy, retention, and pricing policies.
 
-Plyph normally reads GNOME's PRIMARY selection. On Wayland, Firefox may need explicit copying, which Plyph enables for Firefox by default. This sends `Ctrl+C` and temporarily changes the regular clipboard. You can configure additional application IDs in settings. Using previously copied clipboard text as a fallback is optional and disabled by default.
+Plyph normally reads GNOME's PRIMARY selection. On Wayland, Firefox may need explicit copying, which Plyph enables for Firefox by default. This sends `Ctrl+C`, reads the fresh selection, and restores the previous clipboard if nothing else has taken ownership. You can configure additional application IDs in settings. Using previously copied clipboard text as a fallback is optional and disabled by default; a failed compatibility copy never returns unrelated old clipboard text.
+
+When preservation is enabled, copied images are temporarily cached in memory (up to 8 MiB) while their clipboard owner remains current. This preserves browser images whose exported data becomes unavailable after selecting text. The cache is discarded on a clipboard change, disabling preservation, or disabling Plyph; it is never written to disk or sent to the AI.
+
+The **Preserve clipboard** option is enabled by default and can be disabled to bypass clipboard restoration. Compatibility copying attempts to restore the previous clipboard, preferring an image format for images and plain text for text, with an 8 MiB snapshot limit. Multiple representations such as HTML and plain text may be reduced to one. Enable **Require clipboard preservation** to stop compatibility copying when the clipboard cannot be preserved safely. This protection is off by default; unsupported clipboard content may be replaced by the temporary copy. Clipboard-history tools may still record the temporary copy. Replace temporarily puts the result on the clipboard for pasting, then restores the previous content after a short paste window when preservation is enabled. The Copy button intentionally updates the clipboard.
 
 AI responses can be incorrect, so review important changes before replacing text.
 
@@ -128,6 +132,10 @@ Contributions are welcome, whether that's bug fixes, docs, usability improvement
 - **Privacy:** Please avoid adding telemetry, exposing credentials, or sending text to new destinations without a clear user action.
 - **Testing:** A quick note on how you checked your change is helpful. Screenshots are welcome for UI changes.
 
+## Translations
+
+Plyph uses gettext and follows your system language. To add or update a language, see [the translation guide](po/README.md). Translation sources live in `po/`; packaging compiles them automatically.
+
 ## Development checks
 
 Run the automated tests from the repository root:
@@ -147,7 +155,7 @@ The compatibility suite covers GNOME Shell 46–51 API branches with mocks. Nati
 After packaging, you can inspect the ZIP with Shexli:
 
 ```bash
-shexli --format json ai-autocorrect@ubai.dev.shell-extension.zip
+shexli --format json plyph@ubai.dev.shell-extension.zip
 ```
 
 Shexli 0.2.1 has known limitations around clipboard-access review and GNOME 51 version detection; assess its warnings rather than treating every finding as a confirmed issue.
@@ -157,7 +165,7 @@ Shexli 0.2.1 has known limitations around clipboard-access review and GNOME 51 v
 ```bash
 git clone https://github.com/ubaimutl/Plyph.git
 cd Plyph
-gnome-extensions pack --force \
+gnome-extensions pack --force --podir=po \
   --extra-source=actions.js \
   --extra-source=ai.js \
   --extra-source=models.js \
@@ -167,18 +175,19 @@ gnome-extensions pack --force \
   --extra-source=chatgptProtocol.js \
   --extra-source=diff.js \
   --extra-source=markdown.js \
+  --extra-source=i18n.js \
   --extra-source=shell \
   --extra-source=stylesheet.css \
   --extra-source=icons \
   --extra-source=LICENSE \
   --schema=schemas/org.gnome.shell.extensions.ai-autocorrect.gschema.xml
-gnome-extensions install --force ai-autocorrect@ubai.dev.shell-extension.zip
+gnome-extensions install --force plyph@ubai.dev.shell-extension.zip
 ```
 
 Log out and back in, then enable the extension:
 
 ```bash
-gnome-extensions enable ai-autocorrect@ubai.dev
+gnome-extensions enable plyph@ubai.dev
 ```
 
 ## License

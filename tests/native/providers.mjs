@@ -27,7 +27,7 @@ async function run() {
     settings.set_string('groq-model', 'old-groq-model');
     await secrets.setApiKey(settings, 'openai', 'test-only-key');
     const window = new Adw.PreferencesWindow({application: app});
-    const prefs = new Preferences({uuid: 'ai-autocorrect@ubai.dev', name: 'Plyph', path: directory, dir: Gio.File.new_for_path(directory)});
+    const prefs = new Preferences({uuid: 'ai-autocorrect@ubai.dev', name: 'Plyph', 'gettext-domain': 'plyph', path: directory, dir: Gio.File.new_for_path(directory)});
     prefs.getSettings = () => settings;
     assert(settings.get_boolean('show-floating-button'), 'selection toolbar defaults to enabled');
     settings.set_boolean('show-floating-button', false);

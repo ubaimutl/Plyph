@@ -1,3 +1,4 @@
+import {_, ngettext, format} from './i18n.js';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Soup from 'gi://Soup';
@@ -97,7 +98,7 @@ function requestJson(session, url, headers, body, cancellable, settings = null) 
                     data = JSON.parse(text);
                 } catch {
                     if (message.status_code < 400)
-                        throw new Error(`Invalid response (${message.status_code})`);
+                        throw new Error(format(_('Invalid response (%s)'), message.status_code));
                 }
                 debugLog(settings,
                     `AI response: status=${message.status_code}, endpoint=${debugEndpoint(url)}`);
@@ -119,33 +120,33 @@ function openAiBody(model, prompt, text, inputMode, outputLimit = 0, cerebras = 
 }
 
 function providerError(result, provider, model, displayName = null) {
-    const name = displayName ?? PROVIDER_NAMES[provider] ?? 'Provider';
+    const name = displayName ?? PROVIDER_NAMES[provider] ?? _('Provider');
     const providerDetail = result.data?.error?.message ?? result.data?.error;
     const detail = typeof providerDetail === 'string' ? providerDetail : '';
     if (result.status === 401 || result.status === 403)
-        return new Error(provider === 'cloudflare'
-            ? 'Cloudflare rejected the API token or Account ID. Check them in Settings.'
-            : `${name} rejected the API key. Check it in Settings.`);
+        return new Error(provider === "cloudflare"
+            ? _('Cloudflare rejected the API token or Account ID. Check them in Settings.')
+            : format(_('%s rejected the API key. Check it in Settings.'), name));
     if (result.status === 404)
-        return new Error(provider === 'cloudflare'
-            ? `Cloudflare could not find the account or model “${model}”.`
-            : `${name} could not find model “${model}”.`);
+        return new Error(provider === "cloudflare"
+            ? format(_('Cloudflare could not find the account or model “%s”.'), model)
+            : format(_('%s could not find model “%s”.'), name, model));
     if (result.status === 408)
-        return new Error(`${name} timed out. Try again.`);
+        return new Error(format(_('%s timed out. Try again.'), name));
     if (result.status === 429)
-        return new Error(`${name} rate limit reached. Wait and try again.`);
+        return new Error(format(_('%s rate limit reached. Wait and try again.'), name));
     if (result.status >= 500)
-        return new Error(`${name} is temporarily unavailable (${result.status}).`);
+        return new Error(format(_('%s is temporarily unavailable (%s).'), name, result.status));
     if (result.status >= 400)
-        return new Error(detail || `${name} rejected the request (${result.status}).`);
-    return new Error(detail || `${name} returned an unexpected response.`);
+        return new Error(detail || format(_('%s rejected the request (%s).'), name, result.status));
+    return new Error(detail || format(_('%s returned an unexpected response.'), name));
 }
 
 function networkError(error) {
     if (!(error instanceof GLib.Error))
         return error;
     if (error.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.TIMED_OUT))
-        return new Error('The request timed out. Try again.');
+        return new Error(_('The request timed out. Try again.'));
     const offlineCodes = [
         Gio.IOErrorEnum.NETWORK_UNREACHABLE,
         Gio.IOErrorEnum.HOST_UNREACHABLE,
@@ -153,18 +154,19 @@ function networkError(error) {
         Gio.IOErrorEnum.CONNECTION_REFUSED,
     ];
     if (offlineCodes.some(code => error.matches(Gio.IOErrorEnum, code)))
-        return new Error('Could not connect. Check your internet connection or local server.');
+        return new Error(_('Could not connect. Check your internet connection or local server.'));
     return error;
 }
 
 function outputLimitError(thinkingTokens = 0) {
     if (tokenLimit(thinkingTokens)) {
-        return new Error(
-            `Response reached this action’s output limit, and the model used ${thinkingTokens} tokens of it ` +
-            'for thinking. Raise the limit or set it to Auto.');
+        return new Error(format(ngettext(
+            'Response reached this action’s output limit, and the model used %d token of it for thinking. Raise the limit or set it to Auto.',
+            'Response reached this action’s output limit, and the model used %d tokens of it for thinking. Raise the limit or set it to Auto.',
+            thinkingTokens), thinkingTokens));
     }
     return new Error(
-        'Response reached the output limit. Try a custom action with a higher output limit, or select less text.');
+        _('Response reached the output limit. Try a custom action with a higher output limit, or select less text.'));
 }
 
 function outputOrError(result, provider, model, inputMode, displayName = null) {
@@ -208,8 +210,7 @@ export class AiClient {
         const estimatedTokens = estimateTokens(text);
         if (inputLimit && estimatedTokens > inputLimit) {
             throw new Error(
-                `Selected text is about ${estimatedTokens} tokens, above this action's ` +
-                `${inputLimit}-token input limit. Select less text or raise the limit.`);
+                format(_('Selected text is about %s tokens, above this action\'s %s-token input limit. Select less text or raise the limit.'), estimatedTokens, inputLimit));
         }
         const explicitOutputLimit = hasActionLimits ? tokenLimit(options.outputLimit) : 0;
         const outputLimit = explicitOutputLimit || (inputMode === 'prompt' ? 2000 : 0);
@@ -219,7 +220,7 @@ export class AiClient {
         const provider = info.id;
         const model = options.model || providerModel(this._settings, provider);
         if (info.url !== undefined && !model.trim())
-            throw new Error(`Choose a model for “${info.name}” in Settings before running an action.`);
+            throw new Error(format(_('Choose a model for “%s” in Settings before running an action.'), info.name));
         const promptKey = mode === 'rewrite'
             ? 'prompt-rewrite'
             : mode === 'prompt' ? 'prompt-run' : 'prompt-correct';
@@ -247,7 +248,7 @@ export class AiClient {
                 return await this._compatible(info, text, prompt, model, inputMode, outputLimit);
             if (provider === 'chatgpt') {
                 if (hasActionLimits && tokenLimit(options.outputLimit))
-                    throw new Error('ChatGPT does not support output token limits. Set this action’s output limit to Auto.');
+                    throw new Error(_('ChatGPT does not support output token limits. Set this action’s output limit to Auto.'));
                 this._chatgpt ??= new ChatGPTClient(this._settings);
                 const result = await this._chatgpt.transform(inputMode === 'prompt' ? text : payload(text),
                     prompt, model, this._cancellable);
@@ -259,7 +260,7 @@ export class AiClient {
                 return await this._cloudflare(text, prompt, model, inputMode, outputLimit);
             if (provider === 'gemini')
                 return await this._gemini(text, prompt, model, inputMode, explicitOutputLimit);
-            throw new Error('Unsupported provider connection.');
+            throw new Error(_('Unsupported provider connection.'));
         } catch (error) {
             const normalizedError = networkError(error);
             debugLog(this._settings,
@@ -283,9 +284,9 @@ export class AiClient {
     async _required(provider) {
         const value = await getApiKey(this._settings, provider, this._cancellable, true);
         if (!value)
-            throw new Error(provider === 'cloudflare'
-                ? 'Add a Cloudflare Workers AI API token in Settings.'
-                : `Add a ${PROVIDER_NAMES[provider]} API key in Settings.`);
+            throw new Error(provider === "cloudflare"
+                ? _('Add a Cloudflare Workers AI API token in Settings.')
+                : format(_('Add a %s API key in Settings.'), PROVIDER_NAMES[provider]));
         return value;
     }
 
@@ -293,7 +294,7 @@ export class AiClient {
         const key = await this._required('cloudflare');
         const accountId = this._settings.get_string('cloudflare-account-id').trim();
         if (!accountId)
-            throw new Error('Add your Cloudflare Account ID in Settings.');
+            throw new Error(_('Add your Cloudflare Account ID in Settings.'));
         const result = await requestJson(this._session,
             `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/ai/v1/chat/completions`,
             {Authorization: `Bearer ${key}`},
@@ -333,7 +334,7 @@ export class AiClient {
             throw new GLib.Error(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED, 'Request cancelled');
         if (!key && !Object.keys(customHeaders).length &&
             ['groq', 'bai', 'openrouter', 'cerebras', 'openai', 'vercel'].includes(info.adapter))
-            throw new Error(`Add a ${info.name} API key in Settings.`);
+            throw new Error(format(_('Add a %s API key in Settings.'), info.name));
         if (info.adapter === 'openrouter')
             defaults['X-Title'] = 'Plyph';
         const body = openAiBody(model, prompt, text, inputMode, outputLimit, info.adapter === 'cerebras');

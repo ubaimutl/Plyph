@@ -1,0 +1,12 @@
+prefs.js
+providers.js
+secrets.js
+ai.js
+models.js
+extension.js
+chatgpt.js
+chatgptProtocol.js
+shell/dialogs.js
+shell/actionPalette.js
+shell/floatingToolbar.js
+shell/selectionCapture.js

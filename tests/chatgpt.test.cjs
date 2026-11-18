@@ -1,3 +1,4 @@
+const {loadI18n} = require('./helpers/modules.cjs');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const {readFileSync, writeFileSync, mkdtempSync, rmSync} = require('node:fs');
@@ -14,6 +15,7 @@ const context = vm.createContext({TextEncoder, TextDecoder, Uint8Array, GLib: {
     ChecksumType: {SHA256: 1},
     compute_checksum_for_data: (_type, bytes) => crypto.createHash('sha256').update(bytes).digest('hex'),
 }});
+loadI18n(context, resolve(__dirname, '..'));
 vm.runInContext(readFileSync(resolve(__dirname, '../chatgptProtocol.js'), 'utf8')
     .replace(/^import .*;\n/gm, '').replace(/^export /gm, '') +
     '\nglobalThis.protocol = {verifyIdToken, callbackResult, ResponsesStream, base64url, sha256, decode64, chatgptError, Utf8StreamDecoder};', context);
@@ -149,6 +151,7 @@ function clientHarness() {
             password_store_finish: result => result,
         },
     });
+    loadI18n(sandbox, resolve(__dirname, '..'));
     vm.runInContext(readFileSync(resolve(__dirname, '../chatgpt.js'), 'utf8')
         .replace(/^import .*;\n/gm, '').replace('export class ChatGPTClient', 'globalThis.ChatGPTClient = class ChatGPTClient'), sandbox);
     const client = new sandbox.ChatGPTClient(settings);
@@ -463,7 +466,8 @@ test('real GJS removes the wait source synchronously on cancellation without dea
         const modulePath = resolve(temporary, 'client.js');
         const protocolURL = pathToFileURL(resolve(__dirname, '../chatgptProtocol.js')).href;
         writeFileSync(modulePath, readFileSync(resolve(__dirname, '../chatgpt.js'), 'utf8')
-            .replace("'./chatgptProtocol.js'", JSON.stringify(protocolURL)));
+            .replace("'./chatgptProtocol.js'", JSON.stringify(protocolURL))
+            .replace("'./i18n.js'", JSON.stringify(pathToFileURL(resolve(__dirname, '../i18n.js')).href)));
         const script = resolve(temporary, 'check.js');
         writeFileSync(script, `
 import Gio from 'gi://Gio';
