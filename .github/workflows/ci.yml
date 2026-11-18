@@ -23,7 +23,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            gnome-shell gjs libglib2.0-bin unzip gir1.2-soup-3.0 gir1.2-secret-1
+            gnome-shell gjs libglib2.0-bin unzip gettext gir1.2-soup-3.0 gir1.2-secret-1
       - name: Run tests
         run: |
           shopt -s failglob
