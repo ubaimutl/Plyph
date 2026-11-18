@@ -64,6 +64,8 @@
       <summary>Prefer plain text responses</summary>
       <description>Request plain text unless Markdown is explicitly requested or already present in the text being transformed.</description>
     </key>
+    <key name="preserve-clipboard" type="b"><default>true</default></key>
+    <key name="protect-clipboard" type="b"><default>false</default></key>
     <key name="clipboard-fallback" type="b"><default>false</default></key>
     <key name="explicit-copy-apps" type="s"><default>'firefox'</default></key>
     <key name="show-floating-button" type="b"><default>true</default></key>

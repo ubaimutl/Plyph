@@ -20,6 +20,7 @@ import {readActions} from './actions.js';
 import {ErrorDialog, ResultDialog, AskDialog} from './shell/dialogs.js';
 import {ActionPalette} from './shell/actionPalette.js';
 import {FloatingToolbar} from './shell/floatingToolbar.js';
+import {SelectionCapture} from './shell/selectionCapture.js';
 
 const SHELL_MAJOR = Number.parseInt(Config.PACKAGE_VERSION, 10);
 const FLOATING_COLLAPSE_DELAY = 900;
@@ -41,6 +42,8 @@ export default class PlyphExtension extends Extension {
         this._undo = null;
         this._undoClearId = null;
         this._pendingDelays = new Map();
+        this._pendingClipboardReads = new Set();
+        this._selectionCapture = new SelectionCapture();
         this._settings = this.getSettings();
         this._providerMigration = new Gio.Cancellable();
         const migration = this._providerMigration;
@@ -50,6 +53,10 @@ export default class PlyphExtension extends Extension {
         });
         this._client = new AiClient(this._settings);
         this._clipboard = St.Clipboard.get_default();
+        this._selectionCapture.watchImages(global.display.get_selection(),
+            () => this._settings?.get_boolean('preserve-clipboard'));
+        this._preserveClipboardChangedId = this._settings.connect('changed::preserve-clipboard', () =>
+            this._selectionCapture?.clearImageCache());
         const backend = SHELL_MAJOR >= 51
             ? global.stage.context.get_backend()
             : Clutter.get_default_backend();
@@ -111,6 +118,14 @@ export default class PlyphExtension extends Extension {
     }
 
     disable() {
+        this._settings.disconnect(this._preserveClipboardChangedId);
+        this._preserveClipboardChangedId = null;
+        this._selectionCapture?.destroy();
+        this._selectionCapture = null;
+        for (const finish of this._pendingClipboardReads)
+            finish('');
+        this._pendingClipboardReads.clear();
+        this._pendingClipboardReads = null;
         this._providerMigration?.cancel();
         this._providerMigration = null;
         this._destroyFloatingButton();
@@ -794,7 +809,7 @@ export default class PlyphExtension extends Extension {
         if (this._busy)
             return;
         const client = this._client;
-        const focusedWindow = global.display.focus_window;
+        let focusedWindow = global.display.focus_window ?? this._floatingSourceWindow;
         this._hideFloatingButton(true);
         this._busy = true;
         this._setIcon('content-loading-symbolic');
@@ -802,6 +817,15 @@ export default class PlyphExtension extends Extension {
 
         let isAskDialogPending = false;
         try {
+            if (!focusedWindow && global.stage.get_key_focus()) {
+                for (let attempt = 0; attempt < 20 && !focusedWindow; attempt++) {
+                    if (!await this._delay(25) || this._client !== client)
+                        return;
+                    focusedWindow = global.display.focus_window;
+                }
+                if (!focusedWindow)
+                    throw new Error(_('Select text first.'));
+            }
             const selection = await this._readSelection(focusedWindow);
             const text = selection.text;
             if (this._client !== client)
@@ -843,12 +867,15 @@ export default class PlyphExtension extends Extension {
         } catch (error) {
             if (this._client !== client)
                 return;
-            if (error instanceof GLib.Error && error.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
+            if (error instanceof GLib.Error && error.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED)) {
+                this._restoreDefaultIcon();
+                this._clearPointerFeedback();
                 return;
+            }
             this._setIcon('dialog-error-symbolic', 1800);
             this._showFeedback(error.message ?? String(error), 'error', 3500);
         } finally {
-            if (!isAskDialogPending)
+            if (!isAskDialogPending && this._client === client)
                 this._busy = false;
         }
     }
@@ -897,12 +924,16 @@ export default class PlyphExtension extends Extension {
         } catch (error) {
             if (this._client !== client)
                 return;
-            if (error instanceof GLib.Error && error.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
+            if (error instanceof GLib.Error && error.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED)) {
+                this._restoreDefaultIcon();
+                this._clearPointerFeedback();
                 return;
+            }
             this._setIcon('dialog-error-symbolic', 1800);
             this._showFeedback(error.message ?? String(error), 'error', 3500);
         } finally {
-            this._busy = false;
+            if (this._client === client)
+                this._busy = false;
         }
     }
 
@@ -952,15 +983,45 @@ export default class PlyphExtension extends Extension {
         this._clearPointerFeedback();
     }
 
-    _replace(output, delayed, message, focusedWindow, primaryText) {
-        this._clipboard.set_text(St.ClipboardType.CLIPBOARD, output);
-        return this._pasteWhenReady(delayed ? 200 : 0, message, () => {
-            this._rememberUndo(focusedWindow);
-            this._discardConsumedPrimary(primaryText);
-        });
+    async _replace(output, delayed, message, focusedWindow, primaryText) {
+        const client = this._client;
+        const wasBusy = this._busy;
+        this._busy = true;
+        const run = async canPaste => {
+            await this._pasteWhenReady(delayed ? 200 : 0, message, () => {
+                this._rememberUndo(focusedWindow);
+                this._discardConsumedPrimary(primaryText);
+            }, canPaste);
+            await this._delay(500);
+        };
+        try {
+            if (this._settings.get_boolean('preserve-clipboard')) {
+                await this._selectionCapture.paste({
+                    selection: global.display.get_selection(), clipboard: this._clipboard, text: output,
+                    strict: this._settings.get_boolean('protect-clipboard'), run,
+                    isCurrent: () => this._client === client && Boolean(this._keyboard),
+                });
+            } else {
+                this._clipboard.set_text(St.ClipboardType.CLIPBOARD, output);
+                await run(() => true);
+            }
+        } catch (error) {
+            if (this._client !== client)
+                return;
+            if (error instanceof GLib.Error && error.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED)) {
+                this._restoreDefaultIcon();
+                this._clearPointerFeedback();
+                return;
+            }
+            this._setIcon('dialog-error-symbolic', 1800);
+            this._showFeedback(error.message ?? String(error), 'error', 3500);
+        } finally {
+            if (this._client === client)
+                this._busy = wasBusy;
+        }
     }
 
-    async _pasteWhenReady(initialDelay, message, onPasted = null) {
+    async _pasteWhenReady(initialDelay, message, onPasted = null, canPaste = () => true) {
         if (initialDelay > 0 && !await this._delay(initialDelay))
             return;
         const released = await this._waitForModifiersReleased();
@@ -972,6 +1033,8 @@ export default class PlyphExtension extends Extension {
             return;
         }
         if (!await this._delay(25) || !this._keyboard)
+            return;
+        if (!canPaste())
             return;
         this._paste();
         onPasted?.();
@@ -1150,7 +1213,7 @@ export default class PlyphExtension extends Extension {
 
     async _readSelection(focusedWindow) {
         if (this._usesExplicitCopy(focusedWindow))
-            return {text: await this._readExplicitCopy(), primaryText: null};
+            return {text: await this._readExplicitCopy(focusedWindow), primaryText: null};
 
         const text = await this._getClipboardText(St.ClipboardType.PRIMARY);
         if (text?.trim())
@@ -1192,44 +1255,55 @@ export default class PlyphExtension extends Extension {
         return allowed.some(name => values.some(value => value.includes(name)));
     }
 
-    async _readExplicitCopy() {
-        const previous = await this._getClipboardText(St.ClipboardType.CLIPBOARD);
+    async _readExplicitCopy(focusedWindow = global.display.focus_window) {
         const released = await this._waitForModifiersReleased();
         if (!this._keyboard)
             return '';
         if (!released)
             throw new Error(_('Release the shortcut keys and try again.'));
-        if (!await this._delay(25))
+        if (!await this._delay(25) || !this._selectionCapture)
             return '';
-
-        this._clipboard.set_text(St.ClipboardType.CLIPBOARD, '');
-        if (!await this._delay(25))
-            return '';
-        this._copy();
-
-        for (const delay of [60, 100, 180, 300]) {
-            if (!await this._delay(delay))
-                return '';
-            const text = await this._getClipboardText(St.ClipboardType.CLIPBOARD);
-            if (text?.trim())
-                return text;
-        }
-
-        if (previous)
-            this._clipboard.set_text(St.ClipboardType.CLIPBOARD, previous);
-        if (this._settings?.get_boolean('clipboard-fallback') && previous?.trim())
-            return previous;
-        throw new Error('Could not capture selected text. Select it and try again.');
+        return this._selectionCapture.capture({
+            selection: global.display.get_selection(), clipboard: this._clipboard,
+            strict: this._settings.get_boolean('protect-clipboard'),
+            preserve: this._settings.get_boolean('preserve-clipboard'),
+            copy: () => this._copy(),
+            isCurrent: () => Boolean(this._keyboard) &&
+                (!global.display.focus_window || global.display.focus_window === focusedWindow),
+        });
     }
 
     _getClipboardText(type) {
         const clipboard = this._clipboard;
         return new Promise(resolve => {
-            if (!clipboard) {
+            const pending = this._pendingClipboardReads;
+            if (!clipboard || !pending) {
                 resolve('');
                 return;
             }
-            clipboard.get_text(type, (_clipboard, text) => resolve(text ?? ''));
+            let finished = false;
+            let timer = null;
+            const finish = text => {
+                if (finished)
+                    return;
+                finished = true;
+                if (timer)
+                    GLib.Source.remove(timer);
+                timer = null;
+                pending.delete(finish);
+                resolve(text ?? '');
+            };
+            pending.add(finish);
+            timer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 3000, () => {
+                timer = null;
+                finish('');
+                return GLib.SOURCE_REMOVE;
+            });
+            try {
+                clipboard.get_text(type, (_clipboard, text) => finish(text));
+            } catch (_error) {
+                finish('');
+            }
         });
     }
 

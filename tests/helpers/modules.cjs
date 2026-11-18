@@ -13,7 +13,7 @@ function loadI18n(context, root) {
 
 function loadShellModules(context, root) {
     loadI18n(context, root);
-    for (const name of ['clipboard', 'dialogs', 'actionPalette', 'floatingToolbar']) {
+    for (const name of ['clipboard', 'dialogs', 'actionPalette', 'floatingToolbar', 'selectionCapture']) {
         const file = resolve(root, 'shell', `${name}.js`);
         const source = readFileSync(file, 'utf8');
         const exports = [...source.matchAll(/^export (?:const|function|class) (\w+)/gm)].map(match => match[1]);

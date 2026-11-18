@@ -9,3 +9,4 @@ chatgptProtocol.js
 shell/dialogs.js
 shell/actionPalette.js
 shell/floatingToolbar.js
+shell/selectionCapture.js

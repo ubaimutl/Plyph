@@ -374,6 +374,19 @@ export default class PlyphPreferences extends ExtensionPreferences {
         });
         settings.bind('clipboard-fallback', clipboardFallback, 'active', Gio.SettingsBindFlags.DEFAULT);
         capture.add(clipboardFallback);
+        const preserveClipboard = new Adw.SwitchRow({
+            title: _('Preserve clipboard'),
+            subtitle: _('Restore the clipboard after actions. Copied images are cached in memory.'),
+        });
+        settings.bind('preserve-clipboard', preserveClipboard, 'active', Gio.SettingsBindFlags.DEFAULT);
+        capture.add(preserveClipboard);
+        const protectClipboard = new Adw.SwitchRow({
+            title: _('Require clipboard preservation'),
+            subtitle: _('Stop compatibility copying if the previous clipboard cannot be preserved.'),
+        });
+        settings.bind('protect-clipboard', protectClipboard, 'active', Gio.SettingsBindFlags.DEFAULT);
+        settings.bind('preserve-clipboard', protectClipboard, 'sensitive', Gio.SettingsBindFlags.GET);
+        capture.add(protectClipboard);
         const pointerFeedback = new Adw.SwitchRow({
             title: _('Show action feedback'),
             subtitle: _('Display a lightweight on-screen status while actions run.'),

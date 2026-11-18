@@ -6,7 +6,7 @@ const {join, resolve} = require('node:path');
 const {test} = require('node:test');
 
 test('native Shell clipboard, text selection, divider dragging and Ask validation', {
-    skip: process.env.PLYPH_NATIVE_SHELL_TEST !== '1', timeout: 60000,
+    skip: process.env.PLYPH_NATIVE_SHELL_TEST !== '1', timeout: 90000,
 }, async () => {
     const root = resolve(__dirname, '..');
     const version = execFileSync('gnome-shell', ['--version'], {encoding: 'utf8'}).match(/\d+/)[0];
@@ -23,7 +23,7 @@ test('native Shell clipboard, text selection, divider dragging and Ask validatio
         cpSync(join(root, 'stylesheet.css'), join(extension, 'stylesheet.css'));
         writeFileSync(join(extension, 'metadata.json'), JSON.stringify({
             uuid: 'plyph-native@local', name: 'Plyph native test',
-            description: 'Isolated test harness', 'shell-version': [version],
+            description: 'Isolated test harness', 'shell-version': [version], 'gettext-domain': 'plyph',
         }));
         writeFileSync(join(extension, 'subject.js'), readFileSync(join(root, 'extension.js'), 'utf8'));
         cpSync(join(__dirname, 'native/extension.js'), join(extension, 'extension.js'));
@@ -37,14 +37,16 @@ gsettings set org.gnome.shell welcome-dialog-last-shown-version '${version}'
 gsettings set org.gnome.desktop.interface enable-animations false
 exec gnome-shell --headless --wayland --no-x11 --virtual-monitor=1280x1024 >"$PLYPH_NATIVE_LOG" 2>&1
 `);
-        execFileSync('dbus-run-session', ['--', 'sh', script], {
+        let failure;
+        try { execFileSync('dbus-run-session', ['--', 'sh', script], {
             env: {...process.env, XDG_DATA_HOME: join(temporary, 'data'),
                 XDG_CONFIG_HOME: join(temporary, 'config'), XDG_CACHE_HOME: join(temporary, 'cache'),
                 XDG_RUNTIME_DIR: join(temporary, 'runtime'), GSETTINGS_BACKEND: 'keyfile',
                 GNOME_SHELL_SESSION_MODE: 'user', LIBGL_ALWAYS_SOFTWARE: '1', PLYPH_NATIVE_LOG: log},
-            timeout: 45000, stdio: 'ignore',
-        });
+            timeout: 75000, stdio: 'ignore',
+        }); } catch (error) { failure = error; }
         const output = readFileSync(log, 'utf8');
+        assert.equal(failure?.status ?? 0, 0, output.slice(-12000));
         assert.doesNotMatch(output, /PLYPH-NATIVE: FAIL|already disposed/, output.slice(-5000));
         assert.match(output, /PLYPH-NATIVE: ALL CHECKS PASSED/, output.slice(-5000));
     } finally {
