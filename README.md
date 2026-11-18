@@ -128,6 +128,10 @@ Contributions are welcome, whether that's bug fixes, docs, usability improvement
 - **Privacy:** Please avoid adding telemetry, exposing credentials, or sending text to new destinations without a clear user action.
 - **Testing:** A quick note on how you checked your change is helpful. Screenshots are welcome for UI changes.
 
+## Translations
+
+Plyph uses gettext and follows your system language. To add or update a language, see [the translation guide](po/README.md). Translation sources live in `po/`; packaging compiles them automatically.
+
 ## Development checks
 
 Run the automated tests from the repository root:
@@ -157,7 +161,7 @@ Shexli 0.2.1 has known limitations around clipboard-access review and GNOME 51 v
 ```bash
 git clone https://github.com/ubaimutl/Plyph.git
 cd Plyph
-gnome-extensions pack --force \
+gnome-extensions pack --force --podir=po \
   --extra-source=actions.js \
   --extra-source=ai.js \
   --extra-source=models.js \
@@ -167,6 +171,7 @@ gnome-extensions pack --force \
   --extra-source=chatgptProtocol.js \
   --extra-source=diff.js \
   --extra-source=markdown.js \
+  --extra-source=i18n.js \
   --extra-source=shell \
   --extra-source=stylesheet.css \
   --extra-source=icons \

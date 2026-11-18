@@ -1,3 +1,4 @@
+import {_, format} from './i18n.js';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Secret from 'gi://Secret';
@@ -76,8 +77,9 @@ function loadSecrets(items, cancellable) {
 let interactiveLookupQueue = Promise.resolve();
 
 function lockedKeyringError(provider) {
-    const credential = provider.endsWith(':headers') ? 'custom headers are' : 'API key is';
-    return new Error(`Your saved ${credential} locked. Unlock Passwords and Keys and try again.`);
+    return new Error(provider.endsWith(':headers')
+        ? _('Your saved custom headers are locked. Unlock Passwords and Keys and try again.')
+        : _('Your saved API key is locked. Unlock Passwords and Keys and try again.'));
 }
 
 async function lookupInteractive(provider, cancellable = null) {
@@ -147,7 +149,7 @@ function store(provider, password, cancellable = null, label = null) {
             schema,
             {provider},
             Secret.COLLECTION_DEFAULT,
-            label ?? `Plyph ${provider} ${provider === 'cloudflare' ? 'API token' : 'API key'}`,
+            label ?? format(provider === 'cloudflare' ? _('Plyph %s API token') : _('Plyph %s API key'), provider),
             password,
             cancellable,
             (_source, result) => {
@@ -177,13 +179,13 @@ function keyringError(error) {
     if (error instanceof GLib.Error &&
         error.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.CANCELLED))
         return error;
-    return new Error('GNOME Keyring is unavailable. Start the Secret Service and try again.');
+    return new Error(_('GNOME Keyring is unavailable. Start the Secret Service and try again.'));
 }
 
 export async function getApiKey(settings, provider, cancellable = null, interactive = false) {
     const setting = KEY_SETTINGS[provider];
     if (!setting && !provider.startsWith('custom:'))
-        throw new Error('Unknown provider credential.');
+        throw new Error(_('Unknown provider credential.'));
 
     let saved;
     try {
@@ -219,7 +221,7 @@ export async function getApiKey(settings, provider, cancellable = null, interact
 export async function setApiKey(settings, provider, password, cancellable = null) {
     const setting = KEY_SETTINGS[provider];
     if (!setting && !provider.startsWith('custom:'))
-        throw new Error('Unknown provider credential.');
+        throw new Error(_('Unknown provider credential.'));
 
     const value = password.trim();
     try {
@@ -260,12 +262,12 @@ export async function getProviderHeaders(profile, cancellable = null, interactiv
     const id = `${profile.id}:headers`;
     const saved = interactive ? await lookupInteractive(id, cancellable) : await lookupSaved(id, cancellable);
     if (!saved)
-        throw new Error('Saved custom headers are missing. Open this provider in Settings and save them again.');
+        throw new Error(_('Saved custom headers are missing. Open this provider in Settings and save them again.'));
     let headers;
     try {
         headers = JSON.parse(saved);
     } catch {
-        throw new Error('Saved custom headers could not be read. Open this provider in Settings.');
+        throw new Error(_('Saved custom headers could not be read. Open this provider in Settings.'));
     }
     return validateHeaders(headers);
 }
@@ -274,7 +276,7 @@ export async function setProviderHeaders(id, headers, cancellable = null) {
     const value = validateHeaders(headers);
     try {
         if (Object.keys(value).length)
-            await store(`${id}:headers`, JSON.stringify(value), cancellable, 'Plyph custom provider headers');
+            await store(`${id}:headers`, JSON.stringify(value), cancellable, _('Plyph custom provider headers'));
         else
             await clear(`${id}:headers`, cancellable);
     } catch (error) {
@@ -314,7 +316,7 @@ export async function saveProviderConnection(settings, profile, credentials, can
             try { await setProviderHeaders(profile.id, oldHeaders); } catch { restored = false; }
         }
         if (!restored)
-            throw new Error('The provider could not be saved and some credentials could not be restored. Check this connection in Settings.');
+            throw new Error(_('The provider could not be saved and some credentials could not be restored. Check this connection in Settings.'));
         throw error;
     }
 }
@@ -322,7 +324,7 @@ export async function saveProviderConnection(settings, profile, credentials, can
 export async function deleteProvider(settings, id, cancellable) {
     const profile = readProviders(settings).find(item => item.id === id);
     if (!profile)
-        throw new Error('This provider has already been removed.');
+        throw new Error(_('This provider has already been removed.'));
     const oldKey = await getApiKey(settings, id, cancellable, true);
     const oldHeaders = await getProviderHeaders(profile, cancellable, true);
     removeProvider(settings, id);
@@ -339,8 +341,8 @@ export async function deleteProvider(settings, id, cancellable) {
             if (!readProviders(settings).some(item => item.id === id))
                 saveProvider(settings, profile);
         } catch {
-            throw new Error('The provider was removed, but its credentials could not be cleaned up or its profile restored.');
+            throw new Error(_('The provider was removed, but its credentials could not be cleaned up or its profile restored.'));
         }
-        throw new Error('The saved credentials could not be removed. The provider has been restored. Try again after unlocking Passwords and Keys.');
+        throw new Error(_('The saved credentials could not be removed. The provider has been restored. Try again after unlocking Passwords and Keys.'));
     }
 }

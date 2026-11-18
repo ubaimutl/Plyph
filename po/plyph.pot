@@ -1,0 +1,1744 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR Plyph contributors
+# This file is distributed under the same license as the Plyph package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: Plyph 1\n"
+"Report-Msgid-Bugs-To: https://github.com/ubaimutl/Plyph/issues\n"
+"POT-Creation-Date: 2026-11-17 14:22+0100\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
+
+#: prefs.js:16 prefs.js:18 prefs.js:29 prefs.js:818
+msgid "Auto"
+msgstr ""
+
+#: prefs.js:16 prefs.js:18
+msgid "2K"
+msgstr ""
+
+#: prefs.js:16 prefs.js:18
+msgid "4K"
+msgstr ""
+
+#: prefs.js:16 prefs.js:18
+msgid "8K"
+msgstr ""
+
+#: prefs.js:16 prefs.js:18
+msgid "16K"
+msgstr ""
+
+#: prefs.js:16
+msgid "32K"
+msgstr ""
+
+#: prefs.js:16 prefs.js:18
+msgid "Custom"
+msgstr ""
+
+#: prefs.js:18
+msgid "1K"
+msgstr ""
+
+#: prefs.js:30
+#, javascript-format
+msgid "%sK"
+msgstr ""
+
+#: prefs.js:38
+#, javascript-format
+msgid "%s…"
+msgstr ""
+
+#: prefs.js:69
+#, javascript-format
+msgid "%s must contain valid JSON."
+msgstr ""
+
+#: prefs.js:86
+#, javascript-format
+msgid "Custom %s"
+msgstr ""
+
+#: prefs.js:135
+msgid "General"
+msgstr ""
+
+#: prefs.js:146
+msgid "Saved providers unavailable"
+msgstr ""
+
+#: prefs.js:147
+msgid "Your saved settings were kept."
+msgstr ""
+
+#: prefs.js:189
+msgid "Actions"
+msgstr ""
+
+#: prefs.js:193
+msgid "Instructions"
+msgstr ""
+
+#: prefs.js:196 prefs.js:588
+msgid "Advanced"
+msgstr ""
+
+#: prefs.js:199 ai.js:123 models.js:44
+msgid "Provider"
+msgstr ""
+
+#: prefs.js:200 providers.js:238
+msgid "Active provider"
+msgstr ""
+
+#: prefs.js:207
+msgid "Provider settings"
+msgstr ""
+
+#: prefs.js:211
+msgid "Saved providers"
+msgstr ""
+
+#: prefs.js:215
+msgid "Saved connections could not be checked"
+msgstr ""
+
+#: prefs.js:220 prefs.js:454 prefs.js:1221 providers.js:240 extension.js:88
+#: extension.js:695
+msgid "Run selected prompt"
+msgstr ""
+
+#: prefs.js:221
+msgid "Selected text is sent directly as the user instruction."
+msgstr ""
+
+#: prefs.js:223 prefs.js:1423
+msgid "Provider override"
+msgstr ""
+
+#: prefs.js:225 prefs.js:1429
+msgid "Model override (optional)"
+msgstr ""
+
+#: prefs.js:234 prefs.js:1437
+msgid "Input limit"
+msgstr ""
+
+#: prefs.js:235
+msgid "Stops before sending when the selected prompt is over this estimate."
+msgstr ""
+
+#: prefs.js:241 prefs.js:1443
+msgid "Output limit"
+msgstr ""
+
+#: prefs.js:242
+msgid ""
+"Auto allows up to 2000 tokens; Gemini and ChatGPT use the model’s own "
+"maximum."
+msgstr ""
+
+#: prefs.js:247
+msgid "Provider and limits"
+msgstr ""
+
+#: prefs.js:248
+msgid "Use the active provider and automatic limits, or customize."
+msgstr ""
+
+#: prefs.js:255
+msgid "Toolbar actions"
+msgstr ""
+
+#: prefs.js:256
+msgid "Select which actions appear in the floating toolbar."
+msgstr ""
+
+#: prefs.js:260
+msgid "Custom actions"
+msgstr ""
+
+#: prefs.js:261
+msgid ""
+"Create actions for the panel menu. Use the Open actions shortcut for quick "
+"access."
+msgstr ""
+
+#: prefs.js:292
+msgid "Shortcuts"
+msgstr ""
+
+#: prefs.js:293
+msgid "Click an action, then press the shortcut you want."
+msgstr ""
+
+#: prefs.js:295 prefs.js:454 prefs.js:1218 shell/dialogs.js:897
+#: shell/dialogs.js:930 shell/floatingToolbar.js:167
+msgid "Ask"
+msgstr ""
+
+#: prefs.js:296 prefs.js:453 shell/floatingToolbar.js:168
+msgid "Correct"
+msgstr ""
+
+#: prefs.js:297 prefs.js:453 shell/floatingToolbar.js:169
+msgid "Rewrite"
+msgstr ""
+
+#: prefs.js:298
+msgid "Open actions"
+msgstr ""
+
+#: prefs.js:301
+msgid "Action palette"
+msgstr ""
+
+#: prefs.js:302
+msgid "Choose where the Open actions shortcut displays actions."
+msgstr ""
+
+#: prefs.js:303
+msgid "Off"
+msgstr ""
+
+#: prefs.js:303
+msgid "Active monitor center"
+msgstr ""
+
+#: prefs.js:303
+msgid "Near pointer"
+msgstr ""
+
+#: prefs.js:318
+msgid "Selection capture"
+msgstr ""
+
+#: prefs.js:320
+msgid ""
+"GNOME normally reads the PRIMARY selection. Some apps—especially Firefox on "
+"Wayland—do not update it reliably. For listed apps, Plyph sends Ctrl+C and "
+"reads the regular clipboard instead. This changes the clipboard. Avoid "
+"adding terminals unless Ctrl+C copies text there."
+msgstr ""
+
+#: prefs.js:322
+msgid "Compatibility apps"
+msgstr ""
+
+#: prefs.js:324
+msgid "Results"
+msgstr ""
+
+#: prefs.js:325
+msgid "Choose how results appear before returning to your app."
+msgstr ""
+
+#: prefs.js:326
+msgid "Selection toolbar"
+msgstr ""
+
+#: prefs.js:327
+msgid "Keep your actions close to the text you select."
+msgstr ""
+
+#: prefs.js:328
+msgid "Feedback"
+msgstr ""
+
+#: prefs.js:331
+msgid "Show selection toolbar"
+msgstr ""
+
+#: prefs.js:332
+msgid "An alternative to keyboard shortcuts."
+msgstr ""
+
+#: prefs.js:339
+msgid "Toolbar size"
+msgstr ""
+
+#: prefs.js:340
+msgid "Enlarge the button, icons, and text together."
+msgstr ""
+
+#: prefs.js:341
+msgid "1× (Default)"
+msgstr ""
+
+#: prefs.js:352
+msgid "Preview before replacing"
+msgstr ""
+
+#: prefs.js:353
+msgid "Confirm, copy, or cancel the generated result."
+msgstr ""
+
+#: prefs.js:358
+msgid "Show changes by default"
+msgstr ""
+
+#: prefs.js:359
+msgid "Open transformed-text previews in the changes view."
+msgstr ""
+
+#: prefs.js:366
+msgid "Prefer plain text responses"
+msgstr ""
+
+#: prefs.js:367
+msgid ""
+"Use Markdown only when requested or already present in the text being "
+"transformed."
+msgstr ""
+
+#: prefs.js:372
+msgid "Use clipboard when no text is selected"
+msgstr ""
+
+#: prefs.js:373
+msgid "Allow actions to use previously copied text."
+msgstr ""
+
+#: prefs.js:378
+msgid "Preserve clipboard"
+msgstr ""
+
+#: prefs.js:379
+msgid ""
+"Restore the clipboard after actions. Copied images are cached in memory."
+msgstr ""
+
+#: prefs.js:384
+msgid "Require clipboard preservation"
+msgstr ""
+
+#: prefs.js:385
+msgid ""
+"Stop compatibility copying if the previous clipboard cannot be preserved."
+msgstr ""
+
+#: prefs.js:391
+msgid "Show action feedback"
+msgstr ""
+
+#: prefs.js:392
+msgid "Display a lightweight on-screen status while actions run."
+msgstr ""
+
+#: prefs.js:397
+msgid "Log request diagnostics"
+msgstr ""
+
+#: prefs.js:398
+msgid "Write request details and response status to the GNOME system log."
+msgstr ""
+
+#: prefs.js:401
+msgid "Diagnostics"
+msgstr ""
+
+#: prefs.js:409
+msgid "Feedback location"
+msgstr ""
+
+#: prefs.js:410
+msgid "Choose where the action status appears on the active monitor."
+msgstr ""
+
+#: prefs.js:412
+msgid "Top left"
+msgstr ""
+
+#: prefs.js:412
+msgid "Top center"
+msgstr ""
+
+#: prefs.js:412
+msgid "Top right"
+msgstr ""
+
+#: prefs.js:413
+msgid "Center left"
+msgstr ""
+
+#: prefs.js:413
+msgid "Center"
+msgstr ""
+
+#: prefs.js:413
+msgid "Center right"
+msgstr ""
+
+#: prefs.js:414
+msgid "Bottom left"
+msgstr ""
+
+#: prefs.js:414
+msgid "Bottom center"
+msgstr ""
+
+#: prefs.js:414
+msgid "Bottom right"
+msgstr ""
+
+#: prefs.js:434
+msgid "Toolbar exclusions"
+msgstr ""
+
+#: prefs.js:435
+msgid ""
+"Comma-separated list of application IDs or WM_CLASS names where the floating "
+"button will be hidden."
+msgstr ""
+
+#: prefs.js:437
+msgid "Excluded apps"
+msgstr ""
+
+#: prefs.js:441 prefs.js:445
+msgid "Personal context"
+msgstr ""
+
+#: prefs.js:442
+msgid "Context to include with your actions."
+msgstr ""
+
+#: prefs.js:443
+msgid "About you"
+msgstr ""
+
+#: prefs.js:444 prefs.js:447
+msgid "Optional"
+msgstr ""
+
+#: prefs.js:452
+msgid "Built-in instructions"
+msgstr ""
+
+#: prefs.js:458
+#, javascript-format
+msgid "%s instructions"
+msgstr ""
+
+#: prefs.js:463 prefs.js:1452
+msgid "Use personal context"
+msgstr ""
+
+#: prefs.js:471
+msgid "Prompt variables"
+msgstr ""
+
+#: prefs.js:472
+msgid "Available as ${language}, ${tone}, ${style}, and ${selection}."
+msgstr ""
+
+#: prefs.js:474
+msgid "Language"
+msgstr ""
+
+#: prefs.js:475
+msgid "Tone"
+msgstr ""
+
+#: prefs.js:476
+msgid "Style"
+msgstr ""
+
+#: prefs.js:515 prefs.js:1421
+msgid "Use active provider"
+msgstr ""
+
+#: prefs.js:519 prefs.js:1420
+msgid "Unavailable provider"
+msgstr ""
+
+#: prefs.js:549 prefs.js:559
+msgid "Add provider"
+msgstr ""
+
+#: prefs.js:559
+msgid "Edit provider"
+msgstr ""
+
+#: prefs.js:570 prefs.js:1360
+msgid "Name"
+msgstr ""
+
+#: prefs.js:571
+msgid "Base URL"
+msgstr ""
+
+#: prefs.js:572
+msgid "API key (optional)"
+msgstr ""
+
+#: prefs.js:573
+msgid "Default model (optional)"
+msgstr ""
+
+#: prefs.js:575
+msgid "Start with"
+msgstr ""
+
+#: prefs.js:576
+msgid "Custom connection"
+msgstr ""
+
+#: prefs.js:589
+msgid "Optional request controls"
+msgstr ""
+
+#: prefs.js:590
+msgid "Temperature (optional)"
+msgstr ""
+
+#: prefs.js:592
+msgid "Leave blank for the provider default, or enter a value from 0 to 2."
+msgstr ""
+
+#: prefs.js:593
+msgid "Reasoning effort"
+msgstr ""
+
+#: prefs.js:594
+msgid "Supported values depend on the provider and model."
+msgstr ""
+
+#: prefs.js:595
+msgid "Provider default"
+msgstr ""
+
+#: prefs.js:595
+msgid "None"
+msgstr ""
+
+#: prefs.js:595
+msgid "Minimal"
+msgstr ""
+
+#: prefs.js:595 prefs.js:818
+msgid "Low"
+msgstr ""
+
+#: prefs.js:595 prefs.js:818
+msgid "Medium"
+msgstr ""
+
+#: prefs.js:595 prefs.js:818
+msgid "High"
+msgstr ""
+
+#: prefs.js:595
+msgid "Extra high"
+msgstr ""
+
+#: prefs.js:599
+msgid "Custom headers (JSON)"
+msgstr ""
+
+#: prefs.js:600
+msgid ""
+"Optional HTTP headers. Values are stored securely in Passwords and Keys."
+msgstr ""
+
+#: prefs.js:602
+msgid "Extra request parameters (JSON)"
+msgstr ""
+
+#: prefs.js:603
+msgid ""
+"Use non-secret parameters. For example: {\"top_p\": 0.9}. Conversation, "
+"model, and action limits remain controlled by Plyph."
+msgstr ""
+
+#: prefs.js:613 prefs.js:1476
+msgid "Save"
+msgstr ""
+
+#: prefs.js:649 providers.js:73
+msgid "Custom headers"
+msgstr ""
+
+#: prefs.js:650 providers.js:58
+msgid "Extra request parameters"
+msgstr ""
+
+#: prefs.js:670 prefs.js:786 prefs.js:1093
+msgid "Model"
+msgstr ""
+
+#: prefs.js:687
+msgid "Delete provider"
+msgstr ""
+
+#: prefs.js:691
+msgid "Remove this connection"
+msgstr ""
+
+#: prefs.js:700
+msgid "Finish provider migration before deleting a provider."
+msgstr ""
+
+#: prefs.js:703 providers.js:251
+#, javascript-format
+msgid "Choose another provider first for: %s."
+msgstr ""
+
+#: prefs.js:707
+msgid "Delete provider?"
+msgstr ""
+
+#: prefs.js:708
+#, javascript-format
+msgid "Remove “%s” and its saved API key?"
+msgstr ""
+
+#: prefs.js:710 prefs.js:855 prefs.js:1475 shell/dialogs.js:309
+#: shell/dialogs.js:925
+msgid "Cancel"
+msgstr ""
+
+#: prefs.js:711 prefs.js:1480
+msgid "Delete"
+msgstr ""
+
+#: prefs.js:751
+msgid "Provider unavailable"
+msgstr ""
+
+#: prefs.js:759
+msgid ""
+"Use your ChatGPT plan. Credentials are stored securely in Passwords and Keys."
+msgstr ""
+
+#: prefs.js:761
+msgid "Runs on your configured local server."
+msgstr ""
+
+#: prefs.js:763
+msgid "Connects to LM Studio or another OpenAI-compatible server."
+msgstr ""
+
+#: prefs.js:765
+msgid "API tokens are stored securely in Passwords and Keys."
+msgstr ""
+
+#: prefs.js:766
+msgid "API keys are stored securely in Passwords and Keys."
+msgstr ""
+
+#: prefs.js:770
+msgid "Address"
+msgstr ""
+
+#: prefs.js:772
+msgid "Connection"
+msgstr ""
+
+#: prefs.js:780
+msgid "Account ID"
+msgstr ""
+
+#: prefs.js:781 prefs.js:963
+msgid "API token"
+msgstr ""
+
+#: prefs.js:790
+msgid "Refresh models"
+msgstr ""
+
+#: prefs.js:796
+msgid "Enter a custom model"
+msgstr ""
+
+#: prefs.js:807
+msgid "Model refresh failed"
+msgstr ""
+
+#: prefs.js:815
+msgid "Thinking effort"
+msgstr ""
+
+#: prefs.js:816
+msgid "More effort can take longer."
+msgstr ""
+
+#: prefs.js:817
+msgid "Applies to all actions using this provider. Support varies by model."
+msgstr ""
+
+#: prefs.js:846 prefs.js:882
+msgid "Account"
+msgstr ""
+
+#: prefs.js:848 prefs.js:874
+msgid "Connect your account"
+msgstr ""
+
+#: prefs.js:851
+msgid "Account controls"
+msgstr ""
+
+#: prefs.js:852
+msgid "Continue with ChatGPT"
+msgstr ""
+
+#: prefs.js:853
+msgid "Add account"
+msgstr ""
+
+#: prefs.js:854
+msgid "Sign out"
+msgstr ""
+
+#: prefs.js:862
+msgid "Manage usage"
+msgstr ""
+
+#: prefs.js:874
+msgid "Account options"
+msgstr ""
+
+#: prefs.js:882
+msgid "Connected account"
+msgstr ""
+
+#: prefs.js:883 prefs.js:890
+msgid "No saved accounts"
+msgstr ""
+
+#: prefs.js:923
+msgid "Connecting…"
+msgstr ""
+
+#: prefs.js:942
+msgid "Connected to your ChatGPT plan."
+msgstr ""
+
+#: prefs.js:942
+msgid "Plan access was not granted. Reconnect and allow plan usage."
+msgstr ""
+
+#: prefs.js:956
+msgid "Signed out."
+msgstr ""
+
+#: prefs.js:956
+msgid ""
+"Signed out locally. Remove this connection in Manage usage to confirm remote "
+"revocation."
+msgstr ""
+
+#: prefs.js:962 prefs.js:963
+msgid "API key"
+msgstr ""
+
+#: prefs.js:970
+msgid "Loading from Passwords and Keys…"
+msgstr ""
+
+#: prefs.js:976
+msgid "Unlock"
+msgstr ""
+
+#: prefs.js:988 prefs.js:1017
+msgid "Stored securely in Passwords and Keys"
+msgstr ""
+
+#: prefs.js:988
+#, javascript-format
+msgid "No %s saved"
+msgstr ""
+
+#: prefs.js:1011
+msgid "Saving…"
+msgstr ""
+
+#: prefs.js:1018
+#, javascript-format
+msgid "%s removed"
+msgstr ""
+
+#: prefs.js:1060
+msgid "Choose a model"
+msgstr ""
+
+#: prefs.js:1067
+#, javascript-format
+msgid "%s — %s"
+msgstr ""
+
+#: prefs.js:1076
+msgid "Loading models…"
+msgstr ""
+
+#: prefs.js:1101
+msgid "Model ID"
+msgstr ""
+
+#: prefs.js:1110
+msgid "Custom model"
+msgstr ""
+
+#: prefs.js:1140
+#, javascript-format
+msgid "%s%s"
+msgstr ""
+
+#: prefs.js:1141
+msgid "Provider unavailable — choose another provider"
+msgstr ""
+
+#: prefs.js:1141
+msgid "Uses active provider and model"
+msgstr ""
+
+#: prefs.js:1143
+#, javascript-format
+msgid "Limits: input %s, output %s"
+msgstr ""
+
+#: prefs.js:1146
+msgid "Uses selected text as the prompt"
+msgstr ""
+
+#: prefs.js:1157 prefs.js:1449
+msgid "Show in panel menu"
+msgstr ""
+
+#: prefs.js:1170 prefs.js:1260
+msgid "Move up"
+msgstr ""
+
+#: prefs.js:1178 prefs.js:1269
+msgid "Move down"
+msgstr ""
+
+#: prefs.js:1186 prefs.js:1359 prefs.js:1495
+msgid "Edit action"
+msgstr ""
+
+#: prefs.js:1199
+msgid "Add action"
+msgstr ""
+
+#: prefs.js:1219 extension.js:80 extension.js:693
+msgid "Correct selected text"
+msgstr ""
+
+#: prefs.js:1220 extension.js:84 extension.js:694
+msgid "Rewrite selected text"
+msgstr ""
+
+#: prefs.js:1278
+msgid "Remove from Quick Actions"
+msgstr ""
+
+#: prefs.js:1294
+msgid "Add quick action"
+msgstr ""
+
+#: prefs.js:1305
+msgid "Limit reached"
+msgstr ""
+
+#: prefs.js:1306
+msgid ""
+"Up to four actions appear beside the selection button. More remain available "
+"in the palette."
+msgstr ""
+
+#: prefs.js:1317
+msgid "Add Quick Action"
+msgstr ""
+
+#: prefs.js:1326
+msgid "Available Actions"
+msgstr ""
+
+#: prefs.js:1338
+msgid "No more actions available."
+msgstr ""
+
+#: prefs.js:1359 prefs.js:1495
+msgid "New action"
+msgstr ""
+
+#: prefs.js:1362
+msgid "Input mode"
+msgstr ""
+
+#: prefs.js:1363
+msgid "Transform the selection or use it directly as the user instruction."
+msgstr ""
+
+#: prefs.js:1365
+msgid "Transform text"
+msgstr ""
+
+#: prefs.js:1366
+msgid "Run as prompt"
+msgstr ""
+
+#: prefs.js:1391 prefs.js:1406
+msgid "Prompt"
+msgstr ""
+
+#: prefs.js:1411
+msgid "System guidance (optional)"
+msgstr ""
+
+#: prefs.js:1412
+msgid "Transformation prompt"
+msgstr ""
+
+#: prefs.js:1438
+msgid "Stops before sending when the selected text is over this estimate."
+msgstr ""
+
+#: prefs.js:1444
+msgid "Sets the maximum response length for this action."
+msgstr ""
+
+#: prefs.js:1460
+msgid "Advanced options"
+msgstr ""
+
+#: prefs.js:1461
+msgid "Provider, model, and token limits"
+msgstr ""
+
+#: prefs.js:1546
+msgid "Not set"
+msgstr ""
+
+#: prefs.js:1552
+#, javascript-format
+msgid "Set %s shortcut"
+msgstr ""
+
+#: prefs.js:1553
+msgid "Press a key combination. Backspace clears it; Escape cancels."
+msgstr ""
+
+#: providers.js:5
+msgid "Ollama (local)"
+msgstr ""
+
+#: providers.js:6
+msgid "ChatGPT Account"
+msgstr ""
+
+#: providers.js:17
+msgid "LM Studio (local)"
+msgstr ""
+
+#: providers.js:38
+#, javascript-format
+msgid "%s must be a JSON object."
+msgstr ""
+
+#: providers.js:40
+#, javascript-format
+msgid "%s is too large."
+msgstr ""
+
+#: providers.js:45
+msgid "Advanced settings"
+msgstr ""
+
+#: providers.js:49
+msgid "Temperature must be a number from 0 to 2, or left blank."
+msgstr ""
+
+#: providers.js:54
+msgid "Choose a supported reasoning effort."
+msgstr ""
+
+#: providers.js:64
+#, javascript-format
+msgid "“%s” is controlled by Plyph and cannot be overridden here."
+msgstr ""
+
+#: providers.js:80
+#, javascript-format
+msgid "“%s” is not an allowed custom header."
+msgstr ""
+
+#: providers.js:82
+#, javascript-format
+msgid "The header “%s” is duplicated."
+msgstr ""
+
+#: providers.js:84
+msgid "Header values must be strings without line breaks."
+msgstr ""
+
+#: providers.js:113
+msgid "Saved providers could not be read. Your settings have been kept."
+msgstr ""
+
+#: providers.js:116
+msgid "Saved providers have an invalid format. Your settings have been kept."
+msgstr ""
+
+#: providers.js:122
+msgid "A saved provider is invalid. Your settings have been kept."
+msgstr ""
+
+#: providers.js:134
+msgid "Enter a provider name."
+msgstr ""
+
+#: providers.js:138
+msgid ""
+"Enter an HTTP or HTTPS base URL without credentials, a query, or a fragment."
+msgstr ""
+
+#: providers.js:140
+msgid "Enter a default model."
+msgstr ""
+
+#: providers.js:169
+msgid "Providers could not be saved. Your previous settings have been kept."
+msgstr ""
+
+#: providers.js:171
+msgid ""
+"Provider migration could not be marked complete. It will retry next time."
+msgstr ""
+
+#: providers.js:182
+msgid "OpenAI-compatible (legacy)"
+msgstr ""
+
+#: providers.js:206
+msgid ""
+"The selected provider no longer exists. Choose a provider in Settings or "
+"edit this action."
+msgstr ""
+
+#: providers.js:224
+msgid "Providers could not be saved."
+msgstr ""
+
+#: providers.js:253
+msgid "The provider could not be removed."
+msgstr ""
+
+#: secrets.js:81
+msgid ""
+"Your saved custom headers are locked. Unlock Passwords and Keys and try "
+"again."
+msgstr ""
+
+#: secrets.js:82
+msgid "Your saved API key is locked. Unlock Passwords and Keys and try again."
+msgstr ""
+
+#: secrets.js:152
+#, javascript-format
+msgid "Plyph %s API token"
+msgstr ""
+
+#: secrets.js:152
+#, javascript-format
+msgid "Plyph %s API key"
+msgstr ""
+
+#: secrets.js:182
+msgid "GNOME Keyring is unavailable. Start the Secret Service and try again."
+msgstr ""
+
+#: secrets.js:188 secrets.js:224
+msgid "Unknown provider credential."
+msgstr ""
+
+#: secrets.js:265
+msgid ""
+"Saved custom headers are missing. Open this provider in Settings and save "
+"them again."
+msgstr ""
+
+#: secrets.js:270
+msgid "Saved custom headers could not be read. Open this provider in Settings."
+msgstr ""
+
+#: secrets.js:279
+msgid "Plyph custom provider headers"
+msgstr ""
+
+#: secrets.js:319
+msgid ""
+"The provider could not be saved and some credentials could not be restored. "
+"Check this connection in Settings."
+msgstr ""
+
+#: secrets.js:327
+msgid "This provider has already been removed."
+msgstr ""
+
+#: secrets.js:344
+msgid ""
+"The provider was removed, but its credentials could not be cleaned up or its "
+"profile restored."
+msgstr ""
+
+#: secrets.js:346
+msgid ""
+"The saved credentials could not be removed. The provider has been restored. "
+"Try again after unlocking Passwords and Keys."
+msgstr ""
+
+#: ai.js:101 models.js:60
+#, javascript-format
+msgid "Invalid response (%s)"
+msgstr ""
+
+#: ai.js:128
+msgid ""
+"Cloudflare rejected the API token or Account ID. Check them in Settings."
+msgstr ""
+
+#: ai.js:129
+#, javascript-format
+msgid "%s rejected the API key. Check it in Settings."
+msgstr ""
+
+#: ai.js:132
+#, javascript-format
+msgid "Cloudflare could not find the account or model “%s”."
+msgstr ""
+
+#: ai.js:133
+#, javascript-format
+msgid "%s could not find model “%s”."
+msgstr ""
+
+#: ai.js:135 models.js:36 models.js:71
+#, javascript-format
+msgid "%s timed out. Try again."
+msgstr ""
+
+#: ai.js:137 models.js:38
+#, javascript-format
+msgid "%s rate limit reached. Wait and try again."
+msgstr ""
+
+#: ai.js:139 models.js:40
+#, javascript-format
+msgid "%s is temporarily unavailable (%s)."
+msgstr ""
+
+#: ai.js:141 models.js:41
+#, javascript-format
+msgid "%s rejected the request (%s)."
+msgstr ""
+
+#: ai.js:142
+#, javascript-format
+msgid "%s returned an unexpected response."
+msgstr ""
+
+#: ai.js:149
+msgid "The request timed out. Try again."
+msgstr ""
+
+#: ai.js:157
+msgid "Could not connect. Check your internet connection or local server."
+msgstr ""
+
+#: ai.js:164
+#, javascript-format
+msgid ""
+"Response reached this action’s output limit, and the model used %d token of "
+"it for thinking. Raise the limit or set it to Auto."
+msgid_plural ""
+"Response reached this action’s output limit, and the model used %d tokens of "
+"it for thinking. Raise the limit or set it to Auto."
+msgstr[0] ""
+msgstr[1] ""
+
+#: ai.js:169
+msgid ""
+"Response reached the output limit. Try a custom action with a higher output "
+"limit, or select less text."
+msgstr ""
+
+#: ai.js:213
+#, javascript-format
+msgid ""
+"Selected text is about %s tokens, above this action's %s-token input limit. "
+"Select less text or raise the limit."
+msgstr ""
+
+#: ai.js:223
+#, javascript-format
+msgid "Choose a model for “%s” in Settings before running an action."
+msgstr ""
+
+#: ai.js:251
+msgid ""
+"ChatGPT does not support output token limits. Set this action’s output limit "
+"to Auto."
+msgstr ""
+
+#: ai.js:263
+msgid "Unsupported provider connection."
+msgstr ""
+
+#: ai.js:288
+msgid "Add a Cloudflare Workers AI API token in Settings."
+msgstr ""
+
+#: ai.js:289 ai.js:337
+#, javascript-format
+msgid "Add a %s API key in Settings."
+msgstr ""
+
+#: ai.js:297
+msgid "Add your Cloudflare Account ID in Settings."
+msgstr ""
+
+#: models.js:31
+msgid ""
+"Cloudflare rejected the API token or Account ID. Check them and try again."
+msgstr ""
+
+#: models.js:32
+#, javascript-format
+msgid "%s rejected the API key. Check it and try again."
+msgstr ""
+
+#: models.js:34
+#, javascript-format
+msgid "%s model list is unavailable."
+msgstr ""
+
+#: models.js:78
+#, javascript-format
+msgid "Could not connect to %s."
+msgstr ""
+
+#: models.js:115
+msgid "Add a Cloudflare Workers AI API token first."
+msgstr ""
+
+#: models.js:116
+#, javascript-format
+msgid "Add a %s API key first."
+msgstr ""
+
+#: models.js:133
+msgid "Request cancelled"
+msgstr ""
+
+#: models.js:157
+msgid "Add your Cloudflare Account ID first."
+msgstr ""
+
+#: extension.js:76 extension.js:692
+msgid "Ask..."
+msgstr ""
+
+#: extension.js:99
+msgid "Undo last replacement"
+msgstr ""
+
+#: extension.js:105
+msgid "Settings"
+msgstr ""
+
+#: extension.js:816 extension.js:912
+msgid "Working…"
+msgstr ""
+
+#: extension.js:827 extension.js:834
+msgid "Select text first."
+msgstr ""
+
+#: extension.js:864
+msgid "Rewritten"
+msgstr ""
+
+#: extension.js:865 extension.js:923
+msgid "Generated"
+msgstr ""
+
+#: extension.js:865
+msgid "Corrected"
+msgstr ""
+
+#: extension.js:966
+msgid "Replaced"
+msgstr ""
+
+#: extension.js:970
+msgid "Copied"
+msgstr ""
+
+#: extension.js:1032 extension.js:1068 extension.js:1263
+msgid "Release the shortcut keys and try again."
+msgstr ""
+
+#: extension.js:1061
+msgid "Return to the original window before undoing."
+msgstr ""
+
+#: extension.js:1076
+msgid "Replacement undone"
+msgstr ""
+
+#: chatgpt.js:42
+msgid ""
+"The saved ChatGPT connection is invalid. Remove the Plyph ChatGPT item in "
+"Passwords and Keys."
+msgstr ""
+
+#: chatgpt.js:49
+msgid "Plyph ChatGPT accounts"
+msgstr ""
+
+#: chatgpt.js:52
+msgid "Could not save the ChatGPT connection."
+msgstr ""
+
+#: chatgpt.js:64
+msgid "Could not generate sign-in security values."
+msgstr ""
+
+#: chatgpt.js:102
+msgid "Another ChatGPT connection update is in progress. Try again."
+msgstr ""
+
+#: chatgpt.js:132 chatgpt.js:157 chatgpt.js:184
+msgid "The ChatGPT connection was closed."
+msgstr ""
+
+#: chatgpt.js:162
+msgid "The ChatGPT retry wait was replaced."
+msgstr ""
+
+#: chatgpt.js:205
+msgid "Invalid ChatGPT service address."
+msgstr ""
+
+#: chatgpt.js:247
+msgid "ChatGPT returned an incomplete connection. Please sign in again."
+msgstr ""
+
+#: chatgpt.js:264
+msgid "ChatGPT account"
+msgstr ""
+
+#: chatgpt.js:280
+msgid "Select a saved ChatGPT account or add a new account."
+msgstr ""
+
+#: chatgpt.js:311
+msgid "Return to Plyph to finish connecting your ChatGPT account."
+msgstr ""
+
+#: chatgpt.js:311
+msgid "Invalid sign-in callback."
+msgstr ""
+
+#: chatgpt.js:317
+msgid "ChatGPT sign-in timed out. Try again."
+msgstr ""
+
+#: chatgpt.js:326 chatgpt.js:329
+msgid "ChatGPT sign-in cancelled."
+msgstr ""
+
+#: chatgpt.js:342
+msgid "Could not open your browser."
+msgstr ""
+
+#: chatgpt.js:355
+msgid "The ChatGPT account identity changed. Add it as a new account."
+msgstr ""
+
+#: chatgpt.js:371
+msgid "Continue with ChatGPT in Plyph settings first."
+msgstr ""
+
+#: chatgpt.js:376
+msgid "Continue with ChatGPT in Plyph settings to reconnect."
+msgstr ""
+
+#: chatgpt.js:378
+msgid ""
+"ChatGPT plan access was not granted. Continue with ChatGPT and allow plan "
+"usage."
+msgstr ""
+
+#: chatgpt.js:397
+msgid "ChatGPT plan access is not enabled for this connection."
+msgstr ""
+
+#: chatgpt.js:412
+msgid "Invalid revocation endpoint."
+msgstr ""
+
+#: chatgpt.js:432
+msgid "The ChatGPT account changed. Refresh models again."
+msgstr ""
+
+#: chatgpt.js:440
+msgid "Choose a ChatGPT model in Plyph settings first."
+msgstr ""
+
+#: chatgpt.js:466
+msgid ""
+"This model could not use the selected thinking effort. Set Thinking effort "
+"to Auto in Plyph settings or choose another model."
+msgstr ""
+
+#: chatgpt.js:480
+msgid "The ChatGPT account changed. Run the action again."
+msgstr ""
+
+#: chatgptProtocol.js:14 chatgptProtocol.js:17
+msgid "Invalid sign-in token encoding."
+msgstr ""
+
+#: chatgptProtocol.js:32 chatgptProtocol.js:35
+msgid "Invalid sign-in token."
+msgstr ""
+
+#: chatgptProtocol.js:38
+msgid "Unsupported sign-in signature."
+msgstr ""
+
+#: chatgptProtocol.js:43
+msgid "The sign-in signing key could not be verified."
+msgstr ""
+
+#: chatgptProtocol.js:49
+msgid "Invalid sign-in signing key."
+msgstr ""
+
+#: chatgptProtocol.js:54
+msgid "Invalid sign-in signature."
+msgstr ""
+
+#: chatgptProtocol.js:67
+msgid "The sign-in signature is invalid."
+msgstr ""
+
+#: chatgptProtocol.js:77
+msgid "The sign-in identity could not be verified. Please sign in again."
+msgstr ""
+
+#: chatgptProtocol.js:83
+msgid "Invalid sign-in state."
+msgstr ""
+
+#: chatgptProtocol.js:85
+msgid "ChatGPT sign-in was declined."
+msgstr ""
+
+#: chatgptProtocol.js:85
+msgid "ChatGPT sign-in failed."
+msgstr ""
+
+#: chatgptProtocol.js:89
+msgid ""
+"ChatGPT registration was incomplete or changed accounts. Try signing in "
+"again."
+msgstr ""
+
+#: chatgptProtocol.js:95
+msgid ""
+"ChatGPT usage is unavailable or a limit was reached. Open Manage usage in "
+"Plyph settings."
+msgstr ""
+
+#: chatgptProtocol.js:97
+msgid ""
+"Your ChatGPT connection expired. Continue with ChatGPT in Plyph settings."
+msgstr ""
+
+#: chatgptProtocol.js:99
+msgid "ChatGPT plan access was denied. Check permissions in ChatGPT settings."
+msgstr ""
+
+#: chatgptProtocol.js:100
+#, javascript-format
+msgid "ChatGPT could not complete the request (%s). Try again."
+msgstr ""
+
+#: chatgptProtocol.js:101
+msgid "ChatGPT could not complete the response. Try again."
+msgstr ""
+
+#: chatgptProtocol.js:148
+msgid "The ChatGPT response is too large. Select less text."
+msgstr ""
+
+#: chatgptProtocol.js:162
+msgid "ChatGPT returned an incomplete response. Try a shorter request."
+msgstr ""
+
+#: chatgptProtocol.js:168
+msgid "ChatGPT did not complete the response."
+msgstr ""
+
+#: chatgptProtocol.js:182
+msgid ""
+"ChatGPT disconnected before completing the response. Nothing was replaced."
+msgstr ""
+
+#: chatgptProtocol.js:184
+msgid "ChatGPT returned no text."
+msgstr ""
+
+#: shell/dialogs.js:22
+msgid "Plyph couldn’t complete the action"
+msgstr ""
+
+#: shell/dialogs.js:49
+msgid "Copy error"
+msgstr ""
+
+#: shell/dialogs.js:50
+msgid "Close"
+msgstr ""
+
+#: shell/dialogs.js:87
+msgid "Result"
+msgstr ""
+
+#: shell/dialogs.js:99
+msgid "Previous result"
+msgstr ""
+
+#: shell/dialogs.js:102
+msgid "Next result"
+msgstr ""
+
+#: shell/dialogs.js:110
+msgid "Wrap"
+msgstr ""
+
+#: shell/dialogs.js:114
+msgid "Wrap lines"
+msgstr ""
+
+#: shell/dialogs.js:124 shell/dialogs.js:621
+msgid "Enlarge preview"
+msgstr ""
+
+#: shell/dialogs.js:133 shell/dialogs.js:722
+msgid "Show changes"
+msgstr ""
+
+#: shell/dialogs.js:137 shell/dialogs.js:724
+msgid "Show changes from the original text"
+msgstr ""
+
+#: shell/dialogs.js:217
+msgid "Resize result and discussion. Use Up and Down to adjust, Home to reset."
+msgstr ""
+
+#: shell/dialogs.js:278 shell/dialogs.js:361
+msgid "Refine this result…"
+msgstr ""
+
+#: shell/dialogs.js:279 shell/dialogs.js:362
+msgid "Refinement instruction"
+msgstr ""
+
+#: shell/dialogs.js:286 shell/dialogs.js:363
+msgid "Submit refinement"
+msgstr ""
+
+#: shell/dialogs.js:314
+msgid "Copy"
+msgstr ""
+
+#: shell/dialogs.js:318
+msgid "Replace"
+msgstr ""
+
+#: shell/dialogs.js:334
+msgid "Refine result"
+msgstr ""
+
+#: shell/dialogs.js:338 shell/dialogs.js:388
+msgid "Refine"
+msgstr ""
+
+#: shell/dialogs.js:346 shell/dialogs.js:390
+msgid "Discuss"
+msgstr ""
+
+#: shell/dialogs.js:348
+msgid "Discuss result"
+msgstr ""
+
+#: shell/dialogs.js:361
+msgid "Ask about this result…"
+msgstr ""
+
+#: shell/dialogs.js:362
+msgid "Question about result"
+msgstr ""
+
+#: shell/dialogs.js:363
+msgid "Send question"
+msgstr ""
+
+#: shell/dialogs.js:373
+#, javascript-format
+msgid "%s/%s"
+msgstr ""
+
+#: shell/dialogs.js:387
+msgid "Refining…"
+msgstr ""
+
+#: shell/dialogs.js:388
+msgid "Hide refinement"
+msgstr ""
+
+#: shell/dialogs.js:389 shell/dialogs.js:515
+msgid "Replying…"
+msgstr ""
+
+#: shell/dialogs.js:390
+msgid "Hide discussion"
+msgstr ""
+
+#: shell/dialogs.js:424
+msgid "No text was returned. Try another instruction."
+msgstr ""
+
+#: shell/dialogs.js:456
+#, javascript-format
+msgid "%s: %s"
+msgstr ""
+
+#: shell/dialogs.js:456
+msgid "You"
+msgstr ""
+
+#: shell/dialogs.js:475 shell/dialogs.js:487
+msgid "Copy response"
+msgstr ""
+
+#: shell/dialogs.js:481
+msgid "Response copied"
+msgstr ""
+
+#: shell/dialogs.js:520
+#, javascript-format
+msgid "Replying%s"
+msgstr ""
+
+#: shell/dialogs.js:554
+msgid "No reply was returned. Try again."
+msgstr ""
+
+#: shell/dialogs.js:621
+msgid "Restore compact preview"
+msgstr ""
+
+#: shell/dialogs.js:721
+msgid "No changes"
+msgstr ""
+
+#: shell/dialogs.js:722
+msgid "Show result"
+msgstr ""
+
+#: shell/dialogs.js:723
+msgid "No changes from the original text"
+msgstr ""
+
+#: shell/dialogs.js:724
+msgid "Show editable result"
+msgstr ""
+
+#: shell/dialogs.js:906
+msgid "Instruction..."
+msgstr ""
+
+#: shell/dialogs.js:913
+msgid "Enter an instruction to continue."
+msgstr ""
+
+#: shell/actionPalette.js:27
+msgid "Plyph"
+msgstr ""
+
+#: shell/actionPalette.js:36
+msgid "Close action palette"
+msgstr ""
+
+#: shell/floatingToolbar.js:69
+msgid "Open Plyph actions"
+msgstr ""
+
+#: shell/floatingToolbar.js:143
+msgid "Close Plyph actions"
+msgstr ""
+
+#: shell/floatingToolbar.js:170
+msgid "Run Prompt"
+msgstr ""
+
+#: shell/selectionCapture.js:90 shell/selectionCapture.js:170
+msgid "A selection capture is already in progress. Try again."
+msgstr ""
+
+#: shell/selectionCapture.js:115 shell/selectionCapture.js:125
+#: shell/selectionCapture.js:147 shell/selectionCapture.js:153
+#: shell/selectionCapture.js:159 shell/selectionCapture.js:290
+msgid "Could not capture selected text. Select it and try again."
+msgstr ""
+
+#: shell/selectionCapture.js:190 shell/selectionCapture.js:249
+#: shell/selectionCapture.js:264
+msgid "The clipboard could not be read safely. Try again."
+msgstr ""
+
+#: shell/selectionCapture.js:224
+msgid ""
+"The clipboard has too many formats to preserve safely. Copy your selection "
+"manually and try again."
+msgstr ""
+
+#: shell/selectionCapture.js:227
+msgid ""
+"The clipboard contains multiple formats Plyph cannot preserve safely. Copy "
+"your selection manually and try again."
+msgstr ""
+
+#: shell/selectionCapture.js:253
+msgid ""
+"The clipboard format cannot be preserved safely. Copy your selection "
+"manually and try again."
+msgstr ""
+
+#: shell/selectionCapture.js:268
+msgid ""
+"The clipboard is too large to preserve safely. Copy your selection manually "
+"and try again."
+msgstr ""
+
+#: shell/selectionCapture.js:294
+msgid "Selection capture cancelled."
+msgstr ""

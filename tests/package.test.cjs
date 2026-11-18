@@ -6,7 +6,7 @@ const {dirname, join, normalize, resolve} = require('node:path');
 const {test} = require('node:test');
 
 const root = resolve(__dirname, '..');
-const modules = ['extension.js', 'prefs.js', 'actions.js', 'ai.js', 'models.js', 'providers.js', 'secrets.js', 'chatgpt.js', 'chatgptProtocol.js', 'diff.js', 'markdown.js'];
+const modules = ['extension.js', 'prefs.js', 'actions.js', 'ai.js', 'models.js', 'providers.js', 'secrets.js', 'chatgpt.js', 'chatgptProtocol.js', 'diff.js', 'markdown.js', 'i18n.js'];
 modules.push(...readdirSync(join(root, 'shell')).filter(file => file.endsWith('.js')).map(file => `shell/${file}`));
 const schema = 'org.gnome.shell.extensions.ai-autocorrect.gschema.xml';
 const metadata = JSON.parse(readFileSync(join(root, 'metadata.json'), 'utf8'));
@@ -26,8 +26,8 @@ test('upload bundle contains current sources, imports, icons and compilable sett
     const temporary = mkdtempSync(join(tmpdir(), 'plyph-package-'));
     try {
         execFileSync('gnome-extensions', [
-            'pack', '--force', `--out-dir=${temporary}`,
-            ...['actions.js', 'ai.js', 'models.js', 'providers.js', 'secrets.js', 'chatgpt.js', 'chatgptProtocol.js', 'diff.js', 'markdown.js', 'shell', 'stylesheet.css', 'icons', 'LICENSE']
+            'pack', '--force', '--podir=po', `--out-dir=${temporary}`,
+            ...['actions.js', 'ai.js', 'models.js', 'providers.js', 'secrets.js', 'chatgpt.js', 'chatgptProtocol.js', 'diff.js', 'markdown.js', 'i18n.js', 'shell', 'stylesheet.css', 'icons', 'LICENSE']
                 .map(file => `--extra-source=${file}`),
             `--schema=schemas/${schema}`, root,
         ], {cwd: root});
@@ -39,7 +39,15 @@ test('upload bundle contains current sources, imports, icons and compilable sett
             `schemas/${schema}`,
             ...readdirSync(join(root, 'icons')).map(file => `icons/${file}`),
         ];
-        assert.deepEqual(entries.filter(file => file !== 'schemas/gschemas.compiled').sort(), expected.sort());
+        const catalogs = readdirSync(join(root, 'po')).filter(file => file.endsWith('.po'))
+            .map(file => `locale/${file.slice(0, -3)}/LC_MESSAGES/${metadata['gettext-domain']}.mo`);
+        assert.deepEqual(entries.filter(file => file !== 'schemas/gschemas.compiled').sort(), [...expected, ...catalogs].sort());
+        for (const catalog of catalogs) {
+            const language = catalog.split('/')[1];
+            const reference = join(temporary, `${language}.mo`);
+            execFileSync('msgfmt', ['--check', '--check-format', '-o', reference, join(root, 'po', `${language}.po`)]);
+            assert.deepEqual(execFileSync('unzip', ['-p', bundle, catalog]), readFileSync(reference));
+        }
         for (const file of expected) {
             const packed = execFileSync('unzip', ['-p', bundle, file]);
             assert.deepEqual(packed, readFileSync(join(root, file)), `${file} is stale`);

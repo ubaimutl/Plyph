@@ -1,8 +1,9 @@
+import {_, N_, format} from './i18n.js';
 import {readActions} from './actions.js';
 
 export const BUILTIN_PROVIDERS = [
-    {id: 'ollama', name: 'Ollama (local)'},
-    {id: 'chatgpt', name: 'ChatGPT Account'},
+    {id: 'ollama', name: N_('Ollama (local)')},
+    {id: 'chatgpt', name: N_('ChatGPT Account')},
     {id: 'cloudflare', name: 'Cloudflare Workers AI'},
     {id: 'gemini', name: 'Gemini'},
 ];
@@ -13,7 +14,7 @@ export const PROVIDER_PRESETS = [
     {id: 'openrouter', name: 'OpenRouter', url: 'https://openrouter.ai/api/v1', adapter: 'openrouter'},
     {id: 'cerebras', name: 'Cerebras', url: 'https://api.cerebras.ai/v1', adapter: 'cerebras'},
     {id: 'openai', name: 'OpenAI', url: 'https://api.openai.com/v1', adapter: 'openai'},
-    {id: 'openai-compatible', name: 'LM Studio (local)', url: 'http://127.0.0.1:1234/v1', adapter: ''},
+    {id: 'openai-compatible', name: N_('LM Studio (local)'), url: 'http://127.0.0.1:1234/v1', adapter: ''},
     {id: 'vercel', name: 'Vercel AI Gateway', url: 'https://ai-gateway.vercel.sh/v1', adapter: 'vercel'},
 ];
 
@@ -34,33 +35,33 @@ export const REASONING_EFFORTS = ['', 'none', 'minimal', 'low', 'medium', 'high'
 
 function jsonObject(value, title) {
     if (!value || typeof value !== 'object' || Array.isArray(value))
-        throw new Error(`${title} must be a JSON object.`);
+        throw new Error(format(_('%s must be a JSON object.'), title));
     if (JSON.stringify(value).length > 16384)
-        throw new Error(`${title} is too large.`);
+        throw new Error(format(_('%s is too large.'), title));
     return value;
 }
 
 export function validateAdvanced(value = {}) {
-    jsonObject(value, 'Advanced settings');
+    jsonObject(value, _('Advanced settings'));
     const advanced = {};
     if (value.temperature !== undefined) {
         if (!Number.isFinite(value.temperature) || value.temperature < 0 || value.temperature > 2)
-            throw new Error('Temperature must be a number from 0 to 2, or left blank.');
+            throw new Error(_('Temperature must be a number from 0 to 2, or left blank.'));
         advanced.temperature = value.temperature;
     }
     if (value.reasoningEffort) {
         if (!REASONING_EFFORTS.includes(value.reasoningEffort))
-            throw new Error('Choose a supported reasoning effort.');
+            throw new Error(_('Choose a supported reasoning effort.'));
         advanced.reasoningEffort = value.reasoningEffort;
     }
     if (value.parameters !== undefined) {
-        const parameters = jsonObject(value.parameters, 'Extra request parameters');
+        const parameters = jsonObject(value.parameters, _('Extra request parameters'));
         const reserved = ['model', 'messages', 'stream', 'stream_options', 'max_tokens',
             'max_completion_tokens', 'input', 'prompt', 'tools', 'tool_choice', 'functions',
             'function_call', 'n', '__proto__', 'constructor', 'prototype'];
         for (const key of Object.keys(parameters)) {
             if (reserved.includes(key))
-                throw new Error(`“${key}” is controlled by Plyph and cannot be overridden here.`);
+                throw new Error(format(_('“%s” is controlled by Plyph and cannot be overridden here.'), key));
         }
         if (Object.keys(parameters).length)
             advanced.parameters = parameters;
@@ -69,18 +70,18 @@ export function validateAdvanced(value = {}) {
 }
 
 export function validateHeaders(value) {
-    jsonObject(value, 'Custom headers');
+    jsonObject(value, _('Custom headers'));
     const headers = {};
     const names = new Set();
     for (const [name, content] of Object.entries(value)) {
         const lower = name.toLowerCase();
         if (!/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(name) ||
             ['host', 'content-length', 'content-type', 'transfer-encoding', 'connection'].includes(lower))
-            throw new Error(`“${name}” is not an allowed custom header.`);
+            throw new Error(format(_('“%s” is not an allowed custom header.'), name));
         if (names.has(lower))
-            throw new Error(`The header “${name}” is duplicated.`);
+            throw new Error(format(_('The header “%s” is duplicated.'), name));
         if (typeof content !== 'string' || /[\r\n\0]/.test(content))
-            throw new Error('Header values must be strings without line breaks.');
+            throw new Error(_('Header values must be strings without line breaks.'));
         names.add(lower);
         Object.defineProperty(headers, name, {value: content, enumerable: true});
     }
@@ -109,16 +110,16 @@ export function readProviders(settings) {
     try {
         profiles = JSON.parse(settings.get_string('custom-providers'));
     } catch {
-        throw new Error('Saved providers could not be read. Your settings have been kept.');
+        throw new Error(_('Saved providers could not be read. Your settings have been kept.'));
     }
     if (!Array.isArray(profiles))
-        throw new Error('Saved providers have an invalid format. Your settings have been kept.');
+        throw new Error(_('Saved providers have an invalid format. Your settings have been kept.'));
     const ids = new Set(BUILTIN_PROVIDERS.map(item => item.id));
     return profiles.map(profile => {
         if (!profile || typeof profile.id !== 'string' || ids.has(profile.id) ||
             ![profile.name, profile.url, profile.model].every(value => typeof value === 'string') ||
             !(profile.id.startsWith('custom:') || PROVIDER_PRESETS.some(item => item.id === profile.id)))
-            throw new Error('A saved provider is invalid. Your settings have been kept.');
+            throw new Error(_('A saved provider is invalid. Your settings have been kept.'));
         ids.add(profile.id);
         return {id: profile.id, name: profile.id === 'openai-compatible' && profile.name === 'OpenAI-compatible'
             ? 'OpenAI-compatible (legacy)' : profile.name, url: profile.url, model: profile.model,
@@ -130,13 +131,13 @@ export function readProviders(settings) {
 
 export function validateProvider(profile, requireModel = true) {
     if (!profile.name.trim())
-        throw new Error('Enter a provider name.');
+        throw new Error(_('Enter a provider name.'));
     const url = profile.url.trim().replace(/\/+$/, '');
     const address = url.match(/^https?:\/\/(\[[0-9a-f:.]+\]|[^\s/:?#@]+)(?::([0-9]+))?(?:\/[^\s?#]*)?$/i);
     if (!address || (address[2] && (Number(address[2]) < 1 || Number(address[2]) > 65535)))
-        throw new Error('Enter an HTTP or HTTPS base URL without credentials, a query, or a fragment.');
+        throw new Error(_('Enter an HTTP or HTTPS base URL without credentials, a query, or a fragment.'));
     if (requireModel && !profile.model.trim())
-        throw new Error('Enter a default model.');
+        throw new Error(_('Enter a default model.'));
     return {...profile, name: profile.name.trim(), url, model: profile.model.trim(),
         adapter: providerAdapter({...profile, url}),
         advanced: Object.keys(validateAdvanced(profile.advanced)).length ? validateAdvanced(profile.advanced) : undefined};
@@ -165,22 +166,24 @@ export function migrateProviders(settings, credentialIds = [], complete = false)
     }
     if (JSON.stringify(profiles) !== settings.get_string('custom-providers') &&
         settings.set_string('custom-providers', JSON.stringify(profiles)) === false)
-        throw new Error('Providers could not be saved. Your previous settings have been kept.');
+        throw new Error(_('Providers could not be saved. Your previous settings have been kept.'));
     if (complete && settings.set_int('provider-migration-version', 1) === false)
-        throw new Error('Provider migration could not be marked complete. It will retry next time.');
+        throw new Error(_('Provider migration could not be marked complete. It will retry next time.'));
 }
 
 export function listProviders(settings) {
     const profiles = readProviders(settings);
-    return [...BUILTIN_PROVIDERS, ...profiles];
+    return [...BUILTIN_PROVIDERS.map(profile => ({...profile, name: _(profile.name)})), ...profiles];
 }
 
 export function providerLabels(providers) {
     return providers.map(profile => {
+        const name = profile.id === 'openai-compatible' && profile.name === 'OpenAI-compatible (legacy)'
+            ? _('OpenAI-compatible (legacy)') : profile.name;
         const duplicates = providers.filter(item => item.name === profile.name);
         if (duplicates.length === 1)
-            return profile.name;
-        const label = `${profile.name} — ${profile.url ?? profile.id}`;
+            return name;
+        const label = `${name} — ${profile.url ?? profile.id}`;
         const sameEndpoint = duplicates.filter(item => item.url === profile.url);
         if (sameEndpoint.length === 1)
             return label;
@@ -188,7 +191,7 @@ export function providerLabels(providers) {
         while (sameEndpoint.some(item => item.id !== profile.id &&
             item.id.slice(-length) === profile.id.slice(-length)))
             length++;
-        return `${profile.name} · ${profile.id.slice(-length)} — ${profile.url ?? profile.id}`;
+        return `${name} · ${profile.id.slice(-length)} — ${profile.url ?? profile.id}`;
     });
 }
 
@@ -200,7 +203,7 @@ export function resolveProvider(settings, id) {
             info = legacyProfile(settings, preset);
     }
     if (!info)
-        throw new Error('The selected provider no longer exists. Choose a provider in Settings or edit this action.');
+        throw new Error(_('The selected provider no longer exists. Choose a provider in Settings or edit this action.'));
     return info;
 }
 
@@ -218,7 +221,7 @@ export function saveProvider(settings, profile) {
     else
         profiles.push(value);
     if (settings.set_string('custom-providers', JSON.stringify(profiles)) === false)
-        throw new Error('Providers could not be saved.');
+        throw new Error(_('Providers could not be saved.'));
 }
 
 export function setProviderModel(settings, id, model) {
@@ -232,9 +235,9 @@ export function setProviderModel(settings, id, model) {
 export function providerReferences(settings, id) {
     const references = [];
     if (settings.get_string('provider') === id)
-        references.push('Active provider');
+        references.push(_('Active provider'));
     if (settings.get_string('prompt-run-provider') === id)
-        references.push('Run selected prompt');
+        references.push(_('Run selected prompt'));
     for (const action of readActions(settings)) {
         if (action.provider === id)
             references.push(action.name);
@@ -245,7 +248,7 @@ export function providerReferences(settings, id) {
 export function removeProvider(settings, id) {
     const references = providerReferences(settings, id);
     if (references.length)
-        throw new Error(`Choose another provider first for: ${references.join(', ')}.`);
+        throw new Error(format(_('Choose another provider first for: %s.'), references.join(', ')));
     if (settings.set_string('custom-providers', JSON.stringify(readProviders(settings).filter(item => item.id !== id))) === false)
-        throw new Error('The provider could not be removed.');
+        throw new Error(_('The provider could not be removed.'));
 }

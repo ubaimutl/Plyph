@@ -13,3 +13,7 @@ schemas/gschemas.compiled
 # IDE-local files
 .vscode/
 
+
+# Compiled translations
+locale/
+*.mo

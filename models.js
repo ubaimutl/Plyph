@@ -1,3 +1,4 @@
+import {_, format} from './i18n.js';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Soup from 'gi://Soup';
@@ -26,21 +27,21 @@ export function abortModelRequests() {
 
 function requestError(status, provider, detail) {
     if (status === 401 || status === 403)
-        return new Error(provider === 'Cloudflare Workers AI'
-            ? 'Cloudflare rejected the API token or Account ID. Check them and try again.'
-            : `${provider} rejected the API key. Check it and try again.`);
+        return new Error(provider === "Cloudflare Workers AI"
+            ? _('Cloudflare rejected the API token or Account ID. Check them and try again.')
+            : format(_('%s rejected the API key. Check it and try again.'), provider));
     if (status === 404)
-        return new Error(`${provider} model list is unavailable.`);
+        return new Error(format(_('%s model list is unavailable.'), provider));
     if (status === 408)
-        return new Error(`${provider} timed out. Try again.`);
+        return new Error(format(_('%s timed out. Try again.'), provider));
     if (status === 429)
-        return new Error(`${provider} rate limit reached. Wait and try again.`);
+        return new Error(format(_('%s rate limit reached. Wait and try again.'), provider));
     if (status >= 500)
-        return new Error(`${provider} is temporarily unavailable (${status}).`);
-    return new Error(detail || `${provider} rejected the request (${status}).`);
+        return new Error(format(_('%s is temporarily unavailable (%s).'), provider, status));
+    return new Error(detail || format(_('%s rejected the request (%s).'), provider, status));
 }
 
-function getJson(url, headers = {}, provider = 'Provider') {
+function getJson(url, headers = {}, provider = _('Provider')) {
     return new Promise((resolve, reject) => {
         const session = new Soup.Session({timeout: 20});
         const message = Soup.Message.new('GET', url);
@@ -56,7 +57,7 @@ function getJson(url, headers = {}, provider = 'Provider') {
                     data = JSON.parse(text);
                 } catch {
                     if (message.status_code < 400)
-                        throw new Error(`Invalid response (${message.status_code})`);
+                        throw new Error(format(_('Invalid response (%s)'), message.status_code));
                 }
                 if (message.status_code < 200 || message.status_code >= 300) {
                     const providerDetail = data?.error?.message ?? data?.error;
@@ -67,14 +68,14 @@ function getJson(url, headers = {}, provider = 'Provider') {
             } catch (error) {
                 if (error instanceof GLib.Error &&
                     error.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.TIMED_OUT))
-                    reject(new Error(`${provider} timed out. Try again.`));
+                    reject(new Error(format(_('%s timed out. Try again.'), provider)));
                 else if (error instanceof GLib.Error && [
                     Gio.IOErrorEnum.NETWORK_UNREACHABLE,
                     Gio.IOErrorEnum.HOST_UNREACHABLE,
                     Gio.IOErrorEnum.NOT_CONNECTED,
                     Gio.IOErrorEnum.CONNECTION_REFUSED,
                 ].some(code => error.matches(Gio.IOErrorEnum, code)))
-                    reject(new Error(`Could not connect to ${provider}.`));
+                    reject(new Error(format(_('Could not connect to %s.'), provider)));
                 else
                     reject(error);
             } finally {
@@ -110,9 +111,9 @@ async function modelCredentials(settings, profile, interactive) {
 async function requiredKey(settings, provider, interactive = false) {
     const value = await modelKey(settings, provider, interactive);
     if (!value)
-        throw new Error(provider === 'cloudflare'
-            ? 'Add a Cloudflare Workers AI API token first.'
-            : `Add a ${resolveProvider(settings, provider).name} API key first.`);
+        throw new Error(provider === "cloudflare"
+            ? _('Add a Cloudflare Workers AI API token first.')
+            : format(_('Add a %s API key first.'), resolveProvider(settings, provider).name));
     return value;
 }
 
@@ -129,7 +130,7 @@ export async function fetchModels(settings, provider, interactive = false) {
     const generation = requestGeneration;
     const ensureCurrent = () => {
         if (generation !== requestGeneration)
-            throw new Error('Request cancelled');
+            throw new Error(_('Request cancelled'));
     };
     if (provider === 'chatgpt') {
         const client = new ChatGPTClient(settings);
@@ -153,7 +154,7 @@ export async function fetchModels(settings, provider, interactive = false) {
         const key = await requiredKey(settings, 'cloudflare', interactive);
         const accountId = settings.get_string('cloudflare-account-id').trim();
         if (!accountId)
-            throw new Error('Add your Cloudflare Account ID first.');
+            throw new Error(_('Add your Cloudflare Account ID first.'));
         ensureCurrent();
         data = await getJson(
             `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/ai/models/search?task=${encodeURIComponent('Text Generation')}&hide_experimental=true&per_page=100`,
