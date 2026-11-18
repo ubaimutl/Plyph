@@ -289,6 +289,7 @@ export default class NativeTest extends Extension {
             const first=toolbar._actionsBox.get_first_child();
             assert(toolbar.orientation===Clutter.Orientation.VERTICAL,'Toolbar supports vertical layout');
             assert(first.get_child().get_children().length===1,'Icon-only toolbar omits labels');
+            assert(first.get_child().get_first_child().icon_name==='web-browser-symbolic','Toolbar uses the custom action icon');
             assert(toolbar.get_style().includes('18px'),'Toolbar applies the configured radius');
             assert(first.get_preferred_height(-1)[1]<36,'Default toolbar buttons stay compact');
         }finally{toolbar.destroy();}

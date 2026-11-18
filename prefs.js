@@ -6,7 +6,7 @@ import GLib from 'gi://GLib';
 import Gtk from 'gi://Gtk';
 
 import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
-import {readActions, writeActions} from './actions.js';
+import {ACTION_ICONS, readActions, writeActions} from './actions.js';
 import {abortModelRequests, fetchModels} from './models.js';
 import {listProviders, providerLabels, readProviders, migrateProviders, validateProvider, validateHeaders, REASONING_EFFORTS, resolveProvider, providerModel, setProviderModel, providerReferences, PROVIDER_PRESETS} from './providers.js';
 import {migrateProviderSettings, deleteProvider, getApiKey, setApiKey, getProviderHeaders, saveProviderConnection} from './secrets.js';
@@ -1478,6 +1478,53 @@ export default class PlyphPreferences extends ExtensionPreferences {
         const personal = new Adw.SwitchRow({title: _('Use personal context'),
             active: action?.usePersonalPreferences ?? true});
         fields.add(name);
+        const iconLabels = [_('Default'), _('Search'), _('Edit'), _('Spelling'), _('Question'),
+            _('Web'), _('Text'), _('Terminal'), _('Star'), _('List'), _('Mail'), _('Find and replace'),
+            _('Copy'), _('New document'), _('Bold'), _('Italic'), _('Underline'), _('Align left'),
+            _('Bulleted list'), _('Numbered list'), _('Subtitles'), _('Send document'), _('Save'),
+            _('Refresh'), _('Pin'), _('Jump')];
+        let selectedIcon = ACTION_ICONS.includes(action?.icon) ? action.icon : ACTION_ICONS[0];
+        const iconRow = new Adw.ActionRow({title: _('Action icon')});
+        const iconChoices = new Gtk.FlowBox({
+            selection_mode: Gtk.SelectionMode.NONE,
+            min_children_per_line: 5,
+            max_children_per_line: 5,
+            homogeneous: true,
+            column_spacing: 4,
+            row_spacing: 4,
+            margin_top: 8, margin_bottom: 8, margin_start: 8, margin_end: 8,
+        });
+        const iconPopover = new Gtk.Popover({child: iconChoices});
+        const actionIcon = new Gtk.MenuButton({
+            icon_name: selectedIcon, popover: iconPopover, valign: Gtk.Align.CENTER,
+            tooltip_text: _('Choose an action icon'),
+        });
+        let activeIconButton;
+        for (const [index, icon] of ACTION_ICONS.entries()) {
+            const button = new Gtk.Button({icon_name: icon,
+                width_request: 36, height_request: 36, tooltip_text: iconLabels[index]});
+            button.update_property([Gtk.AccessibleProperty.LABEL], [iconLabels[index]]);
+            if (icon === selectedIcon) {
+                button.add_css_class('suggested-action');
+                activeIconButton = button;
+            } else {
+                button.add_css_class('flat');
+            }
+            button.connect('clicked', () => {
+                activeIconButton.remove_css_class('suggested-action');
+                activeIconButton.add_css_class('flat');
+                button.remove_css_class('flat');
+                button.add_css_class('suggested-action');
+                activeIconButton = button;
+                selectedIcon = icon;
+                actionIcon.icon_name = icon;
+                iconPopover.popdown();
+            });
+            iconChoices.append(button);
+        }
+        iconRow.add_suffix(actionIcon);
+        iconRow.activatable_widget = actionIcon;
+        fields.add(iconRow);
         fields.add(inputMode);
         fields.add(prompt);
         fields.add(visible);
@@ -1545,6 +1592,7 @@ export default class PlyphPreferences extends ExtensionPreferences {
                 id: action?.id ?? GLib.uuid_string_random(),
                 name: actionName,
                 prompt: actionPrompt,
+                icon: selectedIcon,
                 enabled: visible.active,
                 provider: providerId,
                 model: providerId ? model.text.trim() : '',

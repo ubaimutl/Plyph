@@ -138,6 +138,25 @@ async function run() {
     unlock.emit('clicked');
     await wait(100);
     assert(password.editable && password.text === 'locked-test-key', 'Unlock restores the saved key for editing');
+    prefs._editAction(settings);
+    await wait(100);
+    const actionsWindow = Array.from({length: Gtk.Window.get_toplevels().get_n_items()},
+        (_, i) => Gtk.Window.get_toplevels().get_item(i)).find(w => w !== window && w.title === 'New action');
+    assert(Boolean(actionsWindow), 'custom action editor opens');
+    const actionWidgets = widgets(actionsWindow);
+    const picker = actionWidgets.find(w => w instanceof Gtk.MenuButton && w.tooltip_text === 'Choose an action icon');
+    assert(Boolean(picker), 'custom action uses a visual icon picker');
+    picker.popup();
+    await wait(100);
+    const icon = widgets(picker.popover).find(w => w instanceof Gtk.Button && w.icon_name === 'view-pin-symbolic');
+    assert(Boolean(icon), 'icon picker offers additional choices');
+    icon.emit('clicked');
+    assert(picker.icon_name === 'view-pin-symbolic', 'selected icon appears in the settings row');
+    actionWidgets.find(w => w instanceof Adw.EntryRow && w.title === 'Name').text = 'Icon test';
+    actionWidgets.find(w => w instanceof Adw.ComboRow && w.title === 'Input mode').selected = 1;
+    actionWidgets.find(w => w instanceof Gtk.Button && w.label === 'Save').emit('clicked');
+    assert(JSON.parse(settings.get_string('custom-actions')).some(action => action.icon === 'view-pin-symbolic'),
+        'custom action saves the selected icon');
     window.close();
     await wait(60);
     print('ALL PROVIDER UI CHECKS PASSED');

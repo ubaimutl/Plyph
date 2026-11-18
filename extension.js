@@ -720,7 +720,7 @@ export default class PlyphExtension extends Extension {
                     inputMode: action.inputMode,
                     inputLimit: action.inputLimit,
                     outputLimit: action.outputLimit,
-                    icon: 'system-run-symbolic',
+                    icon: action.icon,
                     separatorBefore: index === 0,
                 })),
         ];
