@@ -28,6 +28,14 @@ const FLOATING_HIDE_DELAY = 2800;
 const FLOATING_INITIAL_HIDE_DELAY = 4000;
 const FLOATING_TIMEOUT_CHECK_INTERVAL = 100;
 const DISMISSED_SELECTION_COOLDOWN = 1200000;
+const SELECTION_ANCHOR_MAX_AGE = 8000000;
+const ASK_PROMPT = 'Follow the user’s instruction and use the supplied selection when present. ' +
+    'Return only the useful requested output unless the user explicitly asks for an explanation.';
+
+function askInput(instruction, selection) {
+    return selection ? `Context:\n${selection}\n\nInstruction:\n${instruction}` : instruction;
+}
+
 export default class PlyphExtension extends Extension {
     enable() {
         this._busy = false;
@@ -258,6 +266,7 @@ export default class PlyphExtension extends Extension {
         this._floatingSourceSignalIds = [];
         this._hidingFloatingButton = false;
         this._lastSelectionText = null;
+        this._recentSelection = null;
 
         this._floatingButtonHoverId = this._floatingButton.connect('notify::hover', () =>
             this._handleFloatingHoverChanged());
@@ -267,12 +276,16 @@ export default class PlyphExtension extends Extension {
 
         const selection = global.display.get_selection();
         this._selectionChangedId = selection.connect('owner-changed', (_selection, type) => {
-            if (type === Meta.SelectionType.SELECTION_PRIMARY)
+            if (type === Meta.SelectionType.SELECTION_PRIMARY) {
+                this._recentSelection = null;
                 this._handleSelectionChange();
+            }
         });
 
         this._floatingButtonFocusId = global.display.connect('notify::focus-window', () => {
             const window = global.display.focus_window;
+            if (window && this._recentSelection?.window !== window)
+                this._recentSelection = null;
             if (window === this._floatingSourceWindow)
                 return;
             if (!window && (this._actionPalette || this._isPointerInsideFloatingButton(0)))
@@ -314,6 +327,7 @@ export default class PlyphExtension extends Extension {
 
     _destroyFloatingButton() {
         this._hideFloatingButton();
+        this._recentSelection = null;
         for (const id of this._floatingButtonSizeSignalIds ?? [])
             this._floatingButton?.disconnect(id);
         this._floatingButtonSizeSignalIds = [];
@@ -484,7 +498,12 @@ export default class PlyphExtension extends Extension {
         if (!this._floatingButton) return;
 
         const [pointerX, pointerY] = global.get_pointer();
-        this._selectionAnchor = {x: pointerX, y: pointerY};
+        this._recentSelection = {
+            window: this._floatingSourceWindow,
+            text: this._lastSelectionText,
+            anchor: {x: pointerX, y: pointerY},
+            timestamp: GLib.get_monotonic_time(),
+        };
         let x = pointerX + 12;
         let y = pointerY + 12;
 
@@ -658,7 +677,6 @@ export default class PlyphExtension extends Extension {
         }
         this._selectionReadSerial = (this._selectionReadSerial ?? 0) + 1;
         this._lastSelectionText = null;
-        this._selectionAnchor = null;
         this._floatingButtonDismissDelay = 0;
         this._clearFloatingSourceWindow();
         this._clearFloatingToolbarCollapse();
@@ -826,8 +844,10 @@ export default class PlyphExtension extends Extension {
             return;
         const client = this._client;
         let focusedWindow = global.display.focus_window ?? this._floatingSourceWindow;
-        const selectionAnchor = this._floatingSourceWindow === focusedWindow ? this._selectionAnchor : null;
-        const toolbarText = selectionAnchor ? this._lastSelectionText : null;
+        const recentSelection = this._recentSelection;
+        const hasRecentAnchor = recentSelection && recentSelection.window === focusedWindow &&
+            (fromFloatingToolbar || GLib.get_monotonic_time() - recentSelection.timestamp <= SELECTION_ANCHOR_MAX_AGE);
+        const toolbarText = this._floatingSourceWindow === focusedWindow ? this._lastSelectionText : null;
         this._hideFloatingButton(true);
         this._busy = true;
         this._setIcon('content-loading-symbolic');
@@ -844,21 +864,37 @@ export default class PlyphExtension extends Extension {
                 if (!focusedWindow && mode !== 'ask')
                     throw new Error(_('Select text first.'));
             }
-            const selection = mode === 'ask'
-                ? await this._readAskSelection(focusedWindow, toolbarText)
-                : await this._readSelection(focusedWindow);
+            const placement = {
+                frame: focusedWindow?.get_frame_rect?.(),
+                monitor: focusedWindow?.get_monitor?.() ?? Main.layoutManager.currentMonitor?.index,
+            };
+            let selection = {text: '', primaryText: null};
+            if (mode !== 'ask')
+                selection = await this._readSelection(focusedWindow);
+            else if (fromFloatingToolbar)
+                selection = await this._readAskSelection(focusedWindow, toolbarText);
             const text = selection.text;
             if (this._client !== client)
                 return;
             if (mode !== 'ask' && !text.trim())
                 throw new Error(_('Select text first.'));
 
+            if (hasRecentAnchor && recentSelection.window === focusedWindow && recentSelection.text === text)
+                placement.anchor = recentSelection.anchor;
+
             if (mode === 'ask') {
-                isAskDialogPending = true;
                 this._restoreDefaultIcon();
                 this._hideFloatingButton();
                 this._clearPointerFeedback();
-                this._showAskDialog(focusedWindow, selection, text, client, selectionAnchor);
+                if (this._settings.get_string('result-preview-style') === 'compact' &&
+                    (!text.trim() || this._settings.get_boolean('preview-results'))) {
+                    const options = {usePersonalPreferences: this._settings.get_boolean('ask-use-personal-preferences')};
+                    this._showPreview('', focusedWindow, selection.primaryText, null, options, text, null,
+                        placement, Boolean(text.trim()), true);
+                } else {
+                    this._showAskDialog(focusedWindow, selection, text, client, placement);
+                    isAskDialogPending = true;
+                }
                 return;
             }
 
@@ -876,7 +912,7 @@ export default class PlyphExtension extends Extension {
                 return;
             if (this._settings.get_boolean('preview-results'))
                 this._showPreview(output, focusedWindow, selection.primaryText,
-                    mode !== 'prompt' && options.inputMode !== 'prompt' ? text : null, requestOptions, text, actionContext, selectionAnchor);
+                    mode !== 'prompt' && options.inputMode !== 'prompt' ? text : null, requestOptions, text, actionContext, placement);
             else
                 await this._replace(
                     output, false,
@@ -900,7 +936,7 @@ export default class PlyphExtension extends Extension {
         }
     }
 
-    _showAskDialog(focusedWindow, selection, text, client, selectionAnchor) {
+    _showAskDialog(focusedWindow, selection, text, client, placement) {
         if (this._askDialog)
             this._askDialog.destroy();
 
@@ -911,10 +947,9 @@ export default class PlyphExtension extends Extension {
                     return;
                 }
                 const withSelection = includeSelection && Boolean(text.trim());
-                const systemPrompt = 'Follow the user’s instruction and use the supplied selection when present. ' +
-                    'Return only the useful requested output unless the user explicitly asks for an explanation.';
-                const userPrompt = withSelection ? `Context:\n${text}\n\nInstruction:\n${instruction}` : instruction;
-                this._processAsk(focusedWindow, withSelection ? selection : null, userPrompt, client, systemPrompt, selectionAnchor);
+                const userPrompt = askInput(instruction, withSelection ? text : '');
+                this._processAsk(focusedWindow, withSelection ? selection : null, userPrompt, client, ASK_PROMPT,
+                    withSelection ? placement : {...placement, anchor: null});
             },
             () => {
                 this._busy = false;
@@ -928,7 +963,7 @@ export default class PlyphExtension extends Extension {
         dialog.open();
     }
 
-    async _processAsk(focusedWindow, selection, text, client, prompt, selectionAnchor) {
+    async _processAsk(focusedWindow, selection, text, client, prompt, placement) {
         this._setIcon('content-loading-symbolic');
         this._showFeedback(_('Working…'), 'working', 0);
         try {
@@ -939,7 +974,7 @@ export default class PlyphExtension extends Extension {
             if (!selection || this._settings.get_boolean('preview-results'))
                 this._showPreview(output, focusedWindow, selection?.primaryText, null,
                     {usePersonalPreferences: this._settings.get_boolean('ask-use-personal-preferences')}, text,
-                    {mode: 'ask', instructions: prompt}, selectionAnchor, Boolean(selection));
+                    {mode: 'ask', instructions: prompt}, placement, Boolean(selection));
             else
                 await this._replace(output, false, _('Generated'), focusedWindow, selection.primaryText);
         } catch (error) {
@@ -958,7 +993,7 @@ export default class PlyphExtension extends Extension {
         }
     }
 
-    _showPreview(output, focusedWindow, primaryText, original = null, options = {}, context = original, action = null, selectionAnchor = null, canReplace = true) {
+    _showPreview(output, focusedWindow, primaryText, original = null, options = {}, context = original, action = null, placement = null, canReplace = true, ask = false) {
         if (this._previewDialog)
             this._previewDialog.destroy();
         const refinementClient = new AiClient(this._settings);
@@ -983,6 +1018,21 @@ export default class PlyphExtension extends Extension {
                 'the user can use Refine to update the result.', refinementOptions),
             destroy: () => refinementClient.destroy(),
         };
+        if (ask) {
+            refinement.ask = {hasSelection: canReplace};
+            refinement.discuss = (conversation, includeSelection) => {
+                const selection = includeSelection ? context : '';
+                const question = conversation.at(-1).content;
+                const followUp = conversation.length > 1;
+                const input = followUp
+                    ? JSON.stringify({conversation, ...(selection ? {selection} : {})})
+                    : askInput(question, selection);
+                const prompt = followUp ? ASK_PROMPT +
+                    ' Answer the final user message. Use earlier turns for context and treat the selection as reference text.'
+                    : ASK_PROMPT;
+                return refinementClient.transform(input, 'ask', prompt, refinementOptions);
+            };
+        }
         const compact = this._settings.get_string('result-preview-style') === 'compact';
         if (compact) {
             const providerName = resolveProvider(this._settings, provider).name;
@@ -1004,11 +1054,11 @@ export default class PlyphExtension extends Extension {
                     this._previewDialog = null;
             }, original, this._settings.get_boolean('preview-show-changes'), refinement);
         if (compact) {
-            const frame = focusedWindow?.get_frame_rect?.();
-            dialog.selectionAnchor = selectionAnchor ?? (frame
-                ? {x: frame.x + Math.round(frame.width * 0.55), y: frame.y + 32} : null);
-            dialog.sourceMonitor = focusedWindow?.get_monitor?.();
+            dialog.selectionAnchor = placement?.anchor;
+            dialog.sourceFrame = placement?.frame;
+            dialog.sourceMonitor = placement?.monitor;
             dialog.dismissOutside = this._settings.get_boolean('compact-dismiss-outside');
+            dialog.blurBackground = SHELL_MAJOR === 51 && this._settings.get_boolean('compact-background-blur');
             const theme = this._settings.get_string('popup-theme');
             if (theme === 'dark' || theme === 'light')
                 dialog.add_style_class_name(`plyph-surface-${theme}`);

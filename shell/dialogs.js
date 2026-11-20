@@ -4,6 +4,7 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import Pango from 'gi://Pango';
+import Shell from 'gi://Shell';
 import St from 'gi://St';
 import * as Config from 'resource:///org/gnome/shell/misc/config.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
@@ -109,10 +110,6 @@ class PopupSurface extends St.BoxLayout {
     open() {
         this._monitor = Main.layoutManager.monitors[this.sourceMonitor]
             ?? Main.layoutManager.currentMonitor ?? Main.layoutManager.primaryMonitor;
-        this._anchor = this.selectionAnchor ?? {
-            x: this._monitor.x + this._monitor.width * 0.55,
-            y: this._monitor.y + this._monitor.height * 0.22,
-        };
         this._monitorsChangedId = Main.layoutManager.connect('monitors-changed', () => this._escape?.());
         if (this.dismissOutside) {
             this._dismissShield = new St.Widget({reactive: true});
@@ -129,12 +126,32 @@ class PopupSurface extends St.BoxLayout {
             Main.layoutManager.addTopChrome(this._dismissShield);
         }
         Main.uiGroup.add_child(this);
-        this._resizePreview();
+        if (SHELL_MAJOR === 51 && this.blurBackground && Shell.BlurEffect)
+            this._addBackgroundBlur();
+        this._styleFollowUpHint();
+        this._toggleChanges();
         this._initialFocus?.grab_key_focus();
     }
 
     close() {
         this.destroy();
+    }
+
+    _addBackgroundBlur() {
+        const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
+        const inset = 6 * scale;
+        this._blurSurface = new Clutter.Actor();
+        for (const [coordinate, offset] of [
+            [Clutter.BindCoordinate.X, inset], [Clutter.BindCoordinate.Y, inset],
+            [Clutter.BindCoordinate.WIDTH, -2 * inset], [Clutter.BindCoordinate.HEIGHT, -2 * inset],
+        ]) {
+            this._blurSurface.add_constraint(new Clutter.BindConstraint({source: this, coordinate, offset}));
+        }
+        this._blurSurface.add_effect(new Shell.BlurEffect({
+            mode: Shell.BlurMode.BACKGROUND, radius: 20 * scale,
+        }));
+        Main.uiGroup.insert_child_below(this._blurSurface, this);
+        this.add_style_class_name('plyph-compact-blur');
     }
 
     destroy() {
@@ -146,6 +163,8 @@ class PopupSurface extends St.BoxLayout {
         this._monitorsChangedId = null;
         this._dismissShield?.destroy();
         this._dismissShield = null;
+        this._blurSurface?.destroy();
+        this._blurSurface = null;
         super.destroy();
     }
 
@@ -175,7 +194,7 @@ class PopupSurface extends St.BoxLayout {
     }
 
     _startPopupDrag(event) {
-        if (event.get_button() !== 1 || !this._anchor)
+        if (event.get_button() !== 1 || !this._monitor)
             return Clutter.EVENT_PROPAGATE;
         if (this._dragTimer)
             GLib.Source.remove(this._dragTimer);
@@ -197,16 +216,20 @@ class PopupSurface extends St.BoxLayout {
     }
 
     _placePopup() {
-        if (!this._anchor)
+        if (!this._monitor)
             return;
         const {x, y, width, height} = this._monitor;
         const [, naturalWidth] = this.get_preferred_width(-1);
         const [, naturalHeight] = this.get_preferred_height(naturalWidth);
-        const left = this._expanded ? x + (width - naturalWidth) / 2 : this._anchor.x + 12;
-        const above = this._anchor.y - naturalHeight - 10;
-        const below = this._anchor.y + 14;
-        const top = this._expanded ? y + (height - naturalHeight) / 2
-            : below + naturalHeight <= y + height - 12 ? below : above;
+        const anchor = this.selectionAnchor;
+        const frame = (!this._expanded && this.sourceFrame) || this._monitor;
+        let left = frame.x + (frame.width - naturalWidth) / 2;
+        let top = frame.y + (frame.height - naturalHeight) / 2;
+        if (!this._expanded && anchor) {
+            left = anchor.x + 12;
+            const below = anchor.y + 14;
+            top = below + naturalHeight <= y + height - 12 ? below : anchor.y - naturalHeight - 10;
+        }
         const position = this._dragPosition ?? {x: left, y: top};
         this.set_position(Math.round(Math.max(x + 12, Math.min(position.x, x + width - naturalWidth - 12))),
             Math.round(Math.max(y + 12, Math.min(position.y, y + height - naturalHeight - 12))));
@@ -226,6 +249,7 @@ class extends Base {
         this.buttonLayout.layout_manager.homogeneous = false;
         this.buttonLayout.layout_manager.spacing = 8 * St.ThemeContext.get_for_stage(global.stage).scale_factor;
         this._refinement = refinement;
+        this._ask = refinement?.ask;
         this._revisions = [result];
         this._revisionIndex = 0;
         this._refining = false;
@@ -246,7 +270,7 @@ class extends Base {
             x_expand: true,
         });
         const title = new St.BoxLayout({x_expand: true, style_class: 'plyph-preview-title'});
-        const heading = new St.Label({text: _('Result'), style_class: 'modal-dialog-headline',
+        const heading = new St.Label({text: this._ask ? _('Ask') : _('Result'), style_class: 'modal-dialog-headline',
             y_align: Clutter.ActorAlign.CENTER});
         title.add_child(heading);
         header.add_child(title);
@@ -369,6 +393,8 @@ class extends Base {
                 const source = this._selectionStyle.clutter_text;
                 field.clutter_text.set_selection_color(source.get_selection_color());
                 field.clutter_text.set_selected_text_color(source.get_selected_text_color());
+                if (this._compact && field === this._label)
+                    field.clutter_text.set_cursor_color(source.get_cursor_color());
             });
         }
         wrapButton?.connect('notify::checked', () => {
@@ -497,7 +523,6 @@ class extends Base {
         ]);
         this._actionButtons = this.buttonLayout.get_children();
         this._replaceButton = this._actionButtons.at(-1);
-        this._replaceButton.visible = Boolean(onReplace);
         this.setInitialKeyFocus(onReplace ? this._replaceButton : this._actionButtons[1]);
         for (const button of this._actionButtons) {
             button.x_expand = false;
@@ -550,9 +575,47 @@ class extends Base {
             this.buttonLayout.add_child(replace);
             this.buttonLayout.x_align = Clutter.ActorAlign.FILL;
             this.buttonLayout.x_expand = true;
-            this.buttonLayout.set_style('border-top: 1px solid rgba(128, 128, 128, 0.22); padding-top: 8px;');
-            this.buttonLayout.layout_manager.spacing = 4 * St.ThemeContext.get_for_stage(global.stage).scale_factor;
+            this.buttonLayout.set_style('border-top: 1px solid rgba(128, 128, 128, 0.22); padding-top: 8px; spacing: 4px;');
         }
+        this._replaceButton.visible = Boolean(onReplace) && !this._ask;
+        if (this._ask) {
+            this._scroll.hide();
+            this._actionButtons[1].hide();
+            this._refineToggle.hide();
+            this._discussToggle.hide();
+            this._discussing = true;
+            this._refineRow.show();
+            this._refineEntry.hint_text = _('Instruction...');
+            this._refineEntry.accessible_name = _('Ask');
+            this._refineButton.accessible_name = _('Send question');
+            this.setInitialKeyFocus(this._refineEntry);
+            if (this._ask.hasSelection) {
+                const label = new St.Label({text: _('Include selected'), y_align: Clutter.ActorAlign.CENTER});
+                const check = new St.Icon({icon_name: 'object-select-symbolic', icon_size: 12});
+                const indicator = new St.Bin({
+                    style_class: 'plyph-ask-check', y_align: Clutter.ActorAlign.CENTER, child: check,
+                });
+                const content = new St.BoxLayout({style_class: 'plyph-ask-context-content'});
+                content.add_child(indicator);
+                content.add_child(label);
+                this._includeSelection = new St.Button({
+                    child: content, accessible_name: _('Include selected text'), toggle_mode: true, checked: true,
+                    style_class: 'button flat plyph-ask-context',
+                    reactive: true, track_hover: true, can_focus: true, y_align: Clutter.ActorAlign.CENTER,
+                });
+                this._includeSelection.connect('notify::checked', () => {
+                    check.opacity = this._includeSelection.checked ? 255 : 0;
+                });
+                this.buttonLayout.insert_child_at_index(this._includeSelection, 0);
+            }
+        }
+    }
+
+    _styleFollowUpHint() {
+        if (!this._compact)
+            return;
+        const light = this.has_style_class_name('plyph-surface-light');
+        this._refineEntry?.hint_actor?.set_style(light ? 'color: #606069;' : 'color: #b9b9c2;');
     }
 
     _toggleRefinement(discuss = false) {
@@ -563,8 +626,7 @@ class extends Base {
         this._discussing = discuss;
         this._refineEntry.set_text(this._followUpDrafts[discuss ? 'discuss' : 'refine']);
         this._refineEntry.hint_text = discuss ? _('Ask about this result…') : _('Refine this result…');
-        if (this._compact && this.has_style_class_name('plyph-surface-light'))
-            this._refineEntry.hint_actor?.set_style('color: #606069;');
+        this._styleFollowUpHint();
         this._refineEntry.accessible_name = discuss ? _('Question about result') : _('Refinement instruction');
         this._refineButton.accessible_name = discuss ? _('Send question') : _('Submit refinement');
         this._discussionScroll.visible = discuss && this._refineRow.visible && this._discussion.length > 0;
@@ -598,12 +660,8 @@ class extends Base {
         if (this._compact) {
             this._refineToggle.accessible_name = this._refineToggleLabel.text;
             this._discussToggle.accessible_name = discussLabel;
-            for (const [button, selected] of [[this._refineToggle, !this._discussing], [this._discussToggle, this._discussing]]) {
-                if (this._refineRow.visible && selected)
-                    button.add_style_pseudo_class('active');
-                else
-                    button.remove_style_pseudo_class('active');
-            }
+            this._refineToggle.checked = this._refineRow.visible && !this._discussing;
+            this._discussToggle.checked = this._refineRow.visible && this._discussing;
         } else {
             this._discussToggle.label = discussLabel;
         }
@@ -613,6 +671,10 @@ class extends Base {
         this._refineToggle.can_focus = !busy;
         this._refineButton.reactive = !busy;
         this._refineButton.can_focus = !busy;
+        if (this._includeSelection) {
+            this._includeSelection.reactive = !busy;
+            this._includeSelection.can_focus = !busy;
+        }
         this._updateResultNavigation();
         for (const button of this._actionButtons.slice(1)) {
             button.reactive = !busy;
@@ -755,10 +817,21 @@ class extends Base {
         if (!refinement || this._refining || this._finished)
             return;
         const question = this._refineEntry.get_text().trim();
-        if (!question)
+        if (!question) {
+            if (this._ask) {
+                this._refineStatus.text = _('Enter an instruction to continue.');
+                this._statusScroll.visible = true;
+                this._resizePreview();
+                this._refineEntry.grab_key_focus();
+            }
             return;
-        const turn = {role: 'user', content: question,
-            currentResult: this._label.clutter_text.get_text(), revision: this._revisionIndex + 1};
+        }
+        const turn = {role: 'user', content: question};
+        if (!this._ask) {
+            turn.currentResult = this._label.clutter_text.get_text();
+            turn.revision = this._revisionIndex + 1;
+        }
+        const includeSelection = this._includeSelection?.checked === true;
         this._statusScroll.visible = false;
         this._setRefining(true);
         this._addDiscussionMessage('user', question);
@@ -766,7 +839,7 @@ class extends Base {
         this._discussionScroll.visible = true;
         this._resizePreview();
         try {
-            const answer = await refinement.discuss([...this._discussion, turn]);
+            const answer = await refinement.discuss([...this._discussion, turn], includeSelection);
             if (this._refinement !== refinement || this._finished)
                 return;
             if (typeof answer !== 'string' || !answer.trim())
@@ -774,6 +847,10 @@ class extends Base {
             this._clearDiscussionLoading();
             this._discussion.push(turn, {role: 'assistant', content: answer});
             this._addDiscussionMessage('assistant', answer);
+            if (this._ask) {
+                this._label.clutter_text.set_text(answer);
+                this._replaceButton.visible = includeSelection;
+            }
             this._refineEntry.set_text('');
             this._followUpDrafts.discuss = '';
         } catch (error) {
@@ -825,7 +902,7 @@ class extends Base {
             return Clutter.EVENT_STOP;
         if (this._diffLabel.contains(focus) && this._diffClipboard(event) === Clutter.EVENT_STOP)
             return Clutter.EVENT_STOP;
-        if (control && this._onReplace && (key === Clutter.KEY_Return || key === Clutter.KEY_KP_Enter)) {
+        if (control && this._replaceButton.visible && (key === Clutter.KEY_Return || key === Clutter.KEY_KP_Enter)) {
             this._finish(this._onReplace, this._label.clutter_text.get_text());
             return Clutter.EVENT_STOP;
         }
@@ -948,15 +1025,17 @@ class extends Base {
             this._changesButton.add_style_pseudo_class('disabled');
         this._changesButton.accessible_name = !hasChanges ? _('No changes from the original text')
             : this._showChanges ? _('Show editable result') : _('Show changes from the original text');
-        if (this._showChanges)
-            this._diffLabel.clutter_text.set_markup(diffMarkup(this._original, this._label.clutter_text.get_text()));
+        if (this._showChanges) {
+            const light = this._compact && this.has_style_class_name('plyph-surface-light');
+            this._diffLabel.clutter_text.set_markup(diffMarkup(this._original, this._label.clutter_text.get_text(), light));
+        }
         this._label.visible = !this._showChanges;
         this._diffLabel.visible = this._showChanges;
         this._resizePreview();
     }
 
     _resizePreview() {
-        if (this._compact && !this._anchor)
+        if (this._compact && !this._monitor)
             return;
         const monitor = this._monitor ?? Main.layoutManager.currentMonitor ?? Main.layoutManager.primaryMonitor;
         const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
@@ -976,7 +1055,11 @@ class extends Base {
         const maximumHeight = this._compact && !this._expanded ? Math.min(200, availableHeight) : availableHeight;
         let height = Math.min(maximumHeight, Math.max(minimumHeight, naturalPreviewHeight));
         let discussionHeight = 0;
-        if (discussing) {
+        if (discussing && this._ask) {
+            const [, naturalDiscussionHeight] = this._discussionMessages.get_preferred_height(width * scale);
+            discussionHeight = this._expanded ? availableHeight
+                : Math.min(Math.max(84, naturalDiscussionHeight / scale), 280, availableHeight);
+        } else if (discussing) {
             const paneHeight = this._expanded ? availableHeight : Math.min(availableHeight,
                 Math.max(100, Math.min(160, naturalPreviewHeight)) + Math.min(300, monitorHeight * 0.32) + 28);
             this._splitHeight = Math.max(2, paneHeight - 28);
@@ -992,8 +1075,10 @@ class extends Base {
             this._endDividerDrag();
         }
         if (this._divider)
-            this._divider.visible = discussing;
+            this._divider.visible = discussing && !this._ask;
         this.contentLayout.set_style(`padding: 0; margin: 0; spacing: 8px; min-height: 0; max-width: ${width}px;`);
+        if (this._ask)
+            this._refineRow.width = width * scale;
         this._scroll.width = width * scale;
         this._scroll.height = height * scale;
         this._scroll.set_style(`max-height: ${height}px;`);
@@ -1031,6 +1116,7 @@ class extends Base {
         this._revisions = [];
         this._discussion = [];
         this._followUpDrafts = null;
+        this._includeSelection = null;
         if (this._discussToggleId)
             this._discussToggle.disconnect(this._discussToggleId);
         if (this._discussionAllocationId)

@@ -38,6 +38,23 @@ async function run() {
     await filling;
     window.present();
     await wait(180);
+    const resultWidgets = widgets(window);
+    const blur = resultWidgets.find(w => w instanceof Adw.SwitchRow && w.title === 'Blur compact popup background');
+    const previewStyle = resultWidgets.find(w => w instanceof Adw.ComboRow && w.title === 'Preview style');
+    assert(previewStyle.selected === 1 && settings.get_string('result-preview-style') === 'compact',
+        'New settings default to the compact popup');
+    assert(blur && !blur.active, 'Compact blur is off by default');
+    if (blur.subtitle) {
+        assert(!blur.sensitive && blur.subtitle.includes('GNOME Shell 51'), 'Older Shell settings explain disabled blur');
+    } else {
+        assert(blur.sensitive, 'Compact preview enables the GNOME 51 blur switch');
+        blur.active = true;
+        assert(settings.get_boolean('compact-background-blur'), 'Blur preference saves through the switch');
+        blur.active = false;
+    }
+    previewStyle.selected = 0;
+    assert(settings.get_string('result-preview-style') === 'dialog' && !blur.sensitive,
+        'Users can select Dialog and its setting is saved');
     assert(!settings.get_boolean('show-floating-button'), 'explicit toolbar opt-out survives startup');
     assert(settings.get_int('provider-migration-version') === 1, 'real GSettings migration completes');
     assert(providers.readProviders(settings).length === 3, 'configured and keyring-only providers imported');

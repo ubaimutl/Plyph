@@ -10,8 +10,39 @@ test('metadata declares exactly the tested GNOME versions', () => {
     assert.deepEqual(metadata['shell-version'], versions.map(String));
 });
 
+test('Shortcut uses a matching recent selection anchor and snapshots the active window as fallback', async () => {
+    const shell = createShell(51);
+    const e = shell.extension;
+    e.enable();
+    shell.values['preview-results'] = true;
+    const frame = {x: 100, y: 200, width: 800, height: 600};
+    const window = {get_frame_rect: () => ({...frame}), get_monitor: () => 0};
+    shell.display.focus_window = window;
+    const anchor = {x: 250, y: 350};
+    e._recentSelection = {window, text: 'Chosen text', anchor, timestamp: 0};
+    let placement;
+    e._showPreview = (...args) => { placement = args[7]; };
+    e._client.transform = async () => {
+        frame.y += 50;
+        return 'Result';
+    };
+    e._readSelection = async () => ({text: 'Chosen text'});
+    await e._run('correct');
+    assert.equal(placement.anchor, anchor);
+    assert.equal(placement.frame.y, 200);
+    e._readSelection = async () => ({text: 'Different text'});
+    await e._run('correct');
+    assert.equal(placement.anchor, undefined);
+    assert.equal(placement.frame.y, 250);
+    e.disable();
+    shell.assertClean();
+});
+
 test('Ask sends selected text only when included and keeps standalone results copyable', async () => {
-    for (const [selected, include] of [['Example selection', true], ['Example selection', false], ['', false]]) {
+    for (const [selected, fromToolbar, include] of [
+        ['Example selection', true, true], ['Example selection', true, false],
+        ['Unrelated selection', false, false], ['', false, false],
+    ]) {
         const shell = createShell(51);
         const e = shell.extension;
         e.enable();
@@ -22,9 +53,9 @@ test('Ask sends selected text only when included and keeps standalone results co
         shell.clipboard.set(1, 'Unrelated clipboard content');
         let input;
         e._client.transform = async text => { input = text; return 'Answer'; };
-        await e._run('ask');
+        await e._run('ask', null, null, {}, fromToolbar);
         const dialog = e._askDialog;
-        assert.equal(Boolean(dialog._includeSelection), Boolean(selected));
+        assert.equal(Boolean(dialog._includeSelection), Boolean(selected && fromToolbar));
         if (dialog._includeSelection) {
             assert.equal(dialog._includeSelection.checked, true);
             dialog._includeSelection.checked = include;

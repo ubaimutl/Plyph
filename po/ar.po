@@ -360,6 +360,14 @@ msgstr "نافذة منبثقة مدمجة"
 msgid "Close compact popup when clicking outside"
 msgstr "إغلاق النافذة المدمجة عند النقر خارجها"
 
+#: prefs.js:392
+msgid "Blur compact popup background"
+msgstr "تمويه خلفية النافذة المصغّرة"
+
+#: prefs.js:393
+msgid "Background blur is currently supported only on GNOME Shell 51."
+msgstr "تمويه الخلفية مدعوم حاليًا فقط في جنوم شِل 51."
+
 #: prefs.js:396
 msgid "Show changes by default"
 msgstr "إظهار التغييرات افتراضيًا"
@@ -1919,6 +1927,10 @@ msgstr "التعليمة…"
 #: shell/dialogs.js:1132
 msgid "Enter an instruction to continue."
 msgstr "أدخل تعليمة للمتابعة."
+
+#: shell/dialogs.js:591
+msgid "Include selected"
+msgstr "تضمين التحديد"
 
 #: shell/dialogs.js:1137
 msgid "Include selected text"

@@ -383,6 +383,14 @@
   color: #232326;
 }
 
+.plyph-compact-result.plyph-compact-blur {
+  background-color: rgba(46, 46, 49, 0.75);
+}
+
+.plyph-compact-result.plyph-compact-blur.plyph-surface-light {
+  background-color: rgba(250, 250, 250, 0.77);
+}
+
 .plyph-compact-result.plyph-surface-light .button,
 .plyph-floating-toolbar.plyph-surface-dark .plyph-floating-action-btn {
   color: inherit;
@@ -393,10 +401,28 @@
   background-color: #27272a;
 }
 
-.plyph-compact-result.plyph-surface-light .plyph-discussion-message,
-.plyph-compact-result.plyph-surface-light StEntry {
-  background-color: #ebebee;
+.plyph-compact-result.plyph-surface-light .plyph-discussion-message {
+  background-color: #f3f3f5;
+}
+
+.plyph-compact-result .plyph-discussion-message StLabel {
+  color: #f5f5f6;
+}
+
+.plyph-compact-result.plyph-surface-light .plyph-discussion-message StLabel {
   color: #232326;
+}
+
+.plyph-compact-result.plyph-surface-light .plyph-discussion-message.user {
+  background-color: #e7e7eb;
+}
+
+.plyph-compact-result .plyph-discussion-message.loading StLabel {
+  color: #b9b9c2;
+}
+
+.plyph-compact-result.plyph-surface-light .plyph-discussion-message.loading StLabel {
+  color: #55555d;
 }
 
 .plyph-floating-toolbar.plyph-surface-dark .plyph-floating-action-icon {
@@ -432,8 +458,9 @@
 .plyph-compact-result .plyph-compact-tool {
   min-width: 20px;
   min-height: 20px;
-  padding: 7px;
-  border-radius: 8px;
+  padding: 5px;
+  margin: 2px;
+  border-radius: 7px;
   color: inherit;
 }
 
@@ -442,14 +469,36 @@
 }
 
 .plyph-compact-result .plyph-compact-tool StIcon,
-.plyph-compact-result .plyph-compact-close StIcon {
+.plyph-compact-result .plyph-compact-close StIcon,
+.plyph-compact-result .plyph-discussion-copy StIcon,
+.plyph-compact-result .plyph-result-nav StIcon,
+.plyph-compact-result .plyph-ask-check StIcon {
   color: #f5f5f6;
+}
+
+.plyph-compact-result .plyph-compact-tool StIcon,
+.plyph-compact-result .plyph-compact-close StIcon {
   icon-size: 18px;
 }
 
 .plyph-compact-result.plyph-surface-light .plyph-compact-tool StIcon,
-.plyph-compact-result.plyph-surface-light .plyph-compact-close StIcon {
+.plyph-compact-result.plyph-surface-light .plyph-compact-close StIcon,
+.plyph-compact-result.plyph-surface-light .plyph-discussion-copy StIcon,
+.plyph-compact-result.plyph-surface-light .plyph-result-nav StIcon,
+.plyph-compact-result.plyph-surface-light .plyph-ask-check StIcon {
   color: #232326;
+}
+
+.plyph-compact-result .plyph-discussion-copy {
+  background-color: transparent;
+  background-image: none;
+  border-color: transparent;
+}
+
+.plyph-compact-result .plyph-discussion-copy:hover,
+.plyph-compact-result .plyph-discussion-copy:focus,
+.plyph-compact-result .plyph-discussion-copy:active {
+  background-color: rgba(128, 128, 128, 0.22);
 }
 
 .plyph-compact-result .plyph-compact-tool,
@@ -467,21 +516,127 @@
 
 .plyph-compact-result .plyph-compact-tool:hover,
 .plyph-compact-result .plyph-compact-tool:active,
-.plyph-compact-result .plyph-compact-tool:checked,
 .plyph-compact-result .plyph-compact-close:hover {
   background-color: #414145;
 }
 
 .plyph-compact-result.plyph-surface-light .plyph-compact-tool:hover,
 .plyph-compact-result.plyph-surface-light .plyph-compact-tool:active,
-.plyph-compact-result.plyph-surface-light .plyph-compact-tool:checked,
 .plyph-compact-result.plyph-surface-light .plyph-compact-close:hover {
   background-color: #e8e8eb;
 }
 
+.plyph-compact-result.plyph-compact-blur .plyph-compact-tool,
+.plyph-compact-result.plyph-compact-blur .plyph-compact-close,
+.plyph-compact-result.plyph-compact-blur .plyph-compact-replace {
+  background-color: transparent;
+  background-image: none;
+  color: inherit;
+  border-color: transparent;
+}
+
+.plyph-compact-result.plyph-compact-blur .plyph-compact-tool:hover,
+.plyph-compact-result.plyph-compact-blur .plyph-compact-tool:active,
+.plyph-compact-result.plyph-compact-blur .plyph-compact-close:hover,
+.plyph-compact-result.plyph-compact-blur .plyph-compact-close:active,
+.plyph-compact-result.plyph-compact-blur .plyph-compact-replace:hover,
+.plyph-compact-result.plyph-compact-blur .plyph-compact-replace:active {
+  background-color: rgba(128, 128, 128, 0.33);
+}
+
+.plyph-compact-result .plyph-compact-tool:checked,
+.plyph-compact-result.plyph-compact-blur .plyph-compact-tool:checked {
+  background-color: rgba(255, 255, 255, 0.24);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.36);
+}
+
+.plyph-compact-result.plyph-surface-light .plyph-compact-tool:checked,
+.plyph-compact-result.plyph-compact-blur.plyph-surface-light .plyph-compact-tool:checked {
+  background-color: rgba(0, 0, 0, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.27);
+}
+
+.plyph-compact-result .plyph-ask-context {
+  padding: 4px 5px;
+  min-width: 0;
+  min-height: 0;
+  font-weight: normal;
+  font-size: 0.9em;
+}
+
+.plyph-compact-result .plyph-ask-context,
+.plyph-compact-result .plyph-ask-context:checked,
+.plyph-compact-result .plyph-ask-context:active,
+.plyph-compact-result .plyph-ask-context:hover {
+  color: inherit;
+  background-color: transparent;
+  background-image: none;
+  border: none;
+}
+
+.plyph-ask-context-content {
+  spacing: 7px;
+}
+
+.plyph-ask-check {
+  border: 1px solid rgba(128, 128, 128, 0.8);
+  border-radius: 4px;
+  padding: 1px;
+}
+
+.plyph-ask-context:checked .plyph-ask-check,
+.plyph-ask-context:hover .plyph-ask-check {
+  background-color: rgba(128, 128, 128, 0.27);
+}
+
+.plyph-compact-result StEntry {
+  caret-color: #f5f5f6;
+  selection-background-color: #50586b;
+  selected-color: #ffffff;
+}
+
+.plyph-compact-result .plyph-refine-row StEntry {
+  background-color: #37373d;
+  background-image: none;
+  color: #f5f5f6;
+  border-color: #6a6a72;
+}
+
+.plyph-compact-result .plyph-refine-row StEntry:focus {
+  border-color: #b8b8c0;
+  box-shadow: inset 0 0 0 1px #b8b8c0;
+}
+
 .plyph-compact-result.plyph-surface-light StEntry {
+  caret-color: #232326;
   selection-background-color: #b9cfe9;
   selected-color: #172b42;
+}
+
+.plyph-compact-result.plyph-surface-light .plyph-refine-row StEntry {
+  background-color: #f2f2f4;
+  color: #232326;
+  border-color: #a2a2aa;
+}
+
+.plyph-compact-result.plyph-surface-light .plyph-refine-row StEntry:focus {
+  border-color: #696971;
+  box-shadow: inset 0 0 0 1px #696971;
+}
+
+.plyph-compact-result .plyph-refine-submit {
+  background-color: #505058;
+  background-image: none;
+  color: #ffffff;
+}
+
+.plyph-compact-result .plyph-refine-submit:hover,
+.plyph-compact-result .plyph-refine-submit:focus {
+  background-color: #65656e;
+}
+
+.plyph-compact-result .plyph-refine-submit StIcon {
+  color: #ffffff;
 }
 
 .plyph-compact-result.plyph-surface-light .plyph-refine-submit {
@@ -489,10 +644,6 @@
   background-image: none;
   color: #ffffff;
   border-color: #353539;
-}
-
-.plyph-compact-result.plyph-surface-light .plyph-refine-submit StIcon {
-  color: #ffffff;
 }
 
 .plyph-compact-result.plyph-surface-light .plyph-refine-submit:hover,

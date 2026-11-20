@@ -55,13 +55,15 @@ export function diffText(original, result) {
     return parts;
 }
 
-export function diffMarkup(original, result) {
+export function diffMarkup(original, result, light = false) {
+    const added = light ? 'foreground="#17472b" background="#d7efdf"' : 'foreground="#b9f6ca" background="#19452b"';
+    const removed = light ? 'foreground="#75252e" background="#f6dce0"' : 'foreground="#ffcdd2" background="#58252b"';
     return diffText(original, result).map(({type, text}) => {
         const escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         if (type === 'added')
-            return `<span foreground="#b9f6ca" background="#19452b" underline="single">${escaped}</span>`;
+            return `<span ${added} underline="single">${escaped}</span>`;
         if (type === 'removed')
-            return `<span foreground="#ffcdd2" background="#58252b" strikethrough="true">${escaped}</span>`;
+            return `<span ${removed} strikethrough="true">${escaped}</span>`;
         return escaped;
     }).join('');
 }
