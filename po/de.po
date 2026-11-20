@@ -366,6 +366,14 @@ msgstr "Kompaktes Fenster"
 msgid "Close compact popup when clicking outside"
 msgstr "Kompaktes Fenster bei Klick außerhalb schließen"
 
+#: prefs.js:392
+msgid "Blur compact popup background"
+msgstr "Hintergrund des kompakten Fensters weichzeichnen"
+
+#: prefs.js:393
+msgid "Background blur is currently supported only on GNOME Shell 51."
+msgstr "Hintergrundunschärfe wird derzeit nur unter GNOME Shell 51 unterstützt."
+
 #: prefs.js:396
 msgid "Show changes by default"
 msgstr "Änderungen standardmäßig anzeigen"
@@ -1996,6 +2004,10 @@ msgstr "Anweisung…"
 #: shell/dialogs.js:1132
 msgid "Enter an instruction to continue."
 msgstr "Geben Sie zum Fortfahren eine Anweisung ein."
+
+#: shell/dialogs.js:591
+msgid "Include selected"
+msgstr "Auswahl einbeziehen"
 
 #: shell/dialogs.js:1137
 msgid "Include selected text"

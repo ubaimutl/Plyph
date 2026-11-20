@@ -5,6 +5,7 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Gtk from 'gi://Gtk';
 
+import * as Config from 'resource:///org/gnome/Shell/Extensions/js/misc/config.js';
 import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 import {ACTION_ICONS, readActions, writeActions} from './actions.js';
 import {abortModelRequests, fetchModels} from './models.js';
@@ -16,6 +17,8 @@ const INPUT_LIMIT_VALUES = [0, 2000, 4000, 8000, 16000, 32000];
 const INPUT_LIMIT_LABELS = [N_('Auto'), N_('2K'), N_('4K'), N_('8K'), N_('16K'), N_('32K'), N_('Custom')];
 const OUTPUT_LIMIT_VALUES = [0, 1000, 2000, 4000, 8000, 16000];
 const OUTPUT_LIMIT_LABELS = [N_('Auto'), N_('1K'), N_('2K'), N_('4K'), N_('8K'), N_('16K'), N_('Custom')];
+
+const SUPPORTS_COMPACT_BLUR = Number.parseInt(Config.PACKAGE_VERSION, 10) === 51;
 
 function entry(group, settings, key, title) {
     const row = new Adw.EntryRow({title});
@@ -385,13 +388,22 @@ export default class PlyphPreferences extends ExtensionPreferences {
         settings.bind('preview-results', previewStyle, 'sensitive', Gio.SettingsBindFlags.GET);
         const dismissOutside = new Adw.SwitchRow({title: _('Close compact popup when clicking outside')});
         settings.bind('compact-dismiss-outside', dismissOutside, 'active', Gio.SettingsBindFlags.DEFAULT);
-        const updateDismissOutside = () => {
-            dismissOutside.sensitive = preview.active && previewStyle.selected === 1;
+        const blur = new Adw.SwitchRow({
+            title: _('Blur compact popup background'),
+            subtitle: SUPPORTS_COMPACT_BLUR ? '' : _('Background blur is currently supported only on GNOME Shell 51.'),
+        });
+        if (SUPPORTS_COMPACT_BLUR)
+            settings.bind('compact-background-blur', blur, 'active', Gio.SettingsBindFlags.DEFAULT);
+        const updateCompactOptions = () => {
+            const compact = preview.active && previewStyle.selected === 1;
+            dismissOutside.sensitive = compact;
+            blur.sensitive = compact && SUPPORTS_COMPACT_BLUR;
         };
-        preview.connect('notify::active', updateDismissOutside);
-        previewStyle.connect('notify::selected', updateDismissOutside);
-        updateDismissOutside();
+        preview.connect('notify::active', updateCompactOptions);
+        previewStyle.connect('notify::selected', updateCompactOptions);
+        updateCompactOptions();
         behavior.add(dismissOutside);
+        behavior.add(blur);
         const previewChanges = new Adw.SwitchRow({
             title: _('Show changes by default'),
             subtitle: _('Open transformed-text previews in the changes view.'),

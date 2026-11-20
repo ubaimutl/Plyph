@@ -5,8 +5,10 @@ import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
+import * as Config from 'resource:///org/gnome/shell/misc/config.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 import PlyphExtension from './subject.js';
+import {AiClient} from './ai.js';
 import {SelectionCapture} from './shell/selectionCapture.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import {FloatingToolbar} from './shell/floatingToolbar.js';
@@ -363,14 +365,62 @@ export default class NativeTest extends Extension {
         pointer.notify_button(time(),1,Clutter.ButtonState.PRESSED);await delay(50);
         pointer.notify_button(time(),1,Clutter.ButtonState.RELEASED);await delay(100);
         assert(closedCompact,'Outside click closes compact preview when enabled');
-        const persistent=new CompactResultPopup('Keep open',()=>{},()=>{},()=>{},null,()=>{this._dialog=null;});
+        const persistent=new CompactResultPopup('Keep open',()=>{},()=>{},()=>{},null,()=>{this._dialog=null;},
+            'Original',false,{iconsPath:this.path+'/icons',destroy(){}});
+        persistent.sourceFrame={x:180,y:230,width:860,height:400};
+        persistent.blurBackground=Number.parseInt(Config.PACKAGE_VERSION,10)===51;
         this._dialog=persistent;persistent.open();await delay(100);
+        assert(Math.abs(persistent.x+persistent.width/2-610)<=1&&Math.abs(persistent.y+persistent.height/2-430)<=1,
+            'Compact popup without a selection anchor centers in its source window');
+        if(persistent.blurBackground){
+            const blur=persistent._blurSurface;
+            assert(blur?.get_effects()[0] instanceof Shell.BlurEffect,'Opt-in compact popup uses native backdrop blur');
+            const copy=persistent._actionButtons[1];
+            assert(copy.get_theme_node().get_background_color().alpha===0&&
+                persistent._replaceButton.get_theme_node().get_background_color().alpha===0,
+                'Blurred popup footer buttons are transparent at rest');
+            copy.add_style_pseudo_class('active');
+            assert(copy.get_theme_node().get_background_color().alpha>0,'Active blurred popup tool has a visible background');
+            copy.remove_style_pseudo_class('active');
+            for(const light of [false,true]){
+                if(light)persistent.add_style_class_name('plyph-surface-light');
+                for(const button of [persistent._changesButton,persistent._discussToggle,persistent._refineToggle]){
+                    await click(button);
+                    await moveTo(12,160);
+                    assert(button.checked&&button.get_theme_node().get_background_color().alpha>0,
+                        'Selected popup control stays highlighted after the pointer leaves');
+                    await click(button);
+                    await moveTo(12,160);
+                    assert(!button.checked&&button.get_theme_node().get_background_color().alpha===0,
+                        'Closing a popup mode clears its highlight');
+                }
+            }
+            await click(persistent._changesButton);
+            await click(persistent._discussToggle);
+            const [changesX]=persistent._changesButton.get_transformed_position();
+            const [changesWidth]=persistent._changesButton.get_transformed_size();
+            const [discussX]=persistent._discussToggle.get_transformed_position();
+            assert(persistent._changesButton.checked&&persistent._discussToggle.checked&&discussX>changesX+changesWidth,
+                'Adjacent selected footer tools have a visible gap');
+            await click(persistent._discussToggle);
+            await click(persistent._changesButton);
+            assert(blur.x>persistent.x&&blur.width<persistent.width,'Backdrop blur is inset from the rounded corners');
+            const [x,y]=persistent.get_position();
+            const [blurX,blurY]=blur.get_position();
+            persistent._dragPosition={x:x+30,y:y+24};
+            persistent._placePopup();await delay(100);
+            assert(blur.x===blurX+30&&blur.y===blurY+24,'Backdrop follows a moved popup');
+            persistent._toggleExpanded({});await delay(100);
+            assert(persistent.width-blur.width===12*St.ThemeContext.get_for_stage(global.stage).scale_factor,
+                'Backdrop follows popup resizing');
+        }
         await moveTo(12,400);
         pointer.notify_button(time(),1,Clutter.ButtonState.PRESSED);await delay(50);
         pointer.notify_button(time(),1,Clutter.ButtonState.RELEASED);await delay(100);
         assert(this._dialog===persistent&&!persistent._dismissShield,'Outside click keeps the compact preview open by default');
         persistent._replaceButton.grab_key_focus();await combo(Clutter.KEY_Escape);
         assert(this._dialog===null,'Escape closes compact preview');
+        assert(!persistent._blurSurface,'Closing the compact popup releases the backdrop');
         this._dialog=null;
 
         const values={'toolbar-layout':'vertical','popup-theme':'dark','quick-actions':'["translate"]'};
@@ -464,6 +514,101 @@ export default class NativeTest extends Extension {
         assert(transformed&&action._previewDialog&&action._previewDialog._label.get_text()==='Native corrected output',
             'Correct action: selection to AI result opens the real preview');
         action._previewDialog.destroy();
+        action._previewDialog=null;
+        const transform=AiClient.prototype.transform;
+        const requests=[];
+        let answer;
+        AiClient.prototype.transform=(input,mode)=>new Promise(resolve=>{
+            requests.push({input,mode});
+            answer=resolve;
+        });
+        action._settings.get_string=key=>key==='result-preview-style'?'compact':key==='provider'?'ollama':key==='custom-providers'?'[]':'';
+        action._readAskSelection=async()=>({text:'Selected source',primaryText:'Selected source'});
+        try{
+            await action._run('ask', null, null, {}, true);
+            const askPopup=action._previewDialog;this._dialog=askPopup;await delay(100);
+            assert(askPopup instanceof CompactResultPopup&&!action._askDialog&&askPopup._refineRow.visible&&
+                askPopup._includeSelection.checked&&!askPopup._replaceButton.visible,
+                'Compact Ask opens a single popup with a focused composer and selection enabled');
+            const contextToggle=askPopup._includeSelection;
+            const contextCheck=contextToggle.get_child().get_first_child().get_child();
+            assert(contextToggle.get_parent()===askPopup.buttonLayout&&contextCheck.opacity===255,
+                'Compact Ask shows a checked selection control in the footer');
+            askPopup._refineEntry.set_text('Explain this');
+            const first=askPopup._discuss();
+            assert(askPopup._discussionLoading&&requests[0].mode==='ask'&&
+                requests[0].input==='Context:\nSelected source\n\nInstruction:\nExplain this',
+                'Compact Ask shows loading in the conversation and sends checked context');
+            answer('First reply');await first;await delay(100);
+            assert(action._previewDialog===askPopup&&askPopup._replaceButton.visible&&
+                askPopup._discussionMessages.get_children().length===2,
+                'Compact Ask shows the first answer in place and offers Replace for selected text');
+            await click(contextToggle);
+            assert(!contextToggle.checked&&contextCheck.opacity===0,
+                'Turning off selection clears the checkmark');
+            askPopup._refineEntry.set_text('A standalone follow-up');
+            const second=askPopup._discuss();
+            const followUp=JSON.parse(requests[1].input);
+            assert(!Object.hasOwn(followUp,'selection')&&followUp.conversation[1].content==='First reply',
+                'Unchecking selection omits source text and keeps the conversation history');
+            answer('Second reply');await second;
+            assert(!askPopup._replaceButton.visible&&askPopup._discussionMessages.get_children().length===4,
+                'Standalone follow-up stays in the same conversation and cannot replace the selection');
+            askPopup._finish();this._dialog=null;
+            await action._run('ask');
+            const standalone=action._previewDialog;this._dialog=standalone;
+            assert(!standalone._includeSelection,'Direct compact Ask omits the selection toggle');
+            standalone._finish();this._dialog=null;
+        }finally{AiClient.prototype.transform=transform;}
+
+        const blurModes=Number.parseInt(Config.PACKAGE_VERSION,10)===51?[false,true]:[false];
+        for(const blur of blurModes){
+            for(const theme of ['light','dark']){
+                const sample=new CompactResultPopup('',null,()=>{},()=>{},null,()=>{},null,false,{
+                    ask:{hasSelection:true},iconsPath:this.path+'/icons',modelLabel:'Groq · test model',destroy(){},
+                });
+                this._dialog=sample;
+                sample.blurBackground=blur;
+                sample.add_style_class_name(`plyph-surface-${theme}`);
+                sample.open();
+                sample._addDiscussionMessage('user','Can you explain this?');
+                const reply=sample._addDiscussionMessage('assistant','Here is a short **formatted reply**.');
+                const loading=sample._addDiscussionMessage('assistant','Replying…',{loading:true});
+                loading._bubble.add_style_class_name('loading');
+                sample._discussionScroll.show();
+                sample._refineEntry.set_text('A follow-up');
+                sample._resizePreview();await moveTo(12,160);await delay(100);
+                const variant=`${theme} ${blur?'blurred':'solid'}`;
+                const field=sample._refineEntry.clutter_text;
+                const bright=color=>color.red>180;
+                const fieldColor=sample._refineEntry.get_theme_node().get_color('color');
+                assert(field.get_cursor_color().to_string()===fieldColor.to_string()&&
+                    bright(field.get_cursor_color())===(theme==='dark'),
+                    `The ${variant} composer caret matches its readable text color`);
+                const icon=reply._copyButton.get_child();
+                const copyColor=icon.get_theme_node().get_color('color').to_string();
+                const copyPixels=await captureActor(`copy-${theme}-${blur?'blurred':'solid'}`,icon);
+                const pixels=copyPixels.get_pixels();
+                let ink=0;
+                for(let y=0;y<copyPixels.height;y++){
+                    for(let x=0;x<copyPixels.width;x++){
+                        const offset=y*copyPixels.get_rowstride()+x*copyPixels.get_n_channels();
+                        if(theme==='dark'?pixels[offset]>190:pixels[offset]<100)
+                            ink++;
+                    }
+                }
+                assert(ink>12,`The ${variant} reply copy icon renders with contrast`);
+                reply._copyButton.emit('clicked', 1);
+                assert(icon.get_theme_node().get_color('color').to_string()===copyColor&&
+                    reply._copyButton.accessible_name==='Response copied',
+                    `The ${variant} copy confirmation retains the icon color`);
+                const loadingColor=loading._body.get_theme_node().get_color('color');
+                assert(theme==='dark'?loadingColor.red>140:loadingColor.red<120,
+                    `The ${variant} loading label uses its themed foreground`);
+                await captureActor(`ask-${theme}-${blur?'blurred':'solid'}`,sample);
+                sample.destroy();this._dialog=null;
+            }
+        }
         print('PLYPH-NATIVE: ALL CHECKS PASSED');await delay(150);global.context.terminate();
     }
 }

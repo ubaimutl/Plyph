@@ -39,3 +39,9 @@ test('diff escapes user markup and distinguishes changes without color alone', (
     assert.match(markup, /strikethrough="true">old/);
     assert.match(markup, /underline="single">new/);
 });
+
+test('light diff pairs dark text with light backgrounds for both changes', () => {
+    const markup = diffMarkup('before', 'after', true);
+    assert.match(markup, /foreground="#75252e" background="#f6dce0" strikethrough="true">before/);
+    assert.match(markup, /foreground="#17472b" background="#d7efdf" underline="single">after/);
+});

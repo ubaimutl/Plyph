@@ -352,6 +352,14 @@ msgstr ""
 msgid "Close compact popup when clicking outside"
 msgstr ""
 
+#: prefs.js:392
+msgid "Blur compact popup background"
+msgstr ""
+
+#: prefs.js:393
+msgid "Background blur is currently supported only on GNOME Shell 51."
+msgstr ""
+
 #: prefs.js:396
 msgid "Show changes by default"
 msgstr ""
@@ -1850,6 +1858,10 @@ msgstr ""
 
 #: shell/dialogs.js:1132
 msgid "Enter an instruction to continue."
+msgstr ""
+
+#: shell/dialogs.js:591
+msgid "Include selected"
 msgstr ""
 
 #: shell/dialogs.js:1137
