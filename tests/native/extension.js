@@ -326,7 +326,7 @@ export default class NativeTest extends Extension {
             }
         }
         compact.remove_style_class_name('plyph-surface-light');
-        const footerGap=compact.buttonLayout.get_children().at(-2);
+        const footerGap=compact.buttonLayout.get_children().at(-3);
         for(const [name,actor] of [['title',header.get_first_child()],['model label',modelLabel],['footer gap',footerGap]]){
             const [x,y]=actor.get_transformed_position();
             const [width,height]=actor.get_transformed_size();
@@ -339,6 +339,14 @@ export default class NativeTest extends Extension {
                 `Compact popup follows a drag from the ${name} and releases its timer`);
         }
         const compactWidth=compact._scroll.width;
+        const compactHeight=compact._scroll.height;
+        const [gripX,gripY]=compact._resizeGrip.get_transformed_position();
+        await moveTo(gripX+8,gripY+8);
+        pointer.notify_button(time(),1,Clutter.ButtonState.PRESSED);await delay(80);
+        pointer.notify_relative_motion(time(),75,55);await delay(180);
+        pointer.notify_button(time(),1,Clutter.ButtonState.RELEASED);await delay(100);
+        assert(compact._scroll.width>compactWidth+40&&compact._scroll.height>compactHeight+30&&!compact._dragTimer,
+            'Corner grip resizes the compact popup in both dimensions');
         compact._toggleExpanded({});
         assert(compact._scroll.width>compactWidth,'Compact preview enlarges');
         await edit(compact._label,'Compact result editor');
@@ -361,6 +369,11 @@ export default class NativeTest extends Extension {
         await click(compact._discussToggle);
         assert(compact._refineEntry.hint_actor.mapped&&compact._refineEntry.hint_actor.get_theme_node().get_color('color').red<120,
             'Light compact discussion shows a readable placeholder');
+        compact._refineEntry.set_text('Discuss this');
+        compact._refineEntry.clutter_text.set_cursor_position(-1);
+        await combo(Clutter.KEY_Shift_L,Clutter.KEY_Return);
+        assert(compact._refineEntry.get_text()==='Discuss this\n'&&!compact._refining,
+            'Compact Discuss accepts multiple lines before sending');
         await moveTo(12,160);
         pointer.notify_button(time(),1,Clutter.ButtonState.PRESSED);await delay(50);
         pointer.notify_button(time(),1,Clutter.ButtonState.RELEASED);await delay(100);
@@ -534,6 +547,24 @@ export default class NativeTest extends Extension {
             const contextCheck=contextToggle.get_child().get_first_child().get_child();
             assert(contextToggle.get_parent()===askPopup.buttonLayout&&contextCheck.opacity===255,
                 'Compact Ask shows a checked selection control in the footer');
+            const oneLine=askPopup._composerScroll.height;
+            askPopup._refineEntry.set_text('First line');
+            askPopup._refineEntry.clutter_text.set_cursor_position(-1);
+            await combo(Clutter.KEY_Shift_L,Clutter.KEY_Return);
+            assert(askPopup._refineEntry.get_text()==='First line\n'&&requests.length===0,
+                'Shift+Enter starts a new line without sending Ask');
+            askPopup._refineEntry.set_text('One\nTwo\nThree');
+            await delay(100);
+            const threeLines=askPopup._composerScroll.height;
+            const longQuestion='One\nTwo\nThree\nFour\nFive\nSix';
+            clipboard.set_text(St.ClipboardType.CLIPBOARD,longQuestion);
+            await combo(Clutter.KEY_Control_L,Clutter.KEY_a);
+            await combo(Clutter.KEY_Control_L,Clutter.KEY_v);
+            await delay(100);
+            const adjustment=askPopup._composerScroll.vadjustment;
+            assert(askPopup._refineEntry.get_text()===longQuestion&&threeLines>oneLine&&
+                askPopup._composerScroll.height===threeLines&&adjustment.upper>adjustment.page_size&&adjustment.value>0,
+                'The composer grows to three lines and scrolls longer text');
             askPopup._refineEntry.set_text('Explain this');
             const first=askPopup._discuss();
             assert(askPopup._discussionLoading&&requests[0].mode==='ask'&&

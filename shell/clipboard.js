@@ -36,7 +36,8 @@ export function installTextClipboard(owner, actor, {editable = false, multiline 
         const cut = (control && (key === Clutter.KEY_x || key === Clutter.KEY_X)) || (shift && key === Clutter.KEY_Delete);
         const paste = (control && (key === Clutter.KEY_v || key === Clutter.KEY_V)) || (shift && key === Clutter.KEY_Insert);
         const newline = multiline && !control && (key === Clutter.KEY_Return || key === Clutter.KEY_KP_Enter);
-        const submit = onSubmit && (key === Clutter.KEY_Return || key === Clutter.KEY_KP_Enter);
+        const submit = onSubmit && !(multiline && shift) &&
+            (key === Clutter.KEY_Return || key === Clutter.KEY_KP_Enter);
         if (!selectAll && !copy && !cut && !paste && !newline && !submit)
             return Clutter.EVENT_PROPAGATE;
         if (submit) {
