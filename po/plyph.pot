@@ -1934,3 +1934,7 @@ msgstr ""
 #: shell/selectionCapture.js:294
 msgid "Selection capture cancelled."
 msgstr ""
+
+#: shell/dialogs.js:603
+msgid "Resize preview"
+msgstr ""

@@ -193,20 +193,43 @@ class PopupSurface extends St.BoxLayout {
         return this._startPopupDrag(event);
     }
 
-    _startPopupDrag(event) {
+    _startPopupDrag(event, resize = false) {
         if (event.get_button() !== 1 || !this._monitor)
             return Clutter.EVENT_PROPAGATE;
         if (this._dragTimer)
             GLib.Source.remove(this._dragTimer);
         const [pressX, pressY] = event.get_coords();
         const [startX, startY] = this.get_position();
+        const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
+        const startWidth = this.contentLayout.width / scale;
+        const startHeight = [this._scroll, this._divider, this._discussionScroll]
+            .filter(actor => actor?.visible).reduce((height, actor) => height + actor.height / scale, 0);
+        const rtl = this.get_text_direction() === Clutter.TextDirection.RTL;
+        const widthRoom = (rtl ? startX - this._monitor.x
+            : this._monitor.x + this._monitor.width - startX - this.width) / scale;
+        const heightRoom = (this._monitor.y + this._monitor.height - startY - this.height - 12) / scale;
+        let lastX = pressX;
+        let lastY = pressY;
         this._dragTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 16, () => {
             const [x, y, state] = global.get_pointer();
             if (!(state & Clutter.ModifierType.BUTTON1_MASK)) {
                 this._dragTimer = null;
                 return GLib.SOURCE_REMOVE;
             }
-            if (x !== pressX || y !== pressY || this._dragPosition) {
+            if (x === lastX && y === lastY)
+                return GLib.SOURCE_CONTINUE;
+            lastX = x;
+            lastY = y;
+            if (resize) {
+                const width = Math.max(360, startWidth + Math.min(widthRoom - 12, (x - pressX) / scale * (rtl ? -1 : 1)));
+                const height = startHeight + Math.min(heightRoom, (y - pressY) / scale);
+                this._manualSize = {
+                    width,
+                    height: Math.max(40, height),
+                };
+                this._dragPosition = {x: rtl ? startX + (startWidth - width) * scale : startX, y: startY};
+                this._resizePreview();
+            } else {
                 this._dragPosition = {x: startX + x - pressX, y: startY + y - pressY};
                 this._placePopup();
             }
@@ -478,7 +501,9 @@ class extends Base {
             this._refineRow = new St.BoxLayout({visible: false, style_class: 'plyph-refine-row', x_expand: true});
             this._refineEntry = new St.Entry({hint_text: _('Refine this result…'),
                 accessible_name: _('Refinement instruction'), can_focus: true, x_expand: true});
-            installTextClipboard(this, this._refineEntry, {editable: true,
+            if (this._compact)
+                this._createComposerScroll();
+            installTextClipboard(this, this._refineEntry, {editable: true, multiline: this._compact,
                 canEdit: () => !this._refining, onSubmit: () => this._refine()});
             this._refineActivateId = this._refineEntry.clutter_text.connect('activate', () => this._refine());
             this._refineButton = new St.Button({style_class: 'icon-button plyph-refine-submit',
@@ -486,7 +511,7 @@ class extends Base {
                 y_align: Clutter.ActorAlign.CENTER, x_expand: false, y_expand: false,
                 accessible_name: _('Submit refinement'), reactive: true, can_focus: true, track_hover: true});
             this._refineClickId = this._refineButton.connect('clicked', () => this._refine());
-            this._refineRow.add_child(this._refineEntry);
+            this._refineRow.add_child(this._composerScroll ?? this._refineEntry);
             this._refineRow.add_child(this._refineButton);
             this.contentLayout.add_child(this._refineRow);
             this._refineStatus = new St.Label({text: '', x_expand: true});
@@ -573,6 +598,13 @@ class extends Base {
             footerDragArea.connect('button-press-event', (_actor, event) => this._startPopupDrag(event));
             this.buttonLayout.add_child(footerDragArea);
             this.buttonLayout.add_child(replace);
+            this._resizeGrip = new St.Bin({
+                reactive: true, track_hover: true, y_align: Clutter.ActorAlign.END,
+                style_class: 'plyph-resize-grip', accessible_name: _('Resize preview'),
+                child: new St.Widget({style_class: 'plyph-resize-corner'}),
+            });
+            this._resizeGrip.connect('button-press-event', (_actor, event) => this._startPopupDrag(event, true));
+            this.buttonLayout.add_child(this._resizeGrip);
             this.buttonLayout.x_align = Clutter.ActorAlign.FILL;
             this.buttonLayout.x_expand = true;
             this.buttonLayout.set_style('border-top: 1px solid rgba(128, 128, 128, 0.22); padding-top: 8px; spacing: 4px;');
@@ -609,6 +641,59 @@ class extends Base {
                 this.buttonLayout.insert_child_at_index(this._includeSelection, 0);
             }
         }
+    }
+
+    _createComposerScroll() {
+        const entry = this._refineEntry;
+        const text = entry.clutter_text;
+        text.set_single_line_mode(false);
+        text.set_line_wrap(true);
+        text.set_line_wrap_mode(Pango.WrapMode.WORD_CHAR);
+        this._composerScroll = new St.ScrollView({
+            x_expand: true, overlay_scrollbars: true, style_class: 'plyph-composer-scroll',
+            hscrollbar_policy: St.PolicyType.NEVER, vscrollbar_policy: St.PolicyType.AUTOMATIC,
+        });
+        const content = new St.BoxLayout(SHELL_MAJOR >= 48
+            ? {orientation: Clutter.Orientation.VERTICAL} : {vertical: true});
+        content.add_child(entry);
+        this._composerScroll.set_child(content);
+        text.connect('key-focus-in', () => this._composerScroll.add_style_pseudo_class('focus'));
+        text.connect('key-focus-out', () => this._composerScroll.remove_style_pseudo_class('focus'));
+        text.connect('text-changed', () => {
+            if (!this._monitor || !this._refineRow.visible)
+                return;
+            const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
+            const height = this._composerScroll.height;
+            this._sizeComposer(this._scroll.width / scale, scale);
+            if (height !== this._composerScroll.height)
+                this._placePopup();
+        });
+        text.connect('cursor-changed', () => this._revealComposerCursor());
+        content.connect('notify::allocation', () => this._revealComposerCursor());
+    }
+
+    _revealComposerCursor() {
+        const text = this._refineEntry?.clutter_text;
+        const adjustment = this._composerScroll.vadjustment;
+        if (!text?.mapped || !adjustment?.page_size)
+            return;
+        const [found, , top, height] = text.position_to_coords(text.get_cursor_position());
+        if (!found)
+            return;
+        const y = text.y + top;
+        if (y < adjustment.value)
+            adjustment.value = y;
+        else if (y + height > adjustment.value + adjustment.page_size)
+            adjustment.value = y + height - adjustment.page_size;
+    }
+
+    _sizeComposer(width, scale) {
+        const entry = this._refineEntry;
+        const [, lineHeight] = entry.hint_actor.get_preferred_height(-1);
+        const [, buttonWidth] = this._refineButton.get_preferred_width(-1);
+        const [, naturalHeight] = entry.get_preferred_height(Math.max(1, width * scale - buttonWidth - 10 * scale));
+        const padding = 14 * scale;
+        this._composerScroll.height = Math.max(lineHeight + padding, Math.min(naturalHeight + 2 * scale, 3 * lineHeight + padding));
     }
 
     _styleFollowUpHint() {
@@ -891,6 +976,8 @@ class extends Base {
             return Clutter.EVENT_PROPAGATE;
         if (this._refineEntry?.contains(focus) && key !== Clutter.KEY_Escape) {
             if (key === Clutter.KEY_Return || key === Clutter.KEY_KP_Enter) {
+                if (this._compact && state & Clutter.ModifierType.SHIFT_MASK)
+                    return Clutter.EVENT_PROPAGATE;
                 this._refine();
                 return Clutter.EVENT_STOP;
             }
@@ -910,6 +997,7 @@ class extends Base {
     }
 
     _toggleExpanded(button) {
+        this._manualSize = null;
         this._expanded = !this._expanded;
         const fallback = this._expanded ? 'view-restore-symbolic' : 'view-fullscreen-symbolic';
         if (this._compact)
@@ -1043,25 +1131,31 @@ class extends Base {
         const monitorHeight = monitor.height / scale;
         const availableHeight = Math.max(1, Math.min(monitorHeight * 0.8, monitorHeight - 64)
             - (this._refineRow?.visible ? 220 : 160) - (this._statusScroll?.visible ? 80 : 0));
+        if (this._ask && this._manualSize)
+            this._discussionScroll.show();
         const discussing = Boolean(this._discussionScroll?.visible);
         const text = this._label.clutter_text.get_text();
         const longestLine = text.split('\n').reduce((longest, line) => Math.max(longest, line.length), 0);
-        const width = Math.min(availableWidth, this._expanded
-            ? 1000 : this._compact ? 480 : Math.max(600, Math.min(680, longestLine * 8 + 24)));
+        const width = Math.min(availableWidth, this._manualSize?.width ?? (this._expanded
+            ? 1000 : this._compact ? 480 : Math.max(600, Math.min(680, longestLine * 8 + 24))));
+        if (this._composerScroll && this._refineRow.visible)
+            this._sizeComposer(width, scale);
+        const manualHeight = this._manualSize
+            ? Math.min(availableHeight, this._manualSize.height) : null;
         const label = this._showChanges ? this._diffLabel : this._label;
         const [, naturalHeight] = label.get_preferred_height(Math.max(1, (width - 40) * scale));
         const naturalPreviewHeight = Math.ceil(naturalHeight / scale) + 24;
         const minimumHeight = this._compact && !this._expanded ? 40 : 260;
         const maximumHeight = this._compact && !this._expanded ? Math.min(200, availableHeight) : availableHeight;
-        let height = Math.min(maximumHeight, Math.max(minimumHeight, naturalPreviewHeight));
+        let height = manualHeight ?? Math.min(maximumHeight, Math.max(minimumHeight, naturalPreviewHeight));
         let discussionHeight = 0;
         if (discussing && this._ask) {
             const [, naturalDiscussionHeight] = this._discussionMessages.get_preferred_height(width * scale);
-            discussionHeight = this._expanded ? availableHeight
-                : Math.min(Math.max(84, naturalDiscussionHeight / scale), 280, availableHeight);
+            discussionHeight = manualHeight ?? (this._expanded ? availableHeight
+                : Math.min(Math.max(84, naturalDiscussionHeight / scale), 280, availableHeight));
         } else if (discussing) {
-            const paneHeight = this._expanded ? availableHeight : Math.min(availableHeight,
-                Math.max(100, Math.min(160, naturalPreviewHeight)) + Math.min(300, monitorHeight * 0.32) + 28);
+            const paneHeight = manualHeight ?? (this._expanded ? availableHeight : Math.min(availableHeight,
+                Math.max(100, Math.min(160, naturalPreviewHeight)) + Math.min(300, monitorHeight * 0.32) + 28));
             this._splitHeight = Math.max(2, paneHeight - 28);
             const minimumResult = Math.min(100, this._splitHeight * 0.4);
             const minimumDiscussion = Math.min(160, this._splitHeight * 0.5);

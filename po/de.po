@@ -2094,3 +2094,7 @@ msgstr "Erfassen der Auswahl abgebrochen."
 
 #~ msgid "Auto starts at 1000 tokens and allows up to 2000."
 #~ msgstr "Automatisch beginnt bei 1000 Tokens und erlaubt bis zu 2000."
+
+#: shell/dialogs.js:603
+msgid "Resize preview"
+msgstr "Vorschaugröße ändern"

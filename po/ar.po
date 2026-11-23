@@ -2011,3 +2011,7 @@ msgstr "أُلغي التقاط التحديد."
 
 #~ msgid "Auto starts at 1000 tokens and allows up to 2000."
 #~ msgstr "يبدأ الوضع التلقائي من 1000 رمز ويسمح حتى 2000 رمز."
+
+#: shell/dialogs.js:603
+msgid "Resize preview"
+msgstr "تغيير حجم المعاينة"
