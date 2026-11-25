@@ -17,6 +17,7 @@ const INPUT_LIMIT_VALUES = [0, 2000, 4000, 8000, 16000, 32000];
 const INPUT_LIMIT_LABELS = [N_('Auto'), N_('2K'), N_('4K'), N_('8K'), N_('16K'), N_('32K'), N_('Custom')];
 const OUTPUT_LIMIT_VALUES = [0, 1000, 2000, 4000, 8000, 16000];
 const OUTPUT_LIMIT_LABELS = [N_('Auto'), N_('1K'), N_('2K'), N_('4K'), N_('8K'), N_('16K'), N_('Custom')];
+const PROVIDER_OUTPUT_LIMIT_LABELS = [N_('Provider default'), ...OUTPUT_LIMIT_LABELS.slice(1)];
 
 const SUPPORTS_COMPACT_BLUR = Number.parseInt(Config.PACKAGE_VERSION, 10) === 51;
 
@@ -242,7 +243,7 @@ export default class PlyphPreferences extends ExtensionPreferences {
         bindTokenLimit(settings, 'prompt-run-input-limit', runInputLimit, INPUT_LIMIT_VALUES);
         const runOutputLimit = tokenLimitControl(
             _('Output limit'),
-            _('Auto allows up to 2000 tokens; Gemini and ChatGPT use the model’s own maximum.'),
+            _('Auto uses the selected provider’s output limit settings.'),
             OUTPUT_LIMIT_VALUES,
             OUTPUT_LIMIT_LABELS,
             settings.get_int64('prompt-run-output-limit'));
@@ -637,6 +638,12 @@ export default class PlyphPreferences extends ExtensionPreferences {
             group.add(row);
         const advanced = new Adw.ExpanderRow({title: _('Advanced'), expanded: false,
             subtitle: _('Optional request controls'), use_markup: false});
+        const outputLimit = tokenLimitControl(
+            _('Output limit'),
+            _('Applies to built-in actions and actions with an Auto output limit.'),
+            OUTPUT_LIMIT_VALUES,
+            PROVIDER_OUTPUT_LIMIT_LABELS,
+            profile.advanced?.outputLimit ?? 0);
         const temperature = new Adw.EntryRow({title: _('Temperature (optional)'),
             text: profile.advanced?.temperature !== undefined ? String(profile.advanced.temperature) : '',
             tooltip_text: _('Leave blank for the provider default, or enter a value from 0 to 2.')});
@@ -651,7 +658,7 @@ export default class PlyphPreferences extends ExtensionPreferences {
         headerEditor.sensitive = !existing;
         const parameterEditor = textEditor(_('Extra request parameters (JSON)'), parameterText, value => { parameterText = value; });
         parameterEditor.tooltip_text = _('Use non-secret parameters. For example: {"top_p": 0.9}. Conversation, model, and action limits remain controlled by Plyph.');
-        for (const row of [temperature, reasoning, headerEditor, parameterEditor])
+        for (const row of [outputLimit.row, outputLimit.custom, temperature, reasoning, headerEditor, parameterEditor])
             advanced.add_row(row);
         group.add(advanced);
         const status = new Adw.ActionRow({title: '', visible: false, use_markup: false});
@@ -693,6 +700,9 @@ export default class PlyphPreferences extends ExtensionPreferences {
             });
         }
         save.connect('clicked', async () => {
+            const outputLimitValue = outputLimit.value();
+            if (outputLimitValue === null)
+                return;
             save.sensitive = false;
             group.sensitive = false;
             try {
@@ -700,7 +710,8 @@ export default class PlyphPreferences extends ExtensionPreferences {
                 const parameters = providerJson(parameterText, _('Extra request parameters'));
                 const candidate = {...profile, name: name.text, url: url.text, model: model.text,
                     hasCustomHeaders: Object.keys(headers).length ? true : undefined,
-                    advanced: {temperature: temperature.text.trim() ? Number(temperature.text) : undefined,
+                    advanced: {outputLimit: outputLimitValue || undefined,
+                        temperature: temperature.text.trim() ? Number(temperature.text) : undefined,
                         reasoningEffort: REASONING_EFFORTS[reasoning.selected] ?? '', parameters}};
                 const validated = validateProvider(candidate, false);
                 await saveProviderConnection(settings, validated, {apiKey: key.text, headers}, cancellable);
@@ -1491,7 +1502,7 @@ export default class PlyphPreferences extends ExtensionPreferences {
             action?.inputLimit ?? 0);
         const outputLimit = tokenLimitControl(
             _('Output limit'),
-            _('Sets the maximum response length for this action.'),
+            _('Auto uses the selected provider’s output limit settings.'),
             OUTPUT_LIMIT_VALUES,
             OUTPUT_LIMIT_LABELS,
             action?.outputLimit ?? 0);

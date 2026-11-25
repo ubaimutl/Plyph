@@ -115,7 +115,8 @@ function openAiBody(model, prompt, text, inputMode, outputLimit = 0, cerebras = 
         model,
         messages: messages(prompt, text, inputMode),
     };
-    body[cerebras ? 'max_completion_tokens' : 'max_tokens'] = maxTokens(text, outputLimit);
+    if (outputLimit)
+        body[cerebras ? 'max_completion_tokens' : 'max_tokens'] = outputLimit;
     return body;
 }
 
@@ -169,9 +170,11 @@ function outputLimitError(thinkingTokens = 0) {
         _('Response reached the output limit. Try a custom action with a higher output limit, or select less text.'));
 }
 
-function outputOrError(result, provider, model, inputMode, displayName = null) {
+function outputOrError(result, provider, model, inputMode, outputLimit, displayName = null) {
     if (result.data?.choices?.[0]?.finish_reason === 'length')
-        throw outputLimitError();
+        throw outputLimit
+            ? outputLimitError()
+            : new Error(_('The provider reached its output limit. Select less text or choose another model.'));
     const output = result.data?.choices?.[0]?.message?.content?.trim();
     if (output)
         return cleanOutput(output, inputMode);
@@ -212,12 +215,19 @@ export class AiClient {
             throw new Error(
                 format(_('Selected text is about %s tokens, above this action\'s %s-token input limit. Select less text or raise the limit.'), estimatedTokens, inputLimit));
         }
-        const explicitOutputLimit = hasActionLimits ? tokenLimit(options.outputLimit) : 0;
-        const outputLimit = explicitOutputLimit || (inputMode === 'prompt' ? 2000 : 0);
+        let outputLimit = hasActionLimits ? tokenLimit(options.outputLimit) : 0;
         this._cancellable = new Gio.Cancellable();
         const selectedProvider = options.provider || this._settings.get_string('provider');
         const info = resolveProvider(this._settings, selectedProvider);
         const provider = info.id;
+        if (info.url !== undefined) {
+            outputLimit ||= info.advanced?.outputLimit ?? 0;
+        } else if (provider === 'ollama' || provider === 'cloudflare') {
+            if (inputMode === 'prompt')
+                outputLimit ||= 2000;
+            if (provider === 'cloudflare')
+                outputLimit = maxTokens(text, outputLimit);
+        }
         const model = options.model || providerModel(this._settings, provider);
         if (info.url !== undefined && !model.trim())
             throw new Error(format(_('Choose a model for “%s” in Settings before running an action.'), info.name));
@@ -239,7 +249,7 @@ export class AiClient {
             prompt = [prompt, PLAIN_TEXT_GUIDANCE].filter(part => part.trim()).join('\n\n');
         const loggedOutputLimit = provider === 'chatgpt'
             ? 'managed by ChatGPT'
-            : provider === 'gemini' && !explicitOutputLimit ? 'model default' : maxTokens(text, outputLimit);
+            : outputLimit || 'model default';
         debugLog(this._settings,
             `AI request: provider=${provider}, model=${model}, action=${mode}, ` +
             `input-tokens≈${estimatedTokens}, output-limit=${loggedOutputLimit}`);
@@ -247,7 +257,7 @@ export class AiClient {
             if (info.url !== undefined)
                 return await this._compatible(info, text, prompt, model, inputMode, outputLimit);
             if (provider === 'chatgpt') {
-                if (hasActionLimits && tokenLimit(options.outputLimit))
+                if (outputLimit)
                     throw new Error(_('ChatGPT does not support output token limits. Set this action’s output limit to Auto.'));
                 this._chatgpt ??= new ChatGPTClient(this._settings);
                 const result = await this._chatgpt.transform(inputMode === 'prompt' ? text : payload(text),
@@ -259,7 +269,7 @@ export class AiClient {
             if (provider === 'cloudflare')
                 return await this._cloudflare(text, prompt, model, inputMode, outputLimit);
             if (provider === 'gemini')
-                return await this._gemini(text, prompt, model, inputMode, explicitOutputLimit);
+                return await this._gemini(text, prompt, model, inputMode, outputLimit);
             throw new Error(_('Unsupported provider connection.'));
         } catch (error) {
             const normalizedError = networkError(error);
@@ -299,7 +309,7 @@ export class AiClient {
             `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/ai/v1/chat/completions`,
             {Authorization: `Bearer ${key}`},
             openAiBody(model, prompt, text, inputMode, outputLimit), this._cancellable, this._settings);
-        return outputOrError(result, 'cloudflare', model, inputMode);
+        return outputOrError(result, 'cloudflare', model, inputMode, outputLimit);
     }
 
     async _ollama(text, prompt, model, inputMode, outputLimit) {
@@ -346,7 +356,7 @@ export class AiClient {
         const headers = mergeProviderHeaders(defaults, customHeaders);
         const result = await requestJson(session, `${profile.url}/chat/completions`,
             headers, body, cancellable, this._settings);
-        return outputOrError(result, info.id, model, inputMode, info.name);
+        return outputOrError(result, info.id, model, inputMode, outputLimit, info.name);
     }
 
     async _gemini(text, prompt, model, inputMode, explicitOutputLimit) {
