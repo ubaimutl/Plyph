@@ -343,11 +343,14 @@ test('migration preserves Groq reasoning options, OpenRouter headers and Cerebra
     const client = new c.AiClient(s);
     for (const provider of ['groq', 'openrouter', 'cerebras'])
         await client.transform('Source', 'correct', null, {provider});
+    await client.transform('Source', 'custom', null, {provider: 'cerebras', outputLimit: 3000});
     assert.equal(requests[0].body.reasoning_effort, 'low');
     assert.equal(requests[0].body.include_reasoning, false);
     assert.equal(requests[1].headers['X-Title'], 'Plyph');
-    assert.ok(requests[2].body.max_completion_tokens > 0);
+    assert.equal(requests[2].body.max_completion_tokens, undefined);
     assert.equal(requests[2].body.max_tokens, undefined);
+    assert.equal(requests[3].body.max_completion_tokens, 3000);
+    assert.equal(requests[3].body.max_tokens, undefined);
     client.destroy();
 });
 
@@ -481,13 +484,13 @@ test('old profiles with an unrelated endpoint cannot retain preset headers, para
         const before = values['custom-providers'];
         assert.equal(c.resolveProvider(s, adapter).adapter, '');
         const client = new c.AiClient(s);
-        await client.transform('Source', 'correct', null, {provider: adapter});
+        await client.transform('Source', 'custom', null, {provider: adapter, outputLimit: 2500});
         const models = await c.fetchModels(s, adapter);
         assert.equal(requests[0].headers['X-Title'], undefined);
         assert.equal(requests[0].body.reasoning_effort, undefined);
         assert.equal(requests[0].body.include_reasoning, undefined);
         assert.equal(requests[0].body.max_completion_tokens, undefined);
-        assert.ok(requests[0].body.max_tokens > 0);
+        assert.equal(requests[0].body.max_tokens, 2500);
         assert.equal(requests[1].url, 'http://localhost:4321/v1/models');
         assert.equal(models[0].id, 'server-model');
         assert.equal(values['custom-providers'], before, 'Runtime resolution must not rewrite user settings');
@@ -578,10 +581,12 @@ test('advanced controls are optional, persist through model changes, and validat
     c.migrateProviders(s, [], true);
     const original = c.resolveProvider(s, 'groq');
     assert.equal(original.advanced, undefined);
-    const advanced = {temperature: 0, reasoningEffort: 'low', parameters: {top_p: 0.8, extra_body: {thinking: true}}};
+    const advanced = {outputLimit: 5000, temperature: 0, reasoningEffort: 'low', parameters: {top_p: 0.8, extra_body: {thinking: true}}};
     c.saveProvider(s, {...original, advanced});
     c.setProviderModel(s, original.id, 'new-model');
     assert.equal(JSON.stringify(c.resolveProvider(s, original.id).advanced), JSON.stringify(advanced));
+    for (const value of [-1, 0, 1.5, '4000', Number.MAX_SAFE_INTEGER + 1])
+        assert.throws(() => c.validateAdvanced({outputLimit: value}), /positive whole number/);
     for (const value of [-1, 3, NaN, '0.5'])
         assert.throws(() => c.validateAdvanced({temperature: value}), /Temperature/);
     assert.throws(() => c.validateAdvanced({reasoningEffort: 'unknown'}), /reasoning effort/);

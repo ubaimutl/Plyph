@@ -144,13 +144,9 @@ msgstr ""
 msgid "Output limit"
 msgstr "Ausgabelimit"
 
-#: prefs.js:242
-msgid ""
-"Auto allows up to 2000 tokens; Gemini and ChatGPT use the model’s own "
-"maximum."
-msgstr ""
-"Auto erlaubt bis zu 2000 Tokens; Gemini und ChatGPT verwenden das eigene "
-"Maximum des Modells."
+#: prefs.js:246 prefs.js:1504
+msgid "Auto uses the selected provider’s output limit settings."
+msgstr "Auto verwendet das Ausgabelimit des ausgewählten Anbieters."
 
 #: prefs.js:247
 msgid "Provider and limits"
@@ -599,6 +595,10 @@ msgstr "Benutzerdefinierte Verbindung"
 msgid "Optional request controls"
 msgstr "Optionale Anfrageoptionen"
 
+#: prefs.js:643
+msgid "Applies to built-in actions and actions with an Auto output limit."
+msgstr "Gilt für integrierte Aktionen und Aktionen mit automatischem Ausgabelimit."
+
 #: prefs.js:628
 msgid "Temperature (optional)"
 msgstr "Temperatur (optional)"
@@ -1028,10 +1028,6 @@ msgstr ""
 "Bricht vor dem Senden ab, wenn der ausgewählte Text diesen Schätzwert "
 "überschreitet."
 
-#: prefs.js:1482
-msgid "Sets the maximum response length for this action."
-msgstr "Legt die maximale Antwortlänge für diese Aktion fest."
-
 #: prefs.js:1493
 msgid "Search"
 msgstr "Suchen"
@@ -1183,6 +1179,10 @@ msgstr "%s sind zu groß."
 #: providers.js:45
 msgid "Advanced settings"
 msgstr "Erweiterte Einstellungen"
+
+#: providers.js:49
+msgid "Output limit must be a positive whole number."
+msgstr "Das Ausgabelimit muss eine positive ganze Zahl sein."
 
 #: providers.js:49
 msgid "Temperature must be a number from 0 to 2, or left blank."
@@ -1448,6 +1448,14 @@ msgstr ""
 "Die Antwort hat das Ausgabelimit erreicht. Verwenden Sie eine "
 "benutzerdefinierte Aktion mit höherem Ausgabelimit oder wählen Sie weniger "
 "Text aus."
+
+#: ai.js:177
+msgid ""
+"The provider reached its output limit. Select less text or choose another "
+"model."
+msgstr ""
+"Der Anbieter hat sein Ausgabelimit erreicht. Wählen Sie weniger Text oder "
+"ein anderes Modell aus."
 
 #: ai.js:213
 #, javascript-format

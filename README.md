@@ -37,6 +37,8 @@ After saving, use **Refresh models** to choose a model, or enter a model ID manu
 
 **Advanced** is collapsed by default. It offers optional temperature, reasoning effort, custom HTTP headers, and extra JSON request parameters. Leave these blank to keep provider defaults. Header values are stored in the system keyring; extra request parameters are ordinary settings and should contain no credentials. Explicit temperature and reasoning selections take precedence over the same fields in the extra JSON. Plyph retains control of the conversation, selected model, streaming mode, and action token limits.
 
+For **Output limit**, leave **Provider default** selected to let the service choose the limit. You can also set a token cap under **Advanced**. Built-in actions and actions set to **Auto** use this provider setting. An explicit action limit takes precedence.
+
 You can save multiple connections to the same or different services. Each has its own endpoint, credentials, and model, and can be selected as the active provider or used by an individual action.
 
 Presets are available for **Groq, B.AI, OpenRouter, Cerebras, OpenAI, LM Studio (local), Vercel AI Gateway**, and other compatible servers. You can also enter any compatible endpoint, such as LM Studio (`http://127.0.0.1:1234/v1`). A preset fills in connection details; it doesn't require a separate built-in integration.

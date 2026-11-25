@@ -63,7 +63,7 @@ function setup(provider = 'groq') {
                 send_and_read_finish() {
                     const text = response.text;
                     const data = {
-                        choices: [{message: {content: text}, finish_reason: 'stop'}],
+                        choices: [{message: {content: text}, finish_reason: response.compatibleFinishReason ?? 'stop'}],
                         message: {content: text},
                         candidates: [{content: {parts: [{text}]}, finishReason: response.finishReason ?? 'STOP'}],
                         usageMetadata: response.usageMetadata,
@@ -271,17 +271,15 @@ test('gemini: an explicit output limit is sent unchanged, including 2000 in prom
     client.destroy();
 });
 
-test('other providers keep their automatic output limit', async () => {
-    for (const provider of ['groq', 'cloudflare']) {
-        const {client, requests} = setup(provider);
-        await client.transform('a'.repeat(300), 'rewrite');
-        assert.equal(requests.at(-1).max_tokens, 1000);
-        await client.transform('a'.repeat(8000), 'rewrite');
-        assert.equal(requests.at(-1).max_tokens, 2000);
-        await client.transform('a'.repeat(300), 'ask', null, {inputMode: 'prompt'});
-        assert.equal(requests.at(-1).max_tokens, 2000);
-        client.destroy();
-    }
+test('Cloudflare and Ollama keep their automatic output limits', async () => {
+    const cloudflare = setup('cloudflare');
+    await cloudflare.client.transform('a'.repeat(300), 'rewrite');
+    assert.equal(cloudflare.requests.at(-1).max_tokens, 1000);
+    await cloudflare.client.transform('a'.repeat(8000), 'rewrite');
+    assert.equal(cloudflare.requests.at(-1).max_tokens, 2000);
+    await cloudflare.client.transform('a'.repeat(300), 'ask', null, {inputMode: 'prompt'});
+    assert.equal(cloudflare.requests.at(-1).max_tokens, 2000);
+    cloudflare.client.destroy();
     const {client, requests} = setup('ollama');
     await client.transform('a'.repeat(300), 'rewrite');
     assert.equal(requests.at(-1).options, undefined);
@@ -299,8 +297,39 @@ test('the automatic limit follows the provider an action resolves to', async () 
     const geminiActive = setup('gemini');
     await geminiActive.client.transform('a'.repeat(300), 'custom', null,
         {provider: 'groq', model: 'override-model'});
-    assert.equal(geminiActive.requests.at(-1).max_tokens, 1000);
+    assert.equal(geminiActive.requests.at(-1).max_tokens, undefined);
     geminiActive.client.destroy();
+});
+
+test('compatible actions inherit the provider output limit unless the action explicitly sets one', async () => {
+    const {client, strings, requests} = setup();
+    const profile = {id: 'custom:mercury', name: 'Mercury', url: 'https://mercury.example/v1', model: 'mercury'};
+    strings.provider = profile.id;
+    for (const providerLimit of [undefined, 6000]) {
+        strings['custom-providers'] = JSON.stringify([{...profile, advanced: {outputLimit: providerLimit}}]);
+        for (const [mode, options] of [
+            ['correct', {}],
+            ['ask', {inputMode: 'prompt'}],
+            ['custom', {outputLimit: 0}],
+            ['prompt', {outputLimit: 0}],
+        ]) {
+            await client.transform('Source', mode, null, options);
+            assert.equal(requests.at(-1).max_tokens, providerLimit);
+            assert.equal(requests.at(-1).max_completion_tokens, undefined);
+        }
+        for (const mode of ['custom', 'prompt']) {
+            await client.transform('Source', mode, null, {outputLimit: 2000});
+            assert.equal(requests.at(-1).max_tokens, 2000);
+        }
+    }
+    client.destroy();
+});
+
+test('a provider-default length failure does not return unfinished text', async () => {
+    const {client, response} = setup('groq');
+    response.compatibleFinishReason = 'length';
+    await assert.rejects(client.transform('Source', 'correct'), /provider reached its output limit/);
+    client.destroy();
 });
 
 test('diagnostics report the output limit that is actually sent', async () => {
@@ -317,6 +346,8 @@ test('diagnostics report the output limit that is actually sent', async () => {
     const groq = setup('groq');
     groq.preferences.debugLogging = true;
     await groq.client.transform('a'.repeat(300), 'rewrite');
+    assert.match(requestLine(groq.logs), /output-limit=model default$/);
+    await groq.client.transform('a'.repeat(300), 'custom', null, {outputLimit: 1000});
     assert.match(requestLine(groq.logs), /output-limit=1000$/);
     groq.client.destroy();
 });

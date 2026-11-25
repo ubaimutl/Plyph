@@ -44,6 +44,11 @@ function jsonObject(value, title) {
 export function validateAdvanced(value = {}) {
     jsonObject(value, _('Advanced settings'));
     const advanced = {};
+    if (value.outputLimit !== undefined) {
+        if (!Number.isSafeInteger(value.outputLimit) || value.outputLimit <= 0)
+            throw new Error(_('Output limit must be a positive whole number.'));
+        advanced.outputLimit = value.outputLimit;
+    }
     if (value.temperature !== undefined) {
         if (!Number.isFinite(value.temperature) || value.temperature < 0 || value.temperature > 2)
             throw new Error(_('Temperature must be a number from 0 to 2, or left blank.'));

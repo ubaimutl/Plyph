@@ -78,6 +78,10 @@ async function run() {
     const advanced = all.find(w => w instanceof Adw.ExpanderRow && w.title === 'Advanced');
     assert(Boolean(advanced) && !advanced.expanded, 'Advanced controls are collapsed by default');
     advanced.expanded = true;
+    const outputLimit = all.find(w => w instanceof Adw.ComboRow && w.title === 'Output limit');
+    assert(outputLimit.selected_item.string === 'Provider default', 'new connections inherit the provider limit');
+    outputLimit.selected = outputLimit.model.get_n_items() - 1;
+    field('Custom Output limit').text = '6500';
     field('Temperature (optional)').text = '0.4';
     all.find(w => w instanceof Adw.ComboRow && w.title === 'Reasoning effort').selected = 3;
     const headers = all.find(w => w instanceof Adw.PreferencesRow && w.title === 'Custom headers (JSON)');
@@ -94,7 +98,7 @@ async function run() {
     assert(Boolean(custom), 'native Save creates a custom profile');
     assert(prefs._providerChoices.some(p => p.id === custom.id), 'open provider selectors refresh');
     assert(custom.model === '', 'native Save accepts a connection without a model');
-    assert(custom.advanced.temperature === 0.4 && custom.advanced.reasoningEffort === 'low' &&
+    assert(custom.advanced.outputLimit === 6500 && custom.advanced.temperature === 0.4 && custom.advanced.reasoningEffort === 'low' &&
         custom.advanced.parameters.top_p === 0.8, 'native Save persists advanced request controls');
     assert(!settings.get_string('custom-providers').includes('native-secret'), 'custom header values stay out of GSettings');
     assert((await secrets.getProviderHeaders(custom))['X-Test-Key'] === 'native-secret', 'custom headers use the credential store');
@@ -124,10 +128,15 @@ async function run() {
         'existing advanced settings reopen collapsed');
     assert(editWidgets.find(w => w instanceof Adw.EntryRow && w.title === 'Temperature (optional)').text === '0.4',
         'advanced values survive editing and model changes');
+    assert(editWidgets.find(w => w instanceof Adw.EntryRow && w.title === 'Custom Output limit').text === '6500',
+        'the custom provider cap survives model changes');
+    editWidgets.find(w => w instanceof Adw.ComboRow && w.title === 'Output limit').selected = 0;
     editWidgets.find(w => w instanceof Adw.EntryRow && w.title === 'Name').text = 'Renamed test';
     editWidgets.find(w => w instanceof Gtk.Button && w.label === 'Save').emit('clicked');
     await wait(150);
     assert(providers.resolveProvider(settings, custom.id).name === 'Renamed test', 'native edit keeps stable ID');
+    assert(providers.resolveProvider(settings, custom.id).advanced.outputLimit === undefined,
+        'provider default clears the saved cap');
     prefs._editProvider(settings, providers.resolveProvider(settings, custom.id));
     await wait(150);
     const deletion = Array.from({length: Gtk.Window.get_toplevels().get_n_items()}, (_, i) => Gtk.Window.get_toplevels().get_item(i)).find(w => w !== window);
